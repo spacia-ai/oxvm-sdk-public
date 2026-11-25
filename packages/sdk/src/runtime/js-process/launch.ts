@@ -1,7 +1,8 @@
+import { decodeProcessId, type ProcessId } from "../../values.js";
 import { boolean, exactKeys, record, string } from "../decode.js";
 import { isModuleCommandName, moduleCommandPath } from "../module-command-names.js";
 import type { ModuleCommandTerminals } from "../userspace-command-abi.js";
-import { protocol } from "./codec.js";
+import { JS_CHILD_SERVICES_VERSION, JS_FILE_SERVICES_VERSION, protocol } from "./codec.js";
 
 /** The longest launch description the module runner accepts, in UTF-8 bytes. */
 export const RUNNER_LAUNCH_DESCRIPTOR_BYTES = 512 * 1024;
@@ -25,9 +26,13 @@ export interface RunnerCopies {
   readonly artifacts: Readonly<Record<string, RunnerVerifiedFile>>;
   /** The engine's TLS module for a module with a network reach (engine ADR 0029), compiled by the broker; else null. */
   readonly tls: RunnerVerifiedFile | null;
+  readonly fileServicesVersion?: typeof JS_FILE_SERVICES_VERSION;
+  readonly childServicesVersion?: typeof JS_CHILD_SERVICES_VERSION;
 }
 export interface RunnerHostLaunch extends RunnerCopies {
   readonly kind: "host";
+  /** Set by the module broker from the engine's admitted process. */
+  readonly pid?: ProcessId;
   /** `spawnModule`'s launch description, with the consumer's options resolved. */
   readonly descriptor: string;
 }
@@ -58,18 +63,28 @@ function verifiedFile(value: unknown): RunnerVerifiedFile {
 function copies(launch: Readonly<Record<string, unknown>>): RunnerCopies {
   const adapter = launch["adapter"], files = record(launch["artifacts"], "verified module files");
   if (!(adapter instanceof Blob) || Object.keys(files).length > MAX_ARTIFACTS) protocol("Invalid verified module files");
-  return { adapter, artifacts: Object.fromEntries(Object.entries(files).map(([artifact, file]) => [artifact, verifiedFile(file)])), tls: launch["tls"] === null ? null : verifiedFile(launch["tls"]) };
+  const childServicesVersion = launch["childServicesVersion"];
+  if (childServicesVersion !== undefined && childServicesVersion !== JS_CHILD_SERVICES_VERSION) protocol("Invalid module child service version");
+  const fileServicesVersion = launch["fileServicesVersion"];
+  if (fileServicesVersion !== undefined && fileServicesVersion !== JS_FILE_SERVICES_VERSION) protocol("Invalid module file service version");
+  return {
+    adapter, artifacts: Object.fromEntries(Object.entries(files).map(([artifact, file]) => [artifact, verifiedFile(file)])),
+    tls: launch["tls"] === null ? null : verifiedFile(launch["tls"]),
+    ...(fileServicesVersion === undefined ? {} : { fileServicesVersion }),
+    ...(childServicesVersion === undefined ? {} : { childServicesVersion }),
+  };
 }
 
 /** Checks the transport shape of the runner's launch; the runner checks the description and the copies against each other. */
 export function decodeRunnerLaunch(value: unknown): RunnerLaunch {
   const launch = record(value, "module runner launch");
   if (launch["kind"] === "host") {
-    exactKeys(launch, ["kind", "descriptor", "adapter", "artifacts", "tls"]);
-    return { kind: "host", descriptor: descriptorText(launch["descriptor"]), ...copies(launch) };
+    exactKeys(launch, ["kind", "descriptor", "adapter", "artifacts", "tls"], ["fileServicesVersion", "childServicesVersion", "pid"]);
+    const pid = launch["pid"] === undefined ? undefined : decodeProcessId(launch["pid"]);
+    return { kind: "host", descriptor: descriptorText(launch["descriptor"]), ...copies(launch), ...(pid === undefined ? {} : { pid }) };
   }
   if (launch["kind"] !== "module-command") protocol("Unknown module runner launch");
-  exactKeys(launch, ["kind", "invocation", "terminals", "descriptor", "adapter", "artifacts", "tls"]);
+  exactKeys(launch, ["kind", "invocation", "terminals", "descriptor", "adapter", "artifacts", "tls"], ["fileServicesVersion", "childServicesVersion"]);
   const invocation = record(launch["invocation"], "module command invocation"); exactKeys(invocation, ["name", "path"]);
   const name = string(invocation["name"], "module command name");
   if (!isModuleCommandName(name) || invocation["path"] !== moduleCommandPath(name)) protocol("Invalid module command invocation");

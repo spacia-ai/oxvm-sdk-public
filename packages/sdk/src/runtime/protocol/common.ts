@@ -131,7 +131,10 @@
 /** 184 pairs API148 with generic admission (ADR 0026 release R2): OXCR20 trial loads, host operation sets and probed
  * runtime builds, OXJT19 add-on placements with reasons 43 to 53, OXAK3, command operations 8 to 14, the runtime
  * probe lifecycle, and the execution origin's served operation set in initialize. */
-export const PROTOCOL_VERSION = 184;
+/** 186 pairs Userspace API 152 and replay 171 with native utility yields and work counters.
+ * It adds native utility image requirements, typed mismatch errors and persistent root migration. */
+/** 187 releases the workspace reserve before final Userspace publication. */
+export const PROTOCOL_VERSION = 187;
 /** Combined architecture, background compilation and code-profile trace layout. */
 export const SYSTEM_TRACE_SCHEMA_VERSION = 57;
 

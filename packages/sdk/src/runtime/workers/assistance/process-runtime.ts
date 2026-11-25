@@ -34,6 +34,8 @@ import { createHttpClients } from "./node-http-client.ts";
 import { createNodeReport } from "./node-report.js";
 import { nodeV8Memory } from "./node-memory.ts";
 import { nodeSqlite } from "./node-sqlite.js";
+import { createNodeWasi } from "./node-wasi.ts";
+import type { WasiHost } from "../../../wasm/kit/wasi/host.js";
 import { clearRefusedNodeApi, refusedNodeApi, unavailableNodeApi } from "./node-capability.ts";
 import { nodeAssert } from "./node-assert.ts";
 import { createWarningPrinter } from "./node-warnings.ts";
@@ -54,8 +56,15 @@ import { installPromiseContext } from "./promise-context.js";
 import { installSchedulingContext } from "./scheduling-context.js";
 import { installCallSites } from "./call-sites.ts";
 import { installExecutableStacks } from "./executable-stacks.js";
+import { installFunctionSources } from "./function-sources.js";
+import { createGetBuiltinModule } from "./node-builtin-module.js";
+import { createNodeStatfs } from "./node-statfs.js";
+import type { FileSystemStats } from "../../js-process/filesystem-stat.js";
+import { createProcessBinding } from "./node-process-binding.js";
+import { installNodeFetch } from "./node-fetch.js";
+import { installNodeBodies } from "./node-web-bodies.js";
 import { installGeneratedFunctions } from "./generated-functions.js";
-import { Console, createNodeConsole } from "./node-console.ts";
+import { Console, context as consoleContext, createNodeConsole, createTask } from "./node-console.ts";
 import { createProcessTimers } from "./process-timers.js";
 import { createSyncFiles, createAsyncFiles } from "./node-files.ts";
 import { createGuestModules } from "./guest-modules.js";
@@ -93,6 +102,10 @@ export interface ProcessRuntime {
   readonly socketRuntime?: SocketRuntime;
   readonly umask?: (mask?: unknown) => number;
   readonly modulePathInfo?: (path: string) => ModulePathInfo;
+  /** The Linux ports `node:wasi` runs on. Without them the built-in is not provided. */
+  readonly wasiHost?: WasiHost;
+  /** Filesystem statistics from Linux, for `fs.statfs`. */
+  readonly fileSystems?: FileSystemStats;
   readonly compiler: AssistanceCompiler;
   readonly systemSource: string;
   readonly httpParser: WebAssembly.Module;
@@ -224,7 +237,7 @@ export async function runLocalProcess(start: LocalProcessStart, io: ProcessRunti
     const timerExports = { setTimeout: timers.setTimeout, setInterval: timers.setInterval,
       clearTimeout: timers.clear, clearInterval: timers.clear, setImmediate: scheduler.setImmediate, clearImmediate: scheduler.clearImmediate };
     const console = Object.assign(createNodeConsole((stream, text) => { (stream === "stdout" ? stdout : stderr).write(`${text}\n`); }, nodeUtil.format),
-      { Console: class BoundConsole extends Console { constructor(options: unknown) { super(options, nodeUtil.format); } } });
+      { Console: class BoundConsole extends Console { constructor(options: unknown) { super(options, nodeUtil.format); } }, context: consoleContext, createTask });
     const crypto = createNodeCrypto(() => io.retain(), scheduler);
     restore.push(crypto.restore);
     const dns = createNodeDns(children, context, stderr, callback => scheduler.enqueue(callback));
@@ -233,12 +246,19 @@ export async function runLocalProcess(start: LocalProcessStart, io: ProcessRunti
     const buffer = createNodeBuffer(globalThis, Buffer, runtime.socketRuntime?.runtime ?? "node");
     const nodePath = createNodePath(directory.cwd);
     const filesMore = createNodeFilesMore(asynchronous.promises);
+    // Linux answers statfs through its own operation; a process without that port has no fs.statfs.
+    const statfs = runtime.fileSystems === undefined ? undefined : createNodeStatfs(runtime.fileSystems, { retain: () => io.retain(), dispatch: callback => { scheduler.enqueue(callback); }, context });
+    const filePromises = statfs === undefined ? filesMore.promises : { ...filesMore.promises, statfs: statfs.promises.statfs };
     const util = createNodeUtil(process, line => { stderr.write(`${line}\n`); }, runtime.exactPromiseQueries === true);
     const asyncHooks = createNodeAsyncHooks(context, util);
     const events = createNodeEvents(EventEmitter, asyncHooks);
     restore.push(events.restore);
+    // Before the guard below, which reports a real export this process object lacks. The loader exists after it.
+    let builtinModule: (id: string) => unknown = () => undefined;
+    const os = createNodeOs(files, process.env, io.networkInterfaces?.bind(io));
+    Object.assign(process, { getBuiltinModule: createGetBuiltinModule(id => builtinModule(id), inspectArgument), binding: createProcessBinding({ fs: files.constants, os: os.constants }) });
     const builtins = {
-      fs: withNativeRealpath({ ...files, ...asynchronous, Stats: util.deprecate(Stats, "fs.Stats constructor is deprecated.", "DEP0180"), promises: filesMore.promises, watch: watchers.watch, cp: filesMore.cp, ...createNodeReadStreams((path, flags) => asynchronous.promises.open(path, flags), context), ...createNodeWriteStreams((path, flags, mode) => asynchronous.promises.open(path, flags, mode), context) }), "fs/promises": filesMore.promises,
+      fs: withNativeRealpath({ ...files, ...asynchronous, Stats: util.deprecate(Stats, "fs.Stats constructor is deprecated.", "DEP0180"), promises: filePromises, ...(statfs === undefined ? {} : { statfs: statfs.statfs, statfsSync: statfs.statfsSync }), watch: watchers.watch, cp: filesMore.cp, ...createNodeReadStreams((path, flags) => asynchronous.promises.open(path, flags), context), ...createNodeWriteStreams((path, flags, mode) => asynchronous.promises.open(path, flags, mode), context) }), "fs/promises": filePromises,
       tls, https: { ...createHttpClients({ createConnection: tls.connect }, httpParser, context, scheduler.nextTick, () => io.retain(), "https:"), createServer: () => unavailableNodeApi("https.createServer") },
       http2: createNodeHttp2(children, context, () => io.retain(), scheduler),
       assert: nodeAssert, "assert/strict": nodeAssert.strict, constants: files.constants,
@@ -249,9 +269,10 @@ export async function runLocalProcess(start: LocalProcessStart, io: ProcessRunti
       vm: createNodeVm(realmEvaluator(), runtime.contextScripts === "data" ? (source, context, filename): unknown => evaluateContextData(source, context, filename, loader.sources) : undefined),
       "util/types": runtime.exactPromiseQueries === true ? exactPromiseUtilTypes : nodeUtilTypes, perf_hooks: createNodePerfHooks(globalThis), diagnostics_channel: createNodeDiagnosticsChannel(),
       string_decoder: nodeStringDecoder, worker_threads: threads?.module ?? createNodeWorkerThreads(globalThis), inspector: nodeInspector,
-      os: createNodeOs(files, process.env, io.networkInterfaces?.bind(io)), net, http: { maxHeaderSize: 16_384, ...createHttpValidators(nodeUtil.format), ...createHttpServers(net, httpParser, context), ...createHttpClients(net, httpParser, context, scheduler.nextTick, () => io.retain()) },
+      os, net, http: { maxHeaderSize: 16_384, ...createHttpValidators(nodeUtil.format), ...createHttpServers(net, httpParser, context), ...createHttpClients(net, httpParser, context, scheduler.nextTick, () => io.retain()) },
       zlib: { ...createNodeZlib(context, scheduler), ...createNodeBrotli(children, context, () => io.retain(), scheduler) },
       querystring: nodeQuerystring, url: createNodeUrl(directory.cwd), util, crypto: { ...crypto.module, ...cryptoExtras }, v8: nodeV8Memory, sqlite: nodeSqlite,
+      ...(runtime.wasiHost === undefined ? {} : { wasi: createNodeWasi({ host: runtime.wasiHost, exit: code => process.exit(code) }) }),
       ...(runtime.tty === undefined ? {} : { tty: runtime.tty }),
       ...(runtime.nextCompiler === undefined ? {} : { [NEXT_COMPILER_BUILTIN]: runtime.nextCompiler }),
     };
@@ -260,6 +281,7 @@ export async function runLocalProcess(start: LocalProcessStart, io: ProcessRunti
     const loader: ReturnType<typeof createLocalModuleLoader> = createLocalModuleLoader(compiler, systemSource, modules, builtins, directory.cwd, { realExports, onNextMemoryException: path => writeConsole("stderr", [
       `[oxidevm experimental ${NEXT_MEMORY_EXCEPTION}] Applied to ${path}; memory tracing, automatic heap overrides and proactive heap-threshold restart are unavailable. Dependency generation: ${start.dependencies?.generation ?? "none"}.`,
     ]) });
+    builtinModule = id => loader.require(id);
     const setSourceMapsEnabled = (enabled: unknown): void => {
       loader.sources.setSourceMapsSupport(enabled, { nodeModules: enabled, generatedCode: enabled });
     };
@@ -284,6 +306,12 @@ export async function runLocalProcess(start: LocalProcessStart, io: ProcessRunti
     // refusing eval so every generated source crosses the compiler boundary.
     restore.push(installGeneratedFunctions(compiler, globalThis, loader.sources, { eval: start.dependencies === undefined ? "refuse" : "native",
       importModule: (specifier, options) => loader.import(specifier, undefined, options) }));
+    restore.push(installFunctionSources(globalThis, loader.functionSources));
+    // Node's Request and Response read a Node stream given as a body; the browser's would stringify it.
+    restore.push(installNodeBodies(globalThis));
+    // Node's fetch goes through the process's own HTTP clients, so it reaches what the VM reaches; the worker's does not.
+    restore.push(installNodeFetch(globalThis, { http: (options, callback) => builtins.http.request(options, callback), https: (options, callback) => builtins.https.request(options, callback),
+      decoders: { gzip: () => builtins.zlib.createGunzip(), deflate: () => builtins.zlib.createInflate(), br: () => builtins.zlib.createBrotliDecompress() } }));
     io.ready(input.readRequested, input.closed);
     // Older guest dialects retain local-script execution without this image
     // asset. Installed tasks require the version-matched compiler handoff.

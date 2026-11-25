@@ -6,6 +6,16 @@ import { copyEngineRelease, decodeEngineAssetUrls, decodeEngineDownload, decodeE
 import { syntheticEngineRelease, writeSyntheticRelease } from "./engine-release.test-support.js";
 
 const release = syntheticEngineRelease();
+
+it("schema 5 binds its native utility suite without changing legacy release decoding", () => {
+  const nativeUtilities = { identity: "oxidevm-rust-toybox", abi: 1, catalogSha256: "e".repeat(64) };
+  const manifest = { schemaVersion: 5, engineSource: release.manifest.engineSource,
+    identities: release.manifest.identities, nativeUtilities, artifacts: release.manifest.artifacts };
+  const bytes = new TextEncoder().encode(`${JSON.stringify(manifest, null, 2)}\n`);
+  expect(decodeEngineRelease(bytes)).toEqual(manifest);
+  expect(decodeEngineRelease(release.releaseJson)).toEqual(release.manifest);
+  expect(() => decodeEngineRelease(new TextEncoder().encode(`${JSON.stringify({ ...manifest, nativeUtilities: undefined }, null, 2)}\n`))).toThrow();
+});
 const localOnly = pinEngineRelease(release.releaseJson, release.licenseIdentity, null);
 const assetUrls = Object.fromEntries(["release.json", "LICENSE", ...release.modules.keys()].map((name, index) => [name, `https://api.github.com/repos/spacia-ai/oxidevm-sdk/releases/assets/${String(index + 100)}`]));
 const downloadable = pinEngineRelease(release.releaseJson, release.licenseIdentity, decodeEngineDownload({ kind: "github-release-assets", release: `engine-${release.id}`, assets: assetUrls }, release.id));

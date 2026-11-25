@@ -39,10 +39,10 @@ describe("Linux-backed synchronous filesystem adapter", () => {
   it("rejects unsupported metadata and directory options before guest I/O", () => {
     const operations: AssistanceOperation[] = [];
     const fs = createSyncFiles(operation => { operations.push(operation); return { kind: "unit" }; }, () => "/workspace");
-    expect(() => Reflect.apply(fs.statSync, fs, ["file", { bigint: true }])).toThrow(/Unsupported/);
+    expect(() => Reflect.apply(fs.statSync, fs, ["file", { bigint: true, other: 1 }])).toThrow(/Unsupported/);
     expect(() => Reflect.apply(fs.readdirSync, fs, ["dir", { recursive: true }])).toThrow(/Unsupported/);
     expect(() => Reflect.apply(fs.rmdirSync, fs, ["dir", { recursive: true }])).toThrow(/Unsupported/);
-    expect(() => Reflect.apply(fs.readlinkSync, fs, ["link", "buffer"])).toThrow(/Unsupported/);
+    expect(() => Reflect.apply(fs.readlinkSync, fs, ["link", { withFileTypes: true }])).toThrow(/Unsupported/);
     expect(() => { Reflect.apply(fs.writeFileSync, fs, ["file", "data", undefined, "a"]); }).toThrow(/Unsupported/);
     expect(() => { Reflect.apply(fs.unlinkSync, fs, ["file", { force: true }]); }).toThrow(/Unsupported/);
     expect(operations).toEqual([]);

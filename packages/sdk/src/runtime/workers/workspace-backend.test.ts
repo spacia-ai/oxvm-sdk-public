@@ -1,5 +1,8 @@
 import { expect, it } from "vitest";
-import { readWorkspaceBlob } from "./workspace-backend.js";
+import { MemoryDirectory, MemoryQuota } from "./opfs-double.test-support.js";
+import { opfsWorkspaceStoreBackend, readWorkspaceBlob } from "./workspace-backend.js";
+import { WorkspaceStore } from "./workspace-store.js";
+import { workspaceBytesInput } from "./workspace-stream.js";
 
 it("cancels a pending OPFS blob read and awaits underlying retirement", async () => {
   const reading = Promise.withResolvers<undefined>();
@@ -61,4 +64,49 @@ it("does not hide failed blob retirement behind cancellation", async () => {
   await reading.promise;
   controller.abort();
   await failed;
+});
+
+it("commits a compressible workspace larger than the origin quota and reopens every byte", async () => {
+  const chunk = 1024 ** 2;
+  const quota = new MemoryQuota(2 * chunk);
+  const directory = new MemoryDirectory("workspace", undefined, quota);
+  const base = "a".repeat(64);
+  const signal = new AbortController().signal;
+  const snapshot = new Uint8Array(3 * chunk);
+  for (let i = 0; i < 3; i++) snapshot.fill(i + 1, i * chunk, (i + 1) * chunk);
+  const streams = { snapshot: workspaceBytesInput(snapshot), delta: workspaceBytesInput(Uint8Array.of(9)) };
+
+  await expect(new WorkspaceStore(opfsWorkspaceStoreBackend(directory)).commitStreams(base, streams, signal))
+    .rejects.toMatchObject({ name: "QuotaExceededError" });
+  const writer = new WorkspaceStore(opfsWorkspaceStoreBackend(directory, true));
+  await expect(writer.commitStreams(base, streams, signal)).resolves.toBe(1);
+  expect(quota.used).toBeLessThan(chunk);
+
+  const reader = new WorkspaceStore(opfsWorkspaceStoreBackend(directory));
+  const restored = await reader.read(base);
+  expect(restored?.length).toBe(snapshot.length);
+  expect(restored?.every((byte, offset) => byte === snapshot[offset])).toBe(true);
+  await expect(reader.readDelta(base)).resolves.toEqual(Uint8Array.of(9));
+});
+
+it("reads existing raw chunks and rejects invalid compressed lengths before allocation", async () => {
+  const directory = new MemoryDirectory();
+  const raw = opfsWorkspaceStoreBackend(directory);
+  const compact = opfsWorkspaceStoreBackend(directory, true);
+  const path = `chunks/${"b".repeat(64)}`;
+  const bytes = new Uint8Array(128 * 1024).fill(17);
+
+  await raw.write(path, bytes, "immutable-chunk");
+  expect((await compact.read(path))?.every(byte => byte === 17)).toBe(true);
+  await compact.remove(path);
+  await compact.write(path, bytes, "immutable-chunk");
+  await expect(raw.read(path, bytes.length - 1)).rejects.toMatchObject({ code: "STORAGE_ERROR" });
+  const packed = await directory.getDirectoryHandle("chunks");
+  const file = await packed.getFileHandle(`${"b".repeat(64)}.gzip-v1`);
+  const writable = await file.createWritable({ keepExistingData: true });
+  await writable.write({ type: "write", position: 0, data: Uint8Array.of(0xff, 0xff, 0xff, 0xff) });
+  await writable.close();
+  await expect(raw.read(path)).rejects.toMatchObject({ code: "STORAGE_ERROR" });
+  await raw.remove(path);
+  await expect(compact.read(path)).resolves.toBeUndefined();
 });

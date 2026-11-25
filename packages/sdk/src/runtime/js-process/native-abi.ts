@@ -1,10 +1,25 @@
 import { decodeProcessId } from "../../values.js";
-import { Reader, Writer, protocol, decodeJSIdentity, type JSProcessIdentity } from "./codec.js";
+import { integer } from "../decode.js";
+import { JS_MAILBOX_BYTES, Reader, protocol, decodeJSIdentity, writeBytes, type JSProcessIdentity } from "./codec.js";
 export type { JSProcessIdentity } from "./codec.js";
+
+const REQUEST_MAGIC = new TextEncoder().encode("OXJR");
+const REQUEST_HEADER_BYTES = 36;
 
 export interface JSCompletion extends JSProcessIdentity { readonly sequence: number; readonly pid: number; readonly errno: number; readonly value: bigint; readonly payload: Uint8Array }
 export function encodeJSRequest(identity: JSProcessIdentity, sequence: number, operation: number, payload: Uint8Array): Uint8Array<ArrayBuffer> {
-  return new Writer().raw(new TextEncoder().encode("OXJR")).u32(4).u64(identity.generation).u64(identity.id).u64(sequence).u32(operation).raw(payload).finish();
+  const length = REQUEST_HEADER_BYTES + payload.byteLength;
+  if (length > JS_MAILBOX_BYTES - 64) protocol("Linux request exceeds its byte limit");
+  const bytes = new Uint8Array(length);
+  const view = new DataView(bytes.buffer);
+  writeBytes(bytes, REQUEST_MAGIC);
+  view.setUint32(4, 4, true);
+  view.setBigUint64(8, identity.generation, true);
+  view.setBigUint64(16, identity.id, true);
+  view.setBigUint64(24, BigInt(integer(sequence, "u64", 0)), true);
+  view.setUint32(32, integer(operation, "u32", 0, 0xffff_ffff), true);
+  writeBytes(bytes, payload, REQUEST_HEADER_BYTES);
+  return bytes;
 }
 export function decodeJSCompletion(bytes: Uint8Array): JSCompletion {
   const r = new Reader(bytes);

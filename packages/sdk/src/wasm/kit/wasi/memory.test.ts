@@ -70,3 +70,15 @@ describe("iovec lists (OBL-IO-BOUNDS)", () => {
     expect(() => view.ioVectors(0, 1)).toThrow(GuestFault);
   });
 });
+
+it("copies out of a shared memory into an unshared buffer, so a decoder accepts the bytes", () => {
+  // Threaded programs (napi-rs bindings) run on a shared memory; a slice of a SharedArrayBuffer is still shared.
+  const shared = new WebAssembly.Memory({ initial: 1, maximum: 1, shared: true }), guest = new GuestMemory(shared);
+  guest.write(64, new TextEncoder().encode("shared"));
+  const copy = guest.read(64, 6);
+  expect(copy.buffer).toBeInstanceOf(ArrayBuffer);
+  expect(new TextDecoder().decode(copy)).toBe("shared");
+  // A copy: later guest writes do not change it.
+  guest.write(64, new TextEncoder().encode("CHANGE"));
+  expect(new TextDecoder().decode(copy)).toBe("shared");
+});

@@ -132,16 +132,20 @@ export function readInto(
   handle: FileSystemSyncAccessHandle,
   offset: number,
   destination: Uint8Array,
-): void {
+): number {
   destination.fill(0);
   let completed = 0;
   while (completed < destination.byteLength) {
     const count = handle.read(destination.subarray(completed), {
       at: offset + completed,
     });
-    if (count === 0) return;
+    if (!Number.isSafeInteger(count) || count < 0 || count > destination.byteLength - completed) {
+      throw new VMError("STORAGE_ERROR", "managed disk read returned an invalid byte count");
+    }
+    if (count === 0) break;
     completed += count;
   }
+  return completed;
 }
 
 export function writeAll(

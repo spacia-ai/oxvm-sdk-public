@@ -11,6 +11,6 @@ export async function currentSystemImage(images:FileSystemDirectoryHandle,ref:Ma
  const source=await loadPinnedImage(images,ref.identity);
  if(source===undefined||source.ref.id!==ref.id||source.ref.version!==ref.version)throw new VMError("STORAGE_NOT_FOUND","Active system image source is not retained");
  const manifest=source.manifest;
- if(trusted!==undefined)await verifyManagedImageManifest(manifest,trusted);
+ if(trusted!==undefined&&manifest.schemaVersion===9)await verifyManagedImageManifest(manifest,trusted);
  return {id:manifest.id,version:manifest.version,runtimes:manifest.runtimes,...(trusted===undefined||manifest.schemaVersion!==9?{}:{identity:{id:manifest.id,version:manifest.version,mode:"system",cpuProfile:manifest.cpuProfile,keyId:trusted.keyId,signatureVerified:true,manifestSHA256:decodeSHA256(await sha256Hex(new TextEncoder().encode(source.manifestText)),"actual signed manifest")}}),...(manifest.workspaceBaseSha256===undefined?{}:{workspaceBaseSha256:manifest.workspaceBaseSha256}),...(requested===undefined||requested.id===manifest.id&&requested.version===manifest.version?{}:{update:{...requested}})};
 }

@@ -97,3 +97,22 @@ it("rejects incoming frames that underreport their cloned backing bytes", async 
     expect(await error).toMatchObject({ code: "PROTOCOL_ERROR", message: "Worker message underreports cloned bytes" });
   } finally { ports.dispose(); channel.port2.close(); }
 });
+
+it("passes a shared WebAssembly memory by reference, charges a shared buffer nothing for its size, and refuses an unshared memory as the platform does", () => {
+  const ports = createNodePorts(createAsyncContext(), callback => callback(), () => {});
+  try {
+    const memory = new WebAssembly.Memory({ initial: 1, maximum: 2048, shared: true });
+    memory.grow(1100); // 72 MiB: more than one message may copy.
+    const flag = new Int32Array(memory.buffer, 64, 1), cloned = ports.clone({ memory, flag, plain: new SharedArrayBuffer(128 * 1024 * 1024) });
+    expect(cloned.bytes).toBeLessThan(1024);
+    const received: unknown = ports.receive(cloned.value);
+    if (typeof received !== "object" || received === null) throw new Error("Missing received value");
+    const other: unknown = Reflect.get(received, "memory"), view: unknown = Reflect.get(received, "flag");
+    if (!(other instanceof WebAssembly.Memory) || !(view instanceof Int32Array)) throw new Error("Missing shared memory");
+    Atomics.store(flag, 0, 7);
+    expect([other.buffer.byteLength, Atomics.load(view, 0), Atomics.load(new Int32Array(other.buffer, 64, 1), 0)]).toEqual([memory.buffer.byteLength, 7, 7]);
+    expect(() => ports.clone(new WebAssembly.Memory({ initial: 1 }))).toThrow(/could not be cloned|DataCloneError|clone/iu);
+    // Copied buffers still count in full.
+    expect(() => ports.clone([new SharedArrayBuffer(8), new ArrayBuffer(64 * 1024 * 1024 + 1)])).toThrow(/byte limit/u);
+  } finally { ports.dispose(); }
+});

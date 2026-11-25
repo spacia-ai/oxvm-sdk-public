@@ -95,7 +95,7 @@ export type StorageRequest =
       readonly type: "read-workspace-delta";
       readonly workspaceBaseSha256: string;
     })
-  | (RequestBase & { readonly type: "dispose" | "workspace-persistence" });
+  | (RequestBase & { readonly type: "dispose" | "workspace-persistence" | "release-workspace-reserve" });
 
 export type StorageIncoming = StorageRequest | CancelRequest;
 function decodeManagedBoot(value: unknown): ManagedBoot {
@@ -270,6 +270,7 @@ export function decodeStorageIncoming(value: unknown): StorageIncoming {
       return { ...base, type, storage: decodeStorageScope(message["storage"]) };
     case "dispose":
     case "workspace-persistence":
+    case "release-workspace-reserve":
       exactKeys(message, ["id", "version", "type"]);
       return { ...base, type };
     default:

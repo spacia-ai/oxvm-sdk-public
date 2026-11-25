@@ -37,14 +37,14 @@ async function fixture(schemaVersion:number) {
 }
 
 it("refuses unsupported embedded rootfs schemas during inspection and before import publication",async()=>{
-  const f=await fixture(9),error={code:"SNAPSHOT_VERSION",detail:{reason:"backup-newer"}};
+  const f=await fixture(10),error={code:"SNAPSHOT_VERSION",detail:{reason:"backup-newer"}};
   await expect(inspectBackup(f.store,f.file,Date.now())).rejects.toMatchObject(error);
   await expect(importBackup(f.store,f.file,{enqueue:work=>work(),signal:new AbortController().signal,now:()=>Date.now()})).rejects.toMatchObject(error);
   expect(await f.store.list()).toEqual([]);
 });
 
-it("recognizes supported packed rootfs schemas and honors inspection cancellation",async()=>{
-  const f=await fixture(8);
+it.each([8, 9])("recognizes supported packed rootfs schema %s and honors inspection cancellation",async schema=>{
+  const f=await fixture(schema);
   await expect(inspectBackup(f.store,f.file,Date.now())).resolves.toMatchObject({mode:"userspace",compatible:true});
   await expect(inspectBackup(f.store,f.file,Date.now(),AbortSignal.abort())).rejects.toMatchObject({code:"ABORTED"});
 });

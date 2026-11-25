@@ -23,10 +23,13 @@ export interface OpenModuleFrame {
   dispose(): void;
 }
 
-export async function openModuleFrame(url: URL, sources: ModuleFrameSources, signal?: AbortSignal): Promise<OpenModuleFrame> {
+export async function openModuleFrame(url: URL, sources: ModuleFrameSources | Promise<ModuleFrameSources>, signal?: AbortSignal): Promise<OpenModuleFrame> {
   let opened;
   try {
-    opened = await openExecutionFrame(url, (port, nonce) => ({ version: MODULE_FRAME_BOOTSTRAP_VERSION, type: "module-bootstrap", nonce, port, broker: sources.broker, runner: sources.runner }), (input, nonce) => {
+    opened = await openExecutionFrame(url, async (port, nonce) => {
+      const { broker, runner } = await sources;
+      return { version: MODULE_FRAME_BOOTSTRAP_VERSION, type: "module-bootstrap", nonce, port, broker, runner };
+    }, (input, nonce) => {
       const answer = decodeModuleFrameAnswer(input);
       if (answer.nonce !== nonce) throw new VMError("PROTOCOL_ERROR", "Module frame binding mismatch");
       if (answer.type === "module-failure") throw isolationUnavailable(answer.capability, `This browser cannot isolate WebAssembly modules (${answer.capability})`);
@@ -36,7 +39,7 @@ export async function openModuleFrame(url: URL, sources: ModuleFrameSources, sig
     }, signal, "opaque");
   } catch (error: unknown) {
     // A frame that never loads or answers (Firefox blocks one whose CORP its opaque origin fails) is a capability too.
-    if (error instanceof VMError && error.code === "CORE_LOAD_FAILED") throw isolationUnavailable("frame-load", "The module frame did not load");
+    if (error instanceof VMError && error.code === "CORE_LOAD_FAILED" && error.detail?.["reason"] !== "module-frame-asset") throw isolationUnavailable("frame-load", "The module frame did not load");
     throw error;
   }
   const { liveness } = opened.receipt;

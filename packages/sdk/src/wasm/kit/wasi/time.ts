@@ -84,16 +84,22 @@ export function timeFunctions(context: WasiContext): Readonly<Record<string, Imp
         subscription.kind === "fd" && subscription.fd !== undefined ? [{ fd: subscription.fd, events: subscription.tag === TAG.read ? POLLIN : POLLOUT, userdata: subscription.userdata, tag: subscription.tag }] : []);
       const clocks = subscriptions.flatMap(subscription => subscription.kind === "clock" ? [subscription] : []);
       if (events.length === 0) {
+        const at = context.at;
         let timeout = -1n;
+        let expired = false;
         if (clocks.length > 0) {
           const host = requireClock(context);
-          const remaining = clocks.map(clock => clock.deadline - host.now(clock.clock)).reduce((low, value) => value < low ? value : low);
+          const deadlines = clocks.map(clock => clock.deadline - host.now(clock.clock));
+          const remaining = deadlines.reduce((low, value) => value < low ? value : low);
           timeout = remaining <= 0n ? 0n : (remaining + NS_PER_MS - 1n) / NS_PER_MS;
           if (timeout > MAX_WAIT_MS) timeout = MAX_WAIT_MS;
+          // An expired monotonic deadline cannot become pending while this call runs.
+          expired = descriptors.length === 0 && clocks.every(clock => clock.clock === "monotonic") && deadlines.every(value => value <= 0n);
         }
         if (descriptors.length > 16) throw new WasiError(WASI.inval);
-        const entries: readonly { readonly fd: FileDescriptor; readonly events: 1 | 4 }[] = descriptors.length === 0 ? [{ fd: idleDescriptor(), events: POLLIN }] : descriptors.map(entry => ({ fd: entry.fd, events: entry.events }));
-        const ready = context.at.poll(entries, Number(timeout));
+        const ready = expired ? [] : at.poll(descriptors.length === 0
+          ? [{ fd: idleDescriptor(), events: POLLIN }]
+          : descriptors.map(({ fd, events }) => ({ fd, events })), Number(timeout));
         let readyCount = 0;
         for (const descriptor of descriptors) {
           const result = ready.find(entry => entry.fd === descriptor.fd);
@@ -104,7 +110,7 @@ export function timeFunctions(context: WasiContext): Readonly<Record<string, Imp
         }
         if (readyCount === 0 && clocks.length > 0) {
           const host = requireClock(context);
-          for (const clock of clocks) if (host.now(clock.clock) >= clock.deadline) events.push({ userdata: clock.userdata, error: WASI.success, type: TAG.clock, hangup: false });
+          for (const clock of clocks) if (expired || host.now(clock.clock) >= clock.deadline) events.push({ userdata: clock.userdata, error: WASI.success, type: TAG.clock, hangup: false });
         }
       }
       events.forEach((event, index) => {

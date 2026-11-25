@@ -1,15 +1,16 @@
 import type { BootProgress } from "./contracts.js";
 import { imagePublicKeyBytes, type ImageInfo, type ImageRef } from "./image.js";
 import { fetchPinnedBytes } from "./engine-assets.js";
+import type { PinnedAssetCache } from "./pinned-assets.js";
 import { decodeManagedImageManifest, verifyManagedImageManifest } from "./runtime/managed-image.js";
 import { decodeUserspaceRootfsManifest, verifyUserspaceRootfsManifest } from "./runtime/userspace-rootfs.js";
 import { VMError } from "./runtime/errors.js";
 import type { RuntimeMode } from "./values.js";
 
 /** `manifest` is the pinned manifest's bytes it verified, which a Userspace start hands to its storage owner. */
-export async function verifyImage<M extends RuntimeMode>(image: ImageRef<M>, base: string, signal?: AbortSignal, progress?: (progress: BootProgress) => void): Promise<{ readonly info: ImageInfo & { readonly mode: M }; readonly memoryMiB: number; readonly maxProcesses?: number; readonly manifest: Uint8Array<ArrayBuffer> }> {
+export async function verifyImage<M extends RuntimeMode>(image: ImageRef<M>, base: string, signal?: AbortSignal, progress?: (progress: BootProgress) => void, cache: PinnedAssetCache = "ordinary"): Promise<{ readonly info: ImageInfo & { readonly mode: M }; readonly memoryMiB: number; readonly maxProcesses?: number; readonly manifest: Uint8Array<ArrayBuffer> }> {
   const url = new URL(image.manifestUrl, base);
-  const bytes = await fetchPinnedBytes(url, image.manifestSHA256, "image", signal, progress);
+  const bytes = await fetchPinnedBytes(url, image.manifestSHA256, "image", signal, progress, { cache });
   let input: unknown;
   try { input = JSON.parse(new TextDecoder("utf-8", { fatal: true }).decode(bytes)) as unknown; }
   catch { throw new VMError("PROTOCOL_ERROR", "image manifest must contain UTF-8 JSON"); }

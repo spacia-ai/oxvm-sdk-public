@@ -1,6 +1,8 @@
 import { exactKeys, integer, record, string } from "./decode.ts";
 import { VMError } from "./errors.ts";
 
+export { equalBytes } from "./equal-bytes.js";
+
 export const MAX_JIT_MODULE_BYTES = 4 * 1024 * 1024;
 /** Compiled JIT module bytes a system core keeps alive. The cost of a larger budget is browser
  * memory for compiled code: 2 GiB is the budget that removed every eviction from the first
@@ -82,26 +84,6 @@ export function encodeJitCacheIndex(entries: ReadonlyMap<string, number>): strin
     version: JIT_CACHE_INDEX_VERSION,
     entries: [...entries].map(([key, bytes]) => ({ key, bytes })),
   });
-}
-
-export function equalBytes(left: Uint8Array, right: Uint8Array): boolean {
-  const length = left.byteLength;
-  if (length !== right.byteLength) return false;
-  let index = 0;
-  if (length >= 512) {
-    const leftView = new DataView(left.buffer, left.byteOffset, length);
-    const rightView = new DataView(right.buffer, right.byteOffset, length);
-    for (; index + 4 <= length; index += 4) {
-      if (leftView.getUint32(index, true) !== rightView.getUint32(index, true)) return false;
-    }
-  } else if (length === 0) {
-    // Preserve detached-buffer validation when an empty view appears valid.
-    return left.every(() => true) && right.every(() => true);
-  }
-  for (; index < length; index += 1) {
-    if (left[index] !== right[index]) return false;
-  }
-  return true;
 }
 
 export function findContiguousJitSlots(

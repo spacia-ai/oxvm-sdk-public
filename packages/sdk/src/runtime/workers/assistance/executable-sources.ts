@@ -5,23 +5,30 @@ import type { TransformedSource } from "./compiler.ts";
 import { SourceMap } from "./node-source-map.ts";
 
 export type ExecutableRole = "commonjs" | "module-implementation" | "module-registration" | "generated-function" | "script";
-type ExecutableMapping = { readonly path: string; readonly role: ExecutableRole } & (
+type ExecutableMapping = { readonly path: string; readonly role: ExecutableRole; readonly characters: number } & (
   { readonly kind: "identity"; readonly application: SourceMap | undefined; readonly wrapperLines: number } |
   { readonly kind: "mapped"; readonly map: SourceMap; readonly application: SourceMap | undefined; readonly wrapperLines: number }
 );
 
+interface ApplicationMap { readonly map: SourceMap; readonly characters: number }
+
 /** One process owns the maps for its evaluated bodies. Compilation identities
  * remain distinct across ESM lowering passes and require.cache invalidation. */
 export class ExecutableSources {
+  /** In the order they were emitted, which is the order they are forgotten in. */
   readonly #maps = new Map<string, ExecutableMapping>();
   #mapCharacters = 0;
-  readonly #application = new Map<string, { module: SourceMap | undefined; generated: SourceMap | undefined }>();
+  #emitted = 0;
+  readonly #budget: number;
+  /** A program's own source maps by file identity, oldest first; each slot knows what it was charged. */
+  readonly #application = new Map<string, { module: ApplicationMap | undefined; generated: ApplicationMap | undefined }>();
   readonly #read: (path: string) => string;
   #support = support(false, false, false);
   readonly #urls: ReturnType<typeof createNodeUrl>;
 
-  constructor(read: (path: string) => string = () => { throw new VMError("FEATURE_NOT_AVAILABLE", "Source-map reads need the Linux file owner"); }, cwd: () => string = () => "/") {
+  constructor(read: (path: string) => string = () => { throw new VMError("FEATURE_NOT_AVAILABLE", "Source-map reads need the Linux file owner"); }, cwd: () => string = () => "/", budget = 64 * 1024 * 1024) {
     this.#read = read;
+    this.#budget = budget;
     this.#urls = createNodeUrl(cwd);
   }
 
@@ -43,21 +50,25 @@ export class ExecutableSources {
     if (generated && alias === undefined) return;
     const key = this.#urls.pathToFileURL(path).href;
     const map = loadApplicationSourceMap(generated && alias !== undefined ? this.#key(alias) : path, content, this.#read);
-    if (map === undefined) {
-      const previous = this.#application.get(key);
-      if (previous !== undefined) {
-        if (generated) previous.generated = undefined; else previous.module = undefined;
-      }
-      return;
+    const identities = alias === undefined ? [key] : [key, this.#key(alias)];
+    // Whatever these identities held is replaced: a reloaded file's earlier map is not counted beside its new one.
+    for (const identity of identities) {
+      const entry = this.#application.get(identity), slot = generated ? entry?.generated : entry?.module;
+      if (entry === undefined || slot === undefined) continue;
+      this.#mapCharacters -= slot.characters;
+      if (generated) entry.generated = undefined; else entry.module = undefined;
+      if (entry.module === undefined && entry.generated === undefined) this.#application.delete(identity);
     }
+    if (map === undefined) return;
     const characters = JSON.stringify(map.payload).length;
-    if (this.#application.size + (alias === undefined ? 1 : 2) > 65_536 || this.#mapCharacters + characters > 64 * 1024 * 1024) {
+    if (characters > this.#budget || !this.#room(characters, identities.length)) {
       throw new VMError("QUOTA_EXCEEDED", "Application source-map registry budget exhausted", { path });
     }
     this.#mapCharacters += characters;
-    for (const identity of alias === undefined ? [key] : [key, this.#key(alias)]) {
-      const entry = this.#application.get(identity) ?? { module: undefined, generated: undefined };
-      if (generated) entry.generated = map; else entry.module = map;
+    // The map is charged once, to its first identity.
+    for (const [index, identity] of identities.entries()) {
+      const entry = this.#application.get(identity) ?? { module: undefined, generated: undefined }, slot = { map, characters: index === 0 ? characters : 0 };
+      if (generated) entry.generated = slot; else entry.module = slot;
       this.#application.set(identity, entry);
     }
   }
@@ -67,27 +78,47 @@ export class ExecutableSources {
     if (typeof path !== "string" || path.startsWith("node:")
       || (!this.#support.nodeModules && path.split("/").includes("node_modules"))) return undefined;
     const entry = this.#application.get(this.#key(path));
-    return entry?.module ?? entry?.generated;
+    return entry?.module?.map ?? entry?.generated?.map;
   }
 
   #key(path: string): string {
     return URL.canParse(path) ? path : this.#urls.pathToFileURL(path).href;
   }
 
-  emitScript(source: string, path: string, role: "script" | "commonjs" = "script"): string {
-    if (this.#maps.size >= 65_536 || this.#mapCharacters + source.length > 64 * 1024 * 1024) {
-      throw new VMError("QUOTA_EXCEEDED", "Executable source-map budget exhausted", { path, role });
+  /**
+   * Makes room for `characters` more, and for `identities` more application entries. What is oldest is forgotten first:
+   * loaded bodies, then the program's own source maps. A program that keeps loading code (a development server
+   * reloading its bundles) keeps running; a stack frame in a forgotten body is reported by its compiled location, and
+   * one whose source map was forgotten by the position in the file that ran.
+   */
+  #room(characters: number, identities = 0): boolean {
+    const fits = (): boolean => this.#mapCharacters + characters <= this.#budget;
+    for (const [url, oldest] of this.#maps) {
+      if (this.#maps.size < 65_536 && fits()) break;
+      this.#maps.delete(url); this.#mapCharacters -= oldest.characters;
     }
-    const url = `oxidevm:compiled/${this.#maps.size + 1}/${encodeURIComponent(path)}`;
-    this.#maps.set(url, { path, role, kind: "identity", application: role === "commonjs" ? this.findSourceMap(path) : undefined, wrapperLines: role === "commonjs" ? 2 : 0 });
+    for (const [identity, oldest] of this.#application) {
+      if (this.#application.size + identities <= 65_536 && fits()) break;
+      this.#application.delete(identity); this.#mapCharacters -= (oldest.module?.characters ?? 0) + (oldest.generated?.characters ?? 0);
+    }
+    return fits();
+  }
+
+  /** The identity of one more loaded body. A body that could never fit is refused. */
+  #admit(characters: number, path: string, role: ExecutableRole): string {
+    if (characters > this.#budget || !this.#room(characters)) throw new VMError("QUOTA_EXCEEDED", "Executable source-map budget exhausted", { path, role });
+    return `oxidevm:compiled/${String(++this.#emitted)}/${encodeURIComponent(path)}`;
+  }
+
+  emitScript(source: string, path: string, role: "script" | "commonjs" = "script"): string {
+    const url = this.#admit(source.length, path, role);
+    this.#maps.set(url, { path, role, characters: source.length, kind: "identity", application: role === "commonjs" ? this.findSourceMap(path) : undefined, wrapperLines: role === "commonjs" ? 2 : 0 });
     this.#mapCharacters += source.length;
     return `${role === "commonjs" ? normalizeExecutableSource(source) : source}\n//# sourceURL=${url}`;
   }
 
   emit(source: TransformedSource, path: string, role: ExecutableRole): string {
-    if (this.#maps.size >= 65_536 || this.#mapCharacters + source.map.length > 64 * 1024 * 1024) {
-      throw new VMError("QUOTA_EXCEEDED", "Executable source-map budget exhausted", { path, role });
-    }
+    if (source.map.length > this.#budget) throw new VMError("QUOTA_EXCEEDED", "Executable source-map budget exhausted", { path, role });
     const payload: unknown = JSON.parse(source.map);
     let map: SourceMap;
     try { map = new SourceMap(payload); }
@@ -95,9 +126,9 @@ export class ExecutableSources {
       if (error instanceof VMError) throw new VMError(error.code, error.message, { ...error.detail, path, role });
       throw error;
     }
-    const url = `oxidevm:compiled/${this.#maps.size + 1}/${encodeURIComponent(path)}`;
+    const url = this.#admit(source.map.length, path, role);
     const wrapperLines = role === "script" ? 0 : 2;
-    this.#maps.set(url, { path, role, kind: "mapped", map, application: this.findSourceMap(path), wrapperLines });
+    this.#maps.set(url, { path, role, characters: source.map.length, kind: "mapped", map, application: this.findSourceMap(path), wrapperLines });
     this.#mapCharacters += source.map.length;
     // Function's implicit wrapper adds two lines. Keep its map in original
     // compiler coordinates and account for that wrapper only during lookup.

@@ -16,13 +16,20 @@ export { decodeIoUringCallSource, type IoUringCallSource } from "./userspace-io-
 
 export { decodeUserspaceSpawnResult, type UserspaceSpawnResult } from "./userspace-spawn.ts";
 
-export const USERSPACE_API_VERSION = 151;
+/** API 152 adds native utility run results, work counters and process-free root migration. */
+/** API 153 adds the OXJR statfs operation to the native utility engine. */
+export const USERSPACE_API_VERSION = 153;
 /** Current encoder version; historical trace versions remain readable below. */
 export const USERSPACE_SYSCALL_TRACE_VERSION = 53;
 
 /** A newer work model must be understood before its CPU metrics can be interpreted. */
 export function decodeUserspaceKernelAccountingModel(value: unknown): 1 {
   if (value !== 1n) throw new VMError("PROTOCOL_ERROR", "Unsupported Userspace kernel accounting model");
+  return 1;
+}
+
+export function decodeUserspaceNativeAccountingModel(value: unknown): 1 {
+  if (value !== 1n) throw new VMError("PROTOCOL_ERROR", "Unsupported Userspace native accounting model");
   return 1;
 }
 
@@ -57,6 +64,7 @@ export const MAX_USERSPACE_SYSCALL_TRACE_BYTES = 24 + MAX_USERSPACE_SYSCALL_TRAC
 export type UserspaceRunResult =
   | { readonly kind: "exit"; readonly code: number }
   | { readonly kind: "step-limit" }
+  | { readonly kind: "native-yield"; readonly work: bigint; readonly model: 1 }
   | { readonly kind: "blocked" }
   | { readonly kind: "fault" };
 
@@ -212,14 +220,24 @@ export function encodeUserspaceArguments(arguments_: readonly string[]): Uint8Ar
   return record;
 }
 
+const USERSPACE_RUN_MAGIC = 0x524c_584f; // OXLR
+
 export function decodeUserspaceRunResult(bytes: Uint8Array, completionStatus?: number): UserspaceRunResult {
-  if (
-    bytes.byteLength !== 16
-    || new TextDecoder().decode(bytes.subarray(0, 4)) !== "OXLR"
-  ) {
-    throw new VMError("PROTOCOL_ERROR", "Userspace result record is malformed");
+  if (bytes.byteLength === 24) {
+    const view = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
+    const work = view.getBigUint64(16, true);
+    if (view.getUint32(0, true) === USERSPACE_RUN_MAGIC
+      && view.getUint16(4, true) === 3 && view.getUint16(6, true) === 0
+      && view.getUint32(8, true) === 12 && view.getUint8(12) === 4
+      && view.getUint8(13) === 0 && view.getUint16(14, true) === 1 && work > 0n
+      && (completionStatus === undefined || completionStatus === 6)) {
+      return { kind: "native-yield", work, model: 1 };
+    }
+    throw new VMError("PROTOCOL_ERROR", "Userspace native yield is malformed or unsupported");
   }
+  if (bytes.byteLength !== 16) throw new VMError("PROTOCOL_ERROR", "Userspace result record is malformed");
   const view = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
+  if (view.getUint32(0, true) !== USERSPACE_RUN_MAGIC) throw new VMError("PROTOCOL_ERROR", "Userspace result record is malformed");
   if (
     view.getUint16(4, true) !== 2
     || view.getUint16(6, true) !== 0

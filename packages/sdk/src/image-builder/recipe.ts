@@ -3,6 +3,7 @@ import { readFile } from "node:fs/promises";
 import { resolve } from "node:path";
 import { pathToFileURL } from "node:url";
 import { VMError } from "../runtime/errors.js";
+import { decodeNativeUtilitySuite } from "../runtime/native-utilities.js";
 import { exactKeys, integer, record, string } from "../runtime/decode.js";
 import { decodeSHA256 } from "../values.js";
 import type { BootFilesSource, CommonImageRecipe, SystemImageRecipe, EvidenceInputs, FileArtifactInput, ImageRecipe, UserspaceImageRecipe, KernelSource, RootfsSource } from "./contracts.js";
@@ -109,7 +110,7 @@ function packFirst(value: unknown): readonly string[] {
 
 export function decodeImageRecipe(value: unknown): ImageRecipe {
   const input = record(value, "image recipe");
-  exactKeys(input, ["id", "version", "mode", "source", "smokeTest"], ["cpuProfile", "sourceDateEpoch", "evidence", "resources", "boot", "disk", "workspace", "packFirst"]);
+  exactKeys(input, ["id", "version", "mode", "source", "smokeTest"], ["cpuProfile", "sourceDateEpoch", "evidence", "resources", "boot", "disk", "workspace", "packFirst", "nativeUtilities"]);
   const id = text(input["id"], "id"); const version = text(input["version"], "version");
   if (![id, version].every(value => /^[a-z0-9][a-z0-9._-]{0,63}$/u.test(value))) throw new VMError("INVALID_ARGUMENT", "image ID/version must be bounded portable identifiers");
   const cpuProfile = input["cpuProfile"];
@@ -126,11 +127,13 @@ export function decodeImageRecipe(value: unknown): ImageRecipe {
     if (input["boot"] !== undefined || input["disk"] !== undefined || decodedSource.kind === "boot-files") throw new VMError("INVALID_ARGUMENT", "Userspace recipes cannot contain boot files or a disk");
     if (resources !== undefined) exactKeys(resources, [], ["memoryMiB", "maxProcesses"]);
     return { ...common, mode: "userspace", source: decodedSource,
+      ...(input["nativeUtilities"] === undefined ? {} : { nativeUtilities: decodeNativeUtilitySuite(input["nativeUtilities"]) }),
       ...(resources === undefined ? {} : { resources: { ...memoryMiB, ...(resources["maxProcesses"] === undefined ? {} : { maxProcesses: integer(resources["maxProcesses"], "maxProcesses", 1, 64) }) } }),
       ...(input["workspace"] === undefined ? {} : { workspace: workspace(input["workspace"]) }),
       ...(input["packFirst"] === undefined ? {} : { packFirst: packFirst(input["packFirst"]) }) };
   }
   if (input["mode"] !== "system") throw new VMError("INVALID_ARGUMENT", "mode must be system or userspace");
+  if (input["nativeUtilities"] !== undefined) throw new VMError("INVALID_ARGUMENT", "nativeUtilities is a Userspace recipe option");
   if (input["workspace"] !== undefined) throw new VMError("INVALID_ARGUMENT", "workspace ownership is a Userspace recipe option; a System disk keeps the owners its source recorded");
   if (input["packFirst"] !== undefined) throw new VMError("INVALID_ARGUMENT", "packFirst is a Userspace recipe option; a System disk is delivered in fixed chunks");
   if (resources !== undefined) exactKeys(resources, [], ["memoryMiB", "vcpus"]);

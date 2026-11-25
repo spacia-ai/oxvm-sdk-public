@@ -32,10 +32,15 @@ export class GuestMemory {
   setU32(pointer: number, value: number): void { this.#view(pointer, 4).setUint32(0, value, true); }
   u64(pointer: number): bigint { return this.#view(pointer, 8).getBigUint64(0, true); }
   setU64(pointer: number, value: bigint): void { this.#view(pointer, 8).setBigUint64(0, value, true); }
-  /** A copy of guest bytes: the host never keeps a view into guest memory. */
+  /**
+   * A copy of guest bytes: the host never keeps a view into guest memory. The copy is unshared even when the memory is
+   * shared (a threaded program's): a slice of a SharedArrayBuffer is still shared, and decoders refuse shared bytes.
+   */
   read(pointer: number, length: number): Uint8Array<ArrayBuffer> {
     this.check(pointer, length);
-    return new Uint8Array(this.#memory.buffer.slice(pointer, pointer + length));
+    const copy = new Uint8Array(length);
+    copy.set(new Uint8Array(this.#memory.buffer, pointer, length));
+    return copy;
   }
   write(pointer: number, bytes: Uint8Array): void {
     this.check(pointer, bytes.byteLength);

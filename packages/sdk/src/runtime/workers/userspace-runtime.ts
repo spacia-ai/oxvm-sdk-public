@@ -10,7 +10,7 @@ import { createCore } from "./control/core.js";
 import { JitRuntime } from "./control/jit-runtime.js";
 import { browserJitCompilerHost, JitCompilerClient } from "./control/jit-compiler-client.js";
 import { JitDeferredInstall } from "./control/jit-deferred-install.js";
-import { jitEnginePolicy } from "./control/jit-engine-policy.js";
+import { userspaceJitEnginePolicy, warmUserspaceJitEntries } from "./control/jit-engine-policy.js";
 import type { JitDegradation } from "./control/jit-health.js";
 import { DEFAULT_JIT_INSTALL_MODE, type SystemJitInstallMode } from "../protocol/system-trace-background-compile.js";
 import { callUserspaceU32 as call } from "./userspace-exports.js";
@@ -69,11 +69,12 @@ export async function instantiateRuntime(compiled: WebAssembly.Module, source: s
       throw new VMError("CORE_LOAD_FAILED", "Userspace JIT alias exports are missing");
     }
   }
-  const jitPolicy = jitEnginePolicy();
+  const jitPolicy = userspaceJitEnginePolicy();
+  const warmEntries = memoryExport.buffer instanceof ArrayBuffer && warmUserspaceJitEntries();
   const jitRuntime = new JitRuntime(
     executionTiming,
     undefined,
-    new JitDeferredInstall(jitInstall, new JitCompilerClient(browserJitCompilerHost()), jitPolicy.batch),
+    new JitDeferredInstall(jitInstall, new JitCompilerClient(browserJitCompilerHost(warmEntries)), jitPolicy.batch),
     onJitDegraded,
   );
   jitRuntime.initialize();

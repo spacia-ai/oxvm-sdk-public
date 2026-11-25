@@ -1,5 +1,9 @@
 import type { AssistanceBinding } from "../protocol/assistance.js";
 import { VMError } from "../errors.js";
+import { integer } from "../decode.js";
+import { decodeRootRebaseSource, decodeRootRebaseStep, encodeRootRebaseSource } from "../userspace-root-rebase-abi.js";
+import type { NativeRootRead } from "./native-cold-files.js";
+import type { SnapshotStorageClient } from "./snapshot-channel.js";
 import { decodeUserspaceRootExport } from "../userspace-persistence-abi.js";
 import { AssistanceTraffic } from "./control/assistance-traffic.js";
 import { callUserspaceU32 as call, callUserspaceU64 as call64 } from "./userspace-exports.js";
@@ -91,6 +95,69 @@ export class UserspaceRootPersistence {
     }
   }
 
+  /** Runs before the cold candidate can spawn. Storage selects its new root only
+   * when the surrounding workspace and image publication commits. */
+  async rebase(sourceId: string, client: Pick<SnapshotStorageClient, "request">, signal: AbortSignal): Promise<void> {
+    this.#active(signal);
+    const source = decodeRootRebaseSource(await client.request({ type: "inspect-native-cold-root", sourceId }, [], signal));
+    if (source === undefined) return;
+    if (source.rootTreeSha256 === this.#identity) throw new VMError("PROTOCOL_ERROR", "System-file update selected its own prior image");
+    this.#stage(encodeRootRebaseSource(source));
+    const id = call64(this.#runtime.instance, "oxidevm_userspace_root_rebase_begin", 40 + source.metadata.length);
+    if (id === 0n) throw new VMError("STORAGE_ERROR", "Native system-file update could not start");
+    try {
+      await this.#feedRebase({ kind: "native-root", id: sourceId }, source.rootTreeSha256, "root_import_feed", id, signal);
+      this.#ok("root_rebase_prepare", id);
+      for (;;) {
+        this.#active(signal);
+        this.#ok("root_rebase_next", id);
+        const step = decodeRootRebaseStep(readFileRecord(this.#runtime));
+        if (step.kind === "ready") break;
+        if (step.kind === "shadowed") throw new VMError("NATIVE_UTILITY_MISMATCH", "A persistent file shadows a managed Rust utility", {
+          reason: "path-shadowed", path: step.path,
+        });
+        if (step.kind === "conflict") throw new VMError("STORAGE_ERROR", "Both images have persistent edits at the same path", {
+          reason: "system-file-conflict", path: step.path,
+        });
+        const file = { path: step.path, bytes: step.bytes, sha256: step.sha256 };
+        await this.#feedRebase({ kind: "native-root", id: sourceId, file }, source.rootTreeSha256, "root_rebase_file", id, signal);
+      }
+      this.#ok("root_rebase_complete", id);
+    } catch (error) { this.#ok("root_transfer_abort", id); throw error; }
+    await this.#export({ session: sourceId, generation: 1 }, 1, async ({ descriptor, transfer }) => {
+      integer(await client.request({ type: "stage-native-cold-root", sourceId, input: descriptor }, transfer, signal),
+        "staged system-file generation", 1);
+    });
+  }
+
+  async #feedRebase(selection: NativeRootRead, base: string, operation: "root_import_feed" | "root_rebase_file",
+    id: bigint, signal: AbortSignal): Promise<void> {
+    const read = await this.#storage.workspaceTransfers.read(base, signal, selection);
+    try {
+      const input = read.selection?.snapshot;
+      if (input === undefined || (read.selection?.delta?.bytes ?? 0) !== 0 || read.selection?.dependencies !== undefined
+        || (selection.file === undefined ? input.bytes === 0 || read.selection?.workspaceBaseSha256 !== base : input.bytes !== selection.file.bytes)) {
+        throw new VMError("STORAGE_ERROR", "Verified system-file update stream differs from its requested source");
+      }
+      const producer = input.source(signal);
+      try {
+        if (input.bytes === 0) {
+          this.#stage(new Uint8Array());
+          this.#ok(operation, id, 0);
+        } else {
+          let received = 0;
+          for await (const frame of producer.frames) {
+            this.#active(signal);
+            this.#stage(frame);
+            this.#ok(operation, id, frame.length);
+            received += frame.length;
+          }
+          if (received !== input.bytes) throw new VMError("STORAGE_ERROR", "Verified system-file update stream ended early");
+        }
+      } finally { await producer.retire(); }
+    } finally { await read.retire(); }
+  }
+
   schedule(): Promise<void> { return this.#queue.schedule(); }
   flush(): Promise<void> { return this.#queue.flush(); }
 
@@ -102,6 +169,13 @@ export class UserspaceRootPersistence {
     if (revision === 0xffff_ffff_ffff_ffffn) throw new VMError("STORAGE_ERROR", "Root revision is exhausted or unavailable");
     if (revision === call64(instance, "oxidevm_userspace_root_published_revision")) return;
     if (this.#publication.transfer === 0xffff_ffff) throw new VMError("QUOTA_EXCEEDED", "Root transfer sequence exhausted");
+    await this.#export(this.#publication.binding, ++this.#publication.transfer, async ({ descriptor }) => {
+      await this.#storage.commitRootOverlay(this.#identity, descriptor);
+    });
+  }
+
+  async #export(binding: AssistanceBinding, sequence: number,
+    publish: (transfer: ReturnType<typeof transferWorkspaceStream>) => Promise<void>): Promise<void> {
     this.#ok("root_export_begin");
     const exported = decodeUserspaceRootExport(readFileRecord(this.#runtime));
     let retired = false;
@@ -125,8 +199,8 @@ export class UserspaceRootPersistence {
             yield await Promise.resolve(bytes);
           }
         })(this), retire,
-      }) }, this.#publication.binding, ++this.#publication.transfer, this.#traffic);
-      await this.#storage.commitRootOverlay(this.#identity, transferred.descriptor);
+      }) }, binding, sequence, this.#traffic);
+      await publish(transferred);
       await transferred.finished;
       this.#ok("root_export_complete", exported.id, 1);
     } catch (error) {

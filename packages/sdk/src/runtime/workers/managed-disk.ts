@@ -74,6 +74,7 @@ export class ManagedDisk {
   readonly #blockScratch = new Uint8Array(BLOCK_BYTES);
   readonly #zeroes = new Uint8Array(SNAPSHOT_CHUNK_BYTES);
   #changeBase: string | null;
+  #reserveDeferredForShippedInstall = false;
   #pendingBitmap:
     | { readonly offset: number; readonly length: number }
     | undefined;
@@ -110,7 +111,8 @@ export class ManagedDisk {
     generation: string,
     image: ManagedImageSource,
     base: BaseLease,
-    { reserveBytes = DISK_RESERVE_BYTES }: { readonly reserveBytes?: number } = {},
+    { reserveBytes = DISK_RESERVE_BYTES, deferReserve = false }:
+      { readonly reserveBytes?: number; readonly deferReserve?: boolean } = {},
   ): Promise<ManagedDisk> {
     const length = image.manifest.disk.bytes;
     let bitmapHandle: FileSystemSyncAccessHandle | undefined;
@@ -133,7 +135,7 @@ export class ManagedDisk {
       if (record === undefined) {
         await writeGenerationRecord(directory, { schema: 1, image: image.ref, bytes: length, changeBase: null });
       }
-      reserve = await SpaceReserve.open(directory, reserveBytes);
+      reserve = await SpaceReserve.open(directory, reserveBytes, !deferReserve);
       return new ManagedDisk({
         image,
         generation,
@@ -279,8 +281,15 @@ export class ManagedDisk {
     }
   }
 
+  /** Releases the quiesced generation's reserve until the shipped start replaces or reopens it. */
+  deferReserveForShippedInstall(): void {
+    this.#reserveDeferredForShippedInstall = true;
+    this.#reserve?.release();
+  }
+
   /** Holds the guest's space reserve again when the origin has room; whether it holds it now. */
   async holdReserve(): Promise<boolean> {
+    if (this.#reserveDeferredForShippedInstall) return false;
     return (await this.#reserve?.hold()) ?? false;
   }
 

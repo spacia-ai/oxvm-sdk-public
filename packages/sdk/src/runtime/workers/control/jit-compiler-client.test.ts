@@ -272,12 +272,20 @@ describe("JIT compiler protocol", () => {
       version: JIT_COMPILER_PROTOCOL_VERSION,
       type: "attach",
       ready: null,
-    })).toEqual({ version: JIT_COMPILER_PROTOCOL_VERSION, type: "attach", ready: null });
+      warmEntries: true,
+    })).toEqual({ version: JIT_COMPILER_PROTOCOL_VERSION, type: "attach", ready: null, warmEntries: true });
     expect(() => decodeJitCompilerRequest({
       version: JIT_COMPILER_PROTOCOL_VERSION,
       type: "attach",
       ready: new Int32Array(2),
+      warmEntries: false,
     })).toThrow("JIT compiler ready counter is invalid");
+    expect(() => decodeJitCompilerRequest({
+      version: JIT_COMPILER_PROTOCOL_VERSION,
+      type: "attach",
+      ready: null,
+      warmEntries: "true",
+    })).toThrow("JIT compiler warm-up flag is invalid");
   });
 
   it("rejects responses with extra fields, wrong versions or no module", () => {

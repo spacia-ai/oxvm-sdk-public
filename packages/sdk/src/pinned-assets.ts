@@ -1,9 +1,18 @@
 import type { BootProgress } from "./contracts.js";
 import { VMError } from "./runtime/errors.js";
 import { sha256Hex } from "./runtime/workers/snapshot-content.js";
+import { availableStorageBytes, DISK_RESERVE_BYTES } from "./runtime/workers/browser-quota.js";
+
+export type PinnedAssetCache = "ordinary" | "reserve-workspace";
+
+interface PinnedBytesOptions {
+  readonly expectedBytes?: number;
+  readonly cache?: PinnedAssetCache;
+}
 
 /** Bounded, pinned bytes. An immutable Blob URL keeps verification and execution together. */
-export async function fetchPinnedBytes(url: URL, digest: string, asset: "engine" | "image" | "compiler", signal?: AbortSignal, progress?: (progress: BootProgress) => void, expectedBytes?: number): Promise<Uint8Array<ArrayBuffer>> {
+export async function fetchPinnedBytes(url: URL, digest: string, asset: "engine" | "image" | "compiler", signal?: AbortSignal, progress?: (progress: BootProgress) => void, options: PinnedBytesOptions = {}): Promise<Uint8Array<ArrayBuffer>> {
+  const { expectedBytes } = options;
   abortIfRequested(signal);
   const code = asset === "image" ? "PROTOCOL_ERROR" : "CORE_LOAD_FAILED";
   try {
@@ -25,7 +34,10 @@ export async function fetchPinnedBytes(url: URL, digest: string, asset: "engine"
       throw error;
     });
     const bytes = await readPinnedResponse(response, digest, asset, signal, progress, expectedBytes);
-    await cache?.put(key, new Response(bytes)).catch(() => undefined);
+    if (cache !== undefined && (options.cache !== "reserve-workspace"
+      || (await availableStorageBytes() ?? Infinity) >= DISK_RESERVE_BYTES + bytes.length)) {
+      await cache.put(key, new Response(new Blob([bytes]))).catch(() => undefined);
+    }
     return bytes;
   } catch (error) {
     abortIfRequested(signal);

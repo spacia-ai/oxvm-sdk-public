@@ -1,5 +1,6 @@
 import { Buffer } from "buffer";
-import { statsOf, type Stats } from "./node-stats.ts";
+import { BigIntStats, statsOf, type Stats } from "./node-stats.ts";
+import { lateFailureError } from "../../js-process/late-failure.ts";
 import { systemErrorMessage } from "./node-system-errors.ts";
 import { VMError } from "../../errors.js";
 import { ASSISTANCE_LIMITS, type AssistanceFileTime, type AssistanceOperation } from "../../protocol/assistance.js";
@@ -9,8 +10,29 @@ import { fileURLToPath } from "./node-url.js";
 /** One Linux operation program is driven by either the synchronous mailbox or
  * asynchronous completion. Both forms retain identical validation and cleanup. */
 export type FileOperation<Result> = Generator<AssistanceOperation, Result, AssistanceResult>;
-export const fileAccessConstants = Object.freeze({ F_OK: 0, R_OK: 4, W_OK: 2, X_OK: 1, COPYFILE_EXCL: 1, COPYFILE_FICLONE: 2, COPYFILE_FICLONE_FORCE: 4 });
+/** Linux x86-64 `open(2)` flag values, which are the ones Node's `fs.constants` holds in the guest. */
+const O = Object.freeze({ O_RDONLY: 0, O_WRONLY: 1, O_RDWR: 2, O_CREAT: 0o100, O_EXCL: 0o200, O_NOCTTY: 0o400, O_TRUNC: 0o1000, O_APPEND: 0o2000, O_NONBLOCK: 0o4000,
+  O_DSYNC: 0o10000, O_DIRECT: 0o40000, O_DIRECTORY: 0o200000, O_NOFOLLOW: 0o400000, O_NOATIME: 0o1000000, O_SYNC: 0o4010000 });
+export const fileAccessConstants = Object.freeze({ F_OK: 0, R_OK: 4, W_OK: 2, X_OK: 1, COPYFILE_EXCL: 1, COPYFILE_FICLONE: 2, COPYFILE_FICLONE_FORCE: 4, ...O });
 const flags = ["r", "r+", "w", "w+", "wx", "wx+", "a", "a+", "ax", "ax+"];
+/** What each flag string asks of `open(2)`, in the order of `flags`: the file service opens exactly these ten. */
+const flagBits = [O.O_RDONLY, O.O_RDWR, O.O_WRONLY | O.O_CREAT | O.O_TRUNC, O.O_RDWR | O.O_CREAT | O.O_TRUNC,
+  O.O_WRONLY | O.O_CREAT | O.O_TRUNC | O.O_EXCL, O.O_RDWR | O.O_CREAT | O.O_TRUNC | O.O_EXCL, O.O_WRONLY | O.O_CREAT | O.O_APPEND, O.O_RDWR | O.O_CREAT | O.O_APPEND,
+  O.O_WRONLY | O.O_CREAT | O.O_APPEND | O.O_EXCL, O.O_RDWR | O.O_CREAT | O.O_APPEND | O.O_EXCL];
+/** Bits that change nothing here: no descriptor is inherited across exec, none becomes a controlling terminal, and offsets are 64-bit. */
+const IGNORED_OPEN_BITS = 0o2000000 /* O_CLOEXEC */ | O.O_NOCTTY | 0o100000 /* O_LARGEFILE */;
+const S_IFMT = 0o170000, S_IFDIR = 0o040000;
+
+/** Numeric `open` flags as one of the ten operations, with whether the caller also required a directory. A combination no
+ * flag string names is a limitation of the file service, so the program is remembered and next runs in Linux. */
+function numericFlags(value: number): { readonly index: number; readonly directory: boolean } {
+  if (!Number.isInteger(value) || value < 0 || value > 0xffff_ffff) throw Object.assign(new RangeError(`The value of "flags" is out of range. It must be an integer >= 0 && <= 4294967295. Received ${String(value)}`), { code: "ERR_OUT_OF_RANGE" });
+  const meaningful = value & ~IGNORED_OPEN_BITS, directory = (meaningful & O.O_DIRECTORY) !== 0;
+  // Opening a directory never blocks, so O_NONBLOCK asks nothing more once the target is known to be one.
+  const index = flagBits.indexOf(meaningful & ~(directory ? O.O_DIRECTORY | O.O_NONBLOCK : 0));
+  if (index === -1 || (directory && index !== 0)) throw lateFailureError("unavailable-builtin", `fs.open flags 0o${value.toString(8)} are not supported`, "node:fs open flags");
+  return { index, directory };
+}
 
 export function createFileOperations(cwd: () => string, asynchronous = false, copyOpenMode?: 10) {
   function* perform(operation: AssistanceOperation): FileOperation<AssistanceResult> {
@@ -34,8 +56,19 @@ export function createFileOperations(cwd: () => string, asynchronous = false, co
     return decoded;
   }
   function* open(value: unknown, flag: unknown = "r", mode: unknown = 0o666): FileOperation<number> {
-    if (typeof flag !== "string" || !flags.includes(flag)) throw new TypeError("Unsupported open flags");
-    const result = yield* perform({ kind: "open", path: path(value), flags: flags.indexOf(flag), mode: permissions(mode ?? 0o666) });
+    const selected = typeof flag === "number" ? numericFlags(flag) : { index: typeof flag === "string" ? flags.indexOf(flag) : -1, directory: false };
+    if (selected.index === -1) throw new TypeError("Unsupported open flags");
+    const target = path(value);
+    if (selected.directory) {
+      // O_DIRECTORY: the service has no such flag, so the target is examined first and only a directory is opened. Nothing
+      // else is ever opened this way, which also keeps a FIFO from blocking the open.
+      // shortcut: the check and the open are two operations; a path replaced in between is opened as whatever it became.
+      const status = yield { kind: "stat", path: target };
+      if (status.kind === "error") nodeResult({ ...status, syscall: "open" });
+      if (status.kind !== "stat") throw mismatch();
+      if ((status.stat.mode & S_IFMT) !== S_IFDIR) nodeResult({ kind: "error", errno: 20, code: "ENOTDIR", syscall: "open", path: target, destination: null });
+    }
+    const result = yield* perform({ kind: "open", path: target, flags: selected.index, mode: permissions(mode ?? 0o666) });
     if (result.kind !== "opened") throw mismatch();
     return result.fd;
   }
@@ -80,8 +113,10 @@ export function createFileOperations(cwd: () => string, asynchronous = false, co
     yield* close(fd);
     return result;
   }
-  function* readFile(value: unknown, options?: unknown): FileOperation<Buffer | string> {
-    const selected = contentOptions(options, "r");
+  /** `abortable` is false for the synchronous calls, where Node does not look at `signal`. */
+  function* readFile(value: unknown, options: unknown, abortable: boolean): FileOperation<Buffer | string> {
+    const selected = contentOptions(options, "r"), stop = abortable ? abortCheck(options) : undefined;
+    stop?.();
     const bytes = yield* withFile(value, selected.flag, function* (fd): FileOperation<Buffer> {
       const chunks: Uint8Array[] = [];
       let total = 0;
@@ -89,6 +124,7 @@ export function createFileOperations(cwd: () => string, asynchronous = false, co
         const chunk = new Uint8Array(ASSISTANCE_LIMITS.chunk);
         const count = yield* read(fd, chunk, 0, chunk.length);
         if (count === 0) break;
+        stop?.();
         chunks.push(chunk.subarray(0, count));
         total += count;
       }
@@ -96,12 +132,14 @@ export function createFileOperations(cwd: () => string, asynchronous = false, co
     });
     return selected.encoding === null ? bytes : bytes.toString(selected.encoding);
   }
-  function* writeFile(value: unknown, data: unknown, options?: unknown, flag: "w" | "a" = "w"): FileOperation<void> {
-    const selected = contentOptions(options, flag);
+  function* writeFile(value: unknown, data: unknown, options: unknown, flag: "w" | "a", abortable: boolean): FileOperation<void> {
+    const selected = contentOptions(options, flag), stop = abortable ? abortCheck(options) : undefined;
+    stop?.();
     const bytes = typeof data === "string" ? Buffer.from(data, selected.encoding ?? "utf8") : binary(data);
     yield* withFile(value, selected.flag, function* (fd): FileOperation<void> {
       let offset = 0;
       while (offset < bytes.length) {
+        stop?.();
         const count = yield* write(fd, bytes, offset, bytes.length - offset);
         if (count === 0) throw Object.assign(new Error("EIO: write made no progress"), { errno: -5, code: "EIO", syscall: "write" });
         offset += count;
@@ -109,16 +147,19 @@ export function createFileOperations(cwd: () => string, asynchronous = false, co
       if (selected.flush) yield* unit({ kind: "fsync", fd });
     }, selected.mode);
   }
-  function* pathResult(kind: "readlink" | "realpath", value: unknown, options?: unknown): FileOperation<string> {
-    noOptions(options);
+  function* pathResult(kind: "readlink" | "realpath", value: unknown, options?: unknown): FileOperation<string | Buffer> {
+    const encoding = pathEncoding(options);
     const result = yield* perform({ kind, path: kind === "realpath" && value === "" ? cwd() : path(value) });
     if (result.kind !== "path") throw mismatch();
-    return result.path;
+    return encoding === "utf8" ? result.path : encoding === null ? Buffer.from(result.path) : Buffer.from(result.path).toString(encoding);
   }
-  function* stat(operation: AssistanceOperation, options?: unknown): FileOperation<FileStats | undefined> {
-    let throwIfNoEntry = true;
+  function* stat(operation: AssistanceOperation, options?: unknown): FileOperation<FileStats | BigIntStats | undefined> {
+    let throwIfNoEntry = true, big = false;
     if (options !== undefined) {
-      if (typeof options !== "object" || options === null || Object.keys(options).some(key => !["bigint", "throwIfNoEntry"].includes(key)) || Reflect.get(options, "bigint") === true) throw new TypeError("Unsupported filesystem options");
+      if (typeof options !== "object" || options === null || Object.keys(options).some(key => !["bigint", "throwIfNoEntry"].includes(key))) throw new TypeError("Unsupported filesystem options");
+      const bigint: unknown = Reflect.get(options, "bigint");
+      if (bigint !== undefined && typeof bigint !== "boolean") throw Object.assign(new TypeError('The "options.bigint" property must be of type boolean.'), { code: "ERR_INVALID_ARG_TYPE" });
+      big = bigint === true;
       const requested: unknown = Reflect.get(options, "throwIfNoEntry");
       if (requested !== undefined && typeof requested !== "boolean") throw new TypeError("Invalid throwIfNoEntry option");
       throwIfNoEntry = asynchronous || requested !== false;
@@ -130,7 +171,7 @@ export function createFileOperations(cwd: () => string, asynchronous = false, co
       throw error;
     }
     if (result.kind !== "stat") throw mismatch();
-    return fileStats(result.stat);
+    return big ? bigintFileStats(result.stat) : fileStats(result.stat);
   }
   function* copyFile(source: unknown, destination: unknown, flags: unknown = 0): FileOperation<void> {
     // shortcut: system assistance needs a negotiated nontruncating write-create mode before enabling copyFile.
@@ -257,9 +298,15 @@ export function createFileOperations(cwd: () => string, asynchronous = false, co
     access: checked((value: unknown, mode?: unknown) => unit({ kind: "access", path: path(value), mode: accessMode(mode) }), 1, 2),
     open: checked(open, 1, 3), close: checked(close, 1, 1),
     read: checked(read, 4, 5), write: checked(write, 2, 5),
-    readFile: checked(readFile, 1, 2),
-    writeFile: checked((value: unknown, data: unknown, encoding?: unknown) => writeFile(value, data, encoding), 2, 3),
-    appendFile: checked((value: unknown, data: unknown, encoding?: unknown) => writeFile(value, data, encoding, "a"), 2, 3),
+    readFile: checked((value: unknown, options?: unknown) => readFile(value, options, true), 1, 2),
+    writeFile: checked((value: unknown, data: unknown, encoding?: unknown) => writeFile(value, data, encoding, "w", true), 2, 3),
+    appendFile: checked((value: unknown, data: unknown, encoding?: unknown) => writeFile(value, data, encoding, "a", true), 2, 3),
+    /** The synchronous forms: the same operations, without the `signal` option's effect. */
+    sync: {
+      readFile: checked((value: unknown, options?: unknown) => readFile(value, options, false), 1, 2),
+      writeFile: checked((value: unknown, data: unknown, encoding?: unknown) => writeFile(value, data, encoding, "w", false), 2, 3),
+      appendFile: checked((value: unknown, data: unknown, encoding?: unknown) => writeFile(value, data, encoding, "a", false), 2, 3),
+    },
     stat: checked((value: unknown, options?: unknown) => stat({ kind: "stat", path: path(value) }, options), 1, 2),
     lstat: checked((value: unknown, options?: unknown) => stat({ kind: "lstat", path: path(value) }, options), 1, 2),
     fstat: checked((fd: unknown, options?: unknown) => stat({ kind: "fstat", fd: descriptor(fd) }, options), 1, 2),
@@ -347,6 +394,11 @@ function fileStats(value: Extract<AssistanceResult, { kind: "stat" }>["stat"]): 
     atimeMs: milliseconds(value.atimeNs), mtimeMs: milliseconds(value.mtimeNs), ctimeMs: milliseconds(value.ctimeNs),
     birthtimeMs: value.details === null ? undefined : milliseconds(value.details.birthtimeNs ?? 0n),
   });
+}
+
+function bigintFileStats(value: Extract<AssistanceResult, { kind: "stat" }>["stat"]): BigIntStats {
+  return new BigIntStats(value.dev, BigInt(value.mode), value.nlink, BigInt(value.uid), BigInt(value.gid), value.details?.rdev ?? 0n, BigInt(value.blksize), value.ino,
+    value.size, value.blocks, value.atimeNs, value.mtimeNs, value.ctimeNs, value.details?.birthtimeNs ?? 0n);
 }
 
 function milliseconds(nanoseconds: bigint): number {
@@ -437,12 +489,38 @@ function bufferEncoding(value: unknown, fallback: BufferEncodingName | null): Bu
 }
 function contentOptions(value: unknown, defaultFlag: string) {
   const object = typeof value === "object" && value !== null ? value : null;
-  if (object !== null && Object.keys(object).some(key => !["encoding", "flag", "mode", "flush"].includes(key))) throw new TypeError("Unsupported filesystem options");
+  if (object !== null && Object.keys(object).some(key => !["encoding", "flag", "mode", "flush", "signal"].includes(key))) throw new TypeError("Unsupported filesystem options");
   const at = (key: string): unknown => object === null ? undefined : Reflect.get(object, key);
   const encoding = bufferEncoding(object === null ? value : at("encoding"), null), flag = at("flag") ?? defaultFlag;
   const flush = at("flush") ?? false, mode = mkdirOptions({ mode: at("mode") ?? 0o666 }).mode;
   if (typeof flag !== "string" || !flags.includes(flag) || typeof flush !== "boolean") throw new TypeError("Invalid filesystem options");
   return { encoding, flag, mode, flush };
+}
+/**
+ * Node's `signal` option of the asynchronous `readFile`, `writeFile` and `appendFile`: the returned check throws
+ * Node's AbortError once the signal has aborted. It runs before the file is opened and between its reads or writes.
+ */
+function abortCheck(options: unknown): (() => void) | undefined {
+  const signal: unknown = typeof options === "object" && options !== null ? Reflect.get(options, "signal") : undefined;
+  if (signal === undefined) return undefined;
+  if (typeof signal !== "object" || signal === null || !("aborted" in signal)) {
+    throw Object.assign(new TypeError(`The "options.signal" property must be an instance of AbortSignal. Received ${signal === null ? "null" : `type ${typeof signal}`}`), { code: "ERR_INVALID_ARG_TYPE" });
+  }
+  return () => {
+    if (signal.aborted !== true) return;
+    throw Object.assign(new Error("The operation was aborted", { cause: Reflect.get(signal, "reason") }), { name: "AbortError", code: "ABORT_ERR" });
+  };
+}
+/** Node's `encoding` option of `realpath` and `readlink`, as a string or in an options object; null is `"buffer"`, which asks for bytes. */
+function pathEncoding(value: unknown): BufferEncodingName | null {
+  let selected: unknown = value;
+  if (typeof value === "object" && value !== null) {
+    if (Object.keys(value).some(key => key !== "encoding")) throw new TypeError("Unsupported filesystem options");
+    selected = Reflect.get(value, "encoding");
+  } else if (value !== undefined && typeof value !== "string") throw new TypeError("Unsupported filesystem options");
+  if (selected === "buffer") return null;
+  const encoding = bufferEncoding(selected, "utf8") ?? "utf8";
+  return encoding === "utf-8" ? "utf8" : encoding;
 }
 function noOptions(value: unknown): void {
   if (value !== undefined) throw new TypeError("Unsupported filesystem options");

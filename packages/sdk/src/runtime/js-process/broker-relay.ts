@@ -1,5 +1,5 @@
 import { exactKeys, integer, record } from "../decode.js";
-import { JS_MAILBOX_BYTES, JS_MAX_OPERATION, JS_PROCESS_PROTOCOL_VERSION, protocol } from "./codec.js";
+import { JS_MAILBOX_BYTES, JS_MAX_OPERATION, JS_PROCESS_PROTOCOL_VERSION, postOwnedPayload, protocol } from "./codec.js";
 import { writeWorkerMailbox } from "./worker-mailbox.js";
 
 /**
@@ -67,10 +67,9 @@ export function createBrokerRelay(options: BrokerRelayOptions): BrokerRelay {
       }
       const forwarded = integer(sequence - refusals, "forwarded Linux request sequence", 1, 0x7fff_ffff);
       pending.set(forwarded, { sequence, sync: request["sync"] });
-      // Shared memory stays on this side. The execution worker receives the same bounded request asynchronously,
-      // and its attention counter one notice for it.
+      // Queue the request before waking the advisory notice worker.
+      postOwnedPayload(upstream, { ...request, sequence: forwarded, sync: false }, request["payload"]);
       attention?.postMessage(null);
-      upstream.postMessage({ ...request, sequence: forwarded, sync: false });
     } catch (error) { options.fail(error); }
   };
   local.port1.onmessageerror = options.fail; local.port1.start();
@@ -80,7 +79,7 @@ export function createBrokerRelay(options: BrokerRelayOptions): BrokerRelay {
     if (input["version"] !== JS_PROCESS_PROTOCOL_VERSION || input["type"] !== "reply" || request === undefined || typeof input["value"] !== "bigint" || !(input["payload"] instanceof Uint8Array) || input["payload"].byteLength > JS_MAILBOX_BYTES - 64) protocol("Malformed relayed Linux reply");
     const errno = integer(input["errno"], "Linux reply errno", 0, 4095); pending.delete(forwarded);
     if (request.sync) writeWorkerMailbox(header, body, request.sequence, errno, input["value"], input["payload"]);
-    else local.port1.postMessage({ ...input, sequence: request.sequence });
+    else postOwnedPayload(local.port1, { ...input, sequence: request.sequence }, input["payload"]);
   };
   return {
     mailbox, port: local.port2,

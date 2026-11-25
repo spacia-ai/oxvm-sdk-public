@@ -1,28 +1,28 @@
 // Generated from immutable, independently authenticated release inputs.
 export const starterRelease: unknown = {
   "schemaVersion": 2,
-  "sdkVersion": "0.0.34",
-  "engineRelease": "ddfce46b861a01d4ace375866a6278f34d979e72b002ee931c26fa6b23013372",
+  "sdkVersion": "0.0.35",
+  "engineRelease": "c93ce8b562e00762d507cb5f97c22cf568402cba37420e9a6aa121231eda85ec",
   "engineCompliance": {
-    "url": "https://cdn.oxvm.dev/engine/ddfce46b861a01d4ace375866a6278f34d979e72b002ee931c26fa6b23013372/compliance/fec92c8b182a44c48b19427fa4f8cd2526cfe549fb52236b7ad482c8b74d8417/compliance.json",
+    "url": "https://cdn.oxvm.dev/engine/c93ce8b562e00762d507cb5f97c22cf568402cba37420e9a6aa121231eda85ec/compliance/4a356e42942d8d0a7abc1690d670de9e63d826e1b3a94c2fc7531a8774f26261/compliance.json",
     "bytes": 746,
-    "sha256": "fec92c8b182a44c48b19427fa4f8cd2526cfe549fb52236b7ad482c8b74d8417"
+    "sha256": "4a356e42942d8d0a7abc1690d670de9e63d826e1b3a94c2fc7531a8774f26261"
   },
   "image": {
     "mode": "userspace",
-    "manifestUrl": "https://cdn.oxvm.dev/images/oxidevm-starter-pandas/0.0.3/da71749f0624f5444be55994fb92256535004f7983c46b38a2891178bb31e657/manifest.json",
-    "manifestSHA256": "da71749f0624f5444be55994fb92256535004f7983c46b38a2891178bb31e657",
+    "manifestUrl": "https://cdn.oxvm.dev/images/oxidevm-starter-pandas/0.0.4/577025649786e5c0914787fb425979c8105f1b399328979cdf4376b8c9388f2b/manifest.json",
+    "manifestSHA256": "577025649786e5c0914787fb425979c8105f1b399328979cdf4376b8c9388f2b",
     "trust": {
       "algorithm": "Ed25519",
-      "keyId": "ed25519-d753cdd5739b36c670441766e2c08ea8",
-      "publicKey": "MCowBQYDK2VwAyEAynhb7WG89CT3+mWXxbt8zgaDJJmArtm1F9KTf3bzKTU="
+      "keyId": "ed25519-50a9f91e938eec52aa1cbb5944f5e534",
+      "publicKey": "MCowBQYDK2VwAyEA59hDNE+4pmBi14a3u01yZ8GwPRdxHappxOmORi1HdDo="
     }
   },
   "archive": {
-    "url": "https://cdn.oxvm.dev/images/oxidevm-starter-pandas/0.0.3/da71749f0624f5444be55994fb92256535004f7983c46b38a2891178bb31e657/bundle.tgz",
-    "bytes": 338969488,
-    "sha256": "ad060aaa834912f8d004905db2cf8b65b60e531fcc3cbb729294c579f57a9267"
+    "url": "https://cdn.oxvm.dev/images/oxidevm-starter-pandas/0.0.4/577025649786e5c0914787fb425979c8105f1b399328979cdf4376b8c9388f2b/bundle.tgz",
+    "bytes": 321783090,
+    "sha256": "ea54831d7ed9bfbeb8dd7ac988beac43778f200880bd5b56bf3e8e808390ecfa"
   },
-  "materialsSHA256": "90fa99dc8b0bfac3528d69dbfd313835b8059380cb4a7e4788695f3eddf13c86",
-  "materialsUrl": "https://github.com/spacia-ai/oxvm-sdk-public/releases/download/image-oxidevm-starter-pandas-v0.0.3/OPEN-SOURCE-NOTICE.md"
+  "materialsSHA256": "8635a6c114c749ea7a9465587e608604881e6dc8d7acc8590fb11dba22334650",
+  "materialsUrl": "https://github.com/spacia-ai/oxvm-sdk-public/releases/download/image-oxidevm-starter-pandas-v0.0.4/OPEN-SOURCE-NOTICE.md"
 };

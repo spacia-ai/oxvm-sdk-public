@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "engineSource": "ff5c5effdefcc5712ac94bae1d937e5034e4bfef",
+  "engineSource": "2ff397a9228890ffea07b34fbe005a8a1ab92c01",
   "files": [
     {
       "path": "config/allowed-licenses.json",
@@ -12,7 +12,7 @@
     },
     {
       "path": "config/allowed-guest-artifact-licenses.json",
-      "sha256": "10e3071288a04c66b234af8bd240e2d4c8b9597004237b56abc6c3842ba566cd"
+      "sha256": "38c510856563c96e91d96308e537e4df3cfeff7decc26365a868179fd99da039"
     }
   ]
 }

@@ -31,3 +31,16 @@ it("transport views retain shared offsets while copies own ordinary backing", ()
   view[0] = 9; expect(bytes[1]).toBe(9); expect(copy[0]).toBe(2);
   expect(() => writeBytes(bytes, [1, 2, 3, 4], 1)).toThrow(RangeError);
 });
+
+it("reads fixed-width fields without constructing a byte view for each field", () => {
+  class RecordBytes extends Uint8Array {
+    static get [Symbol.species](): Uint8ArrayConstructor {
+      throw new Error("Fixed-width read allocated a byte view");
+    }
+  }
+  const bytes = new RecordBytes(new ArrayBuffer(16), 1, 15);
+  bytes.set(new Writer().u8(1).raw(Uint8Array.of(2, 0)).u32(3).u64(4n).finish());
+  const reader = new Reader(bytes);
+  expect([reader.u8(), reader.u16(), reader.u32(), reader.u64()]).toEqual([1, 2, 3, 4n]);
+  reader.end();
+});

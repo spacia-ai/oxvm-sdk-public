@@ -56,7 +56,9 @@ describe("verified module copies", () => {
   it("neither held nor supplied is refused", async () => {
     const data = await file("data.bin", DATA), other = await file("other.bin", Uint8Array.of(7)), store = new ModuleCopies();
     const hash = vi.spyOn(crypto.subtle, "digest");
-    await expect(store.hold({ kind: "spawn" }, [data], new Map(), live())).rejects.toMatchObject({ code: "PROTOCOL_ERROR", detail: { reason: "wasm-module-copy-missing", file: "data.bin" } });
+    await expect(store.hold({ kind: "spawn" }, [data, other], new Map(), live())).rejects.toMatchObject({
+      code: "PROTOCOL_ERROR", detail: { reason: "wasm-module-copy-missing", file: "data.bin", missing: [copyKey(data.pin), copyKey(other.pin)] },
+    });
     // A Blob for a key the request does not name is refused too: the page sends only what the VM lacks.
     await expect(store.hold({ kind: "spawn" }, [data], supplied([data, other]), live())).rejects.toMatchObject({ code: "PROTOCOL_ERROR" });
     expect(hash).not.toHaveBeenCalled();

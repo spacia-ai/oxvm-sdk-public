@@ -1,7 +1,21 @@
 #!/bin/sh
 set -eu
 test "$(grep '^nameserver ' /etc/resolv.conf)" = "nameserver 192.0.2.1"
-test "$(readlink /bin/sh)" = dash
+case "${1-}" in
+  --native-utilities)
+    suite=/usr/libexec/oxidevm/toybox
+    for shell in sh dash mksh ash; do
+      test "$(readlink "/bin/$shell")" = "$suite"
+      test "$("/bin/$shell" --version)" = "$shell (OxideVM)"
+    done
+    for utility in cat grep sed sort find awk gzip tar; do
+      test "$(readlink "$(command -v "$utility")")" = "$suite"
+    done
+    /sbin/getty --show-issue -f /dev/null
+    ;;
+  '') test "$(readlink /bin/sh)" = dash ;;
+  *) printf '%s\n' 'usage: test-utilities.sh [--native-utilities]' >&2; exit 2 ;;
+esac
 test "$(/bin/dash -c 'kill -l 2')" = INT
 /bin/dash -c 'trap "exit 0" USR1; kill -USR1 $$; exit 1'
 for command in dash mksh sh awk tr expr bc dc crond crontab getty last mount gzip gunzip xz unxz unzip tar diff cmp vi ssh dropbear curl stty env; do

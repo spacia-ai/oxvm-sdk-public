@@ -9,6 +9,18 @@ function thrown(run: () => unknown): unknown {
 }
 
 describe("recipe boundary", () => {
+  it("accepts a native suite requirement only in Userspace recipes", () => {
+    const nativeUtilities = { identity: "oxidevm-rust-toybox", abi: 1, catalogSha256: "a".repeat(64) };
+    expect(decodeImageRecipe({ ...base, nativeUtilities })).toMatchObject({ nativeUtilities });
+    expect(() => decodeImageRecipe({ ...base, nativeUtilities: { ...nativeUtilities, abi: 0 } })).toThrow();
+    expect(() => decodeImageRecipe({ ...base, nativeUtilities: { ...nativeUtilities, catalogSha256: "bad" } })).toThrow();
+    expect(() => decodeImageRecipe({ ...base, nativeUtilities: { ...nativeUtilities, identity: "unknown" } })).toThrow();
+    expect(() => decodeImageRecipe({ ...base, nativeUtilities: { ...nativeUtilities, extra: true } })).toThrow();
+    expect(() => decodeImageRecipe({ ...base, nativeUtilities: { ...nativeUtilities, abi: 0x1_0000 } })).toThrow();
+    const artifact = { path: "file", sha256: "b".repeat(64) };
+    expect(() => decodeImageRecipe({ ...base, mode: "system", nativeUtilities,
+      source: { kind: "boot-files", kernel: artifact, disk: artifact, commandLine: "" } })).toThrow();
+  });
   it("accepts all rootfs adapters without requiring Node", () => {
     for (const source of [base.source, { kind: "archive", artifact: { path: "root.tar", sha256: "a".repeat(64) } }, { kind: "oci", reference: `alpine@sha256:${"a".repeat(64)}` }, { kind: "dockerfile", context: ".", file: "Dockerfile" }]) {
       expect(decodeImageRecipe({ ...base, source }).source).toEqual(source);
@@ -70,15 +82,19 @@ describe("Userspace workspace ownership", () => {
   });
 });
 
-/** Strict test-project compile contract: only Userspace recipes name a workspace owner. */
+/** Strict test-project compile contract for Userspace-only recipe fields. */
 function workspaceContract(): readonly (UserspaceImageRecipe | SystemImageRecipe)[] {
   const smokeTest = { command: "/bin/true", expectedExitCode: 0 } as const;
   const source = { kind: "directory", path: "rootfs" } as const;
+  const nativeUtilities = { identity: "oxidevm-rust-toybox", abi: 1, catalogSha256: "a".repeat(64) } as const;
   return [
+    { id: "rust", version: "1", mode: "userspace", source, nativeUtilities, smokeTest } satisfies UserspaceImageRecipe,
+    // @ts-expect-error native utility requirements apply only to Userspace images
+    { id: "rust", version: "1", mode: "system", source, boot: { kernel: { kind: "managed-default" } }, nativeUtilities, smokeTest } satisfies SystemImageRecipe,
     { id: "user", version: "1", mode: "userspace", source, workspace: { ownership: { uid: 1000, gid: 1000 } }, smokeTest } satisfies UserspaceImageRecipe,
     { id: "system", version: "1", mode: "system", source, boot: { kernel: { kind: "managed-default" } }, smokeTest } satisfies SystemImageRecipe,
     // @ts-expect-error a System disk records its own workspace owners
     { id: "system", version: "1", mode: "system", source, boot: { kernel: { kind: "managed-default" } }, workspace: { ownership: { uid: 1000, gid: 1000 } }, smokeTest } satisfies SystemImageRecipe,
   ];
 }
-it("keeps the compiler-checked workspace recipe contract", () => { expect(workspaceContract()).toHaveLength(3); });
+it("keeps the compiler-checked Userspace recipe contract", () => { expect(workspaceContract()).toHaveLength(5); });

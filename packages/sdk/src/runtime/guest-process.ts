@@ -81,6 +81,8 @@ export class GuestProcessTransport {
     }
     this.#resolveExit = resolveExit;
     this.#rejectExit = rejectExit;
+    // Restore can retire a process before its caller observes the exit promise.
+    void this.exit.catch(() => {});
     let resolveTermination: ((value: ProcessTermination) => void) | undefined;
     let rejectTermination: ((reason: unknown) => void) | undefined;
     this.termination = new Promise((resolve, reject) => { resolveTermination = resolve; rejectTermination = reject; });

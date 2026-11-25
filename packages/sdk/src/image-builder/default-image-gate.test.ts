@@ -1,8 +1,15 @@
-import { mkdtemp, rm, writeFile } from "node:fs/promises";
+import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { afterEach, expect, it } from "vitest";
+import { afterEach, expect, it, vi } from "vitest";
+import { buildImage } from "./build.js";
+import { generateImageKey } from "./keys.js";
 import { defaultHistoryKey, requireReadableDefaultImage } from "./default-image-gate.js";
+
+const suite = vi.hoisted(() => ({
+  identity: "oxidevm-rust-toybox" as const, abi: 1, catalogSha256: "a".repeat(64),
+}));
+vi.mock("../engine.generated.js", () => ({ engineRelease: { schemaVersion: 5, nativeUtilities: suite } }));
 
 const DIGEST = "ab".repeat(32);
 const directories: string[] = [];
@@ -56,4 +63,26 @@ it("refuses a retired default whose lock records no digest", async () => {
   const dir = await defaultDirectory({ schemaVersion: 2 });
 
   await expect(defaultHistoryKey(dir)).rejects.toMatchObject({ code: "PROTOCOL_ERROR" });
+});
+
+it("rejects a signed default that requires a different native utility catalog before staging its pin", async () => {
+  const dir = await mkdtemp(join(tmpdir(), "oxidevm-default-native-gate-"));
+  directories.push(dir);
+  await mkdir(join(dir, "root"));
+  await writeFile(join(dir, "root", "payload"), "owned test bytes");
+  const key = await generateImageKey(join(dir, "author.pem"));
+  const recipe = { id: "native-default", version: "1", mode: "userspace" as const,
+    source: { kind: "directory" as const, path: "root" },
+    smokeTest: { command: "/bin/true", expectedExitCode: 0 as const },
+  };
+  const mismatch = await buildImage({ ...recipe, nativeUtilities: { ...suite, catalogSha256: DIGEST } },
+    { recipeDir: dir, signingKeyFile: key.privateKeyPath, outDir: "mismatch" });
+  await expect(requireReadableDefaultImage(mismatch.bundleDir, key.trust)).rejects.toMatchObject({
+    code: "NATIVE_UTILITY_MISMATCH", detail: { reason: "catalog-mismatch", directory: mismatch.bundleDir },
+  });
+  const matching = await buildImage({ ...recipe, nativeUtilities: suite },
+    { recipeDir: dir, signingKeyFile: key.privateKeyPath, outDir: "matching" });
+  await expect(requireReadableDefaultImage(matching.bundleDir, key.trust)).resolves.toMatchObject({
+    image: { manifestSHA256: matching.image.manifestSHA256 },
+  });
 });

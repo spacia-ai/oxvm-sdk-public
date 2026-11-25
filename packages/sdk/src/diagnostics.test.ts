@@ -13,8 +13,8 @@ it("exports the relay protocol version its relay specification declares, and no 
 
 it("exposes exactly the advanced values the barrel names, so a new runtime export needs an explicit decision", () => {
   const expected = [
-    "MINIMUM_BROWSERS", "NATIVE_FRAME_VERSION", "NATIVE_OPERATION_SET", "RELAY_VERSION", "VMError", "acquireLocalDataLease", "backupFileName", "configureJSProcessTrace",
-    "createRuntimeVM", "decodeSystemTraceSnapshot", "describeSnapshotError", "detectBrowserSupport", "engineRelease",
+    "MINIMUM_BROWSERS", "NATIVE_FRAME_VERSION", "NATIVE_LOGICAL_CHECKPOINT_VERSION", "NATIVE_OPERATION_SET", "RELAY_VERSION", "VMError", "acquireLocalDataLease", "backupFileName", "configureJSProcessTrace",
+    "createManagedUserspaceRuntimeVM", "createRuntimeVM", "decodeSystemTraceSnapshot", "describeSnapshotError", "detectBrowserSupport", "engineRelease",
     "engineReleaseId", "eraseLocalData", "getDiagnostics", "instructionIdentities", "isPreviewSessionOrigin",
     "readJSProcessTrace", "requestWorkspaceHandoff", "validateRuntimeVMOptions", "watchAccelerationNotices",
   ];

@@ -138,6 +138,22 @@ it("settles returned process streams when their control owner disappears", async
   stdin.releaseLock(); stdout.releaseLock(); stderr.releaseLock(); channel.port2.close();
 });
 
+it("keeps an owner failure for an exit observer attached after the owner stops", async () => {
+  const owner = new AbortController();
+  const channel = new MessageChannel();
+  const process = new GuestProcessTransport(channel.port1, 1, 1, {
+    lifetime: owner.signal,
+    write: bytes => Promise.resolve(bytes.length),
+    closeStdin: async () => {}, signal: async () => {},
+  });
+  const reason = new Error("restored runtime replaced the process owner");
+  owner.abort(reason);
+  await new Promise(resolve => setTimeout(resolve, 0));
+  await expect(process.exit).rejects.toBe(reason);
+  await expect(process.termination).rejects.toBe(reason);
+  channel.port2.close();
+});
+
 it("routes PTY resize and rejects invalid or unavailable controls", async () => {
   const channel = new MessageChannel();
   const resizeTerminal = vi.fn(async () => {});

@@ -1,3 +1,4 @@
+import { decodeProcessId } from "../../../values.js";
 import { exactKeys, integer, record } from "../../decode.js";
 import { VMError } from "../../errors.js";
 import { createBrokerRelay, type BrokerRelay } from "../../js-process/broker-relay.js";
@@ -5,7 +6,7 @@ import { JS_PROCESS_PROTOCOL_VERSION, protocol, Reader } from "../../js-process/
 import { decodeRunnerLaunch, type RunnerLaunch, type RunnerVerifiedFile } from "../../js-process/launch.js";
 import { isTrappableSignal } from "../../js-process/signals.js";
 import { isCopyKey, type CopyKey } from "../../protocol/userspace-module-files.js";
-import { MODULE_BROKER_VERSION, MODULE_FRAME_BOOTSTRAP_VERSION } from "../../protocol/module-frame.js";
+import { MODULE_BROKER_VERSION, MODULE_FRAME_BOOTSTRAP_VERSION, MODULE_RUNNER_READY } from "../../protocol/module-frame.js";
 import { TaskSignals } from "../js-process/task-signals.js";
 
 /**
@@ -32,6 +33,8 @@ export interface RunnerWorker {
 export interface ModuleBrokerPorts {
   /** Starts a runner: a classic worker from the runner Blob's URL. */
   readonly startRunner: (pid: number) => RunnerWorker;
+  /** Starts the SDK bootstrap without a process or a module. */
+  readonly prepareRunner?: () => RunnerWorker;
   /** The browser's compiler unless a test supplies one. */
   readonly compile?: (bytes: ArrayBuffer) => Promise<WebAssembly.Module>;
 }
@@ -65,6 +68,7 @@ export function decodeProcessStart(value: unknown): ProcessStart {
 export class ModuleBroker {
   readonly #ports: ModuleBrokerPorts;
   readonly #compiled = new Map<CopyKey, Promise<WebAssembly.Module | null>>();
+  #preparedRunner: { readonly worker: RunnerWorker; ready: boolean } | undefined;
   #processes = 0;
 
   constructor(ports: ModuleBrokerPorts) { this.#ports = ports; }
@@ -101,6 +105,26 @@ export class ModuleBroker {
     // The TLS module is compiled once per frame, the first time a module with a network reach starts (ADR 0029).
     const tls = start.launch.tls === null || start.tls === null ? null : { blob: start.launch.tls.blob, module: await this.#module(start.tls, start.launch.tls) };
     return { ...start.launch, artifacts, tls };
+  }
+
+  #prepareRunner(): void {
+    if (this.#preparedRunner !== undefined || this.#processes >= MODULE_BROKER_PROCESSES || this.#ports.prepareRunner === undefined) return;
+    let worker: RunnerWorker;
+    try { worker = this.#ports.prepareRunner(); }
+    catch { return; }
+    const prepared = { worker, ready: false };
+    this.#preparedRunner = prepared;
+    const discard = (): void => {
+      if (this.#preparedRunner !== prepared) return;
+      this.#preparedRunner = undefined;
+      worker.terminate();
+    };
+    worker.onmessage = event => {
+      if (event.data !== MODULE_RUNNER_READY || prepared.ready) { discard(); return; }
+      prepared.ready = true;
+    };
+    worker.onerror = event => { event.preventDefault(); discard(); };
+    worker.onmessageerror = discard;
   }
 
   #serve(connection: MessagePort, pid: number, retired: () => void): void {
@@ -149,7 +173,9 @@ export class ModuleBroker {
         const start = decodeProcessStart(request["value"]);
         reach = start.reach;
         relay.attach(upstream, attention);
-        const runner = worker = this.#ports.startRunner(pid);
+        const prepared = this.#preparedRunner;
+        const runner = worker = prepared?.ready === true ? prepared.worker : this.#ports.startRunner(pid);
+        if (runner === prepared?.worker) this.#preparedRunner = undefined;
         // A runner can post what cannot be forwarded (a port it did not transfer): that ends its process only, never the
         // broker, whose uncaught error would make the frame end every module process.
         runner.onmessage = (message: MessageEvent<unknown>) => {
@@ -161,7 +187,9 @@ export class ModuleBroker {
         runner.onmessageerror = () => { fail(new VMError("PROTOCOL_ERROR", "Module runner message could not be decoded")); };
         void this.#withModules(start).then(launch => {
           if (stopped) return;
-          runner.postMessage({ version: JS_PROCESS_PROTOCOL_VERSION, type: "start", port: relay.port, mailbox: relay.mailbox, signals: signals.buffer, launch }, [relay.port]);
+          const admitted = launch.kind === "host" ? { ...launch, pid: decodeProcessId(pid) } : launch;
+          runner.postMessage({ version: JS_PROCESS_PROTOCOL_VERSION, type: "start", port: relay.port, mailbox: relay.mailbox, signals: signals.buffer, launch: admitted }, [relay.port]);
+          this.#prepareRunner();
         }, fail);
       } catch (error) { fail(error); }
     };

@@ -199,6 +199,7 @@ export class SnapshotStorageClient {
       const reading = request.type === "inspect-workspace-base" || request.type === "open-workspace-read" || request.type === "read-workspace-frame"
         || request.type === "retire-workspace-source" || request.type === "retire-workspace-read";
       let completedObjects = 0;
+      let completedImageBytes = 0;
       const timedOut = (): void => {
         this.#pending.delete(id);
         this.#late.add(id);
@@ -214,20 +215,37 @@ export class SnapshotStorageClient {
         }));
         this.#port.close();
       }, 30_000) : CAPTURE_REQUESTS.has(request.type) ? setTimeout(timedOut, SNAPSHOT_CAPTURE_REQUEST_TIMEOUT_MILLISECONDS) : undefined;
+      const continueCapture = (): void => {
+        clearTimeout(deadline);
+        deadline = setTimeout(timedOut, SNAPSHOT_CAPTURE_REQUEST_TIMEOUT_MILLISECONDS);
+      };
       const cancel = (): void => {
         void this.request({ type: "cancel-workspace-operation", requestId: id }).catch((error: unknown) => {
           this.#fail(error instanceof VMError ? error : new VMError("PROTOCOL_ERROR", String(error)));
         });
       };
       const cleanup = (): void => { clearTimeout(deadline); signal?.removeEventListener("abort", cancel); };
-      this.#pending.set(id, { resolve, reject, cleanup, imageProgress:value=>{if(request.type!=="prepare-native-image"&&request.type!=="open-native-capture")throw new VMError("PROTOCOL_ERROR","Unexpected image preparation progress");imageProgress?.(value);}, progress: completed => {
-        if (request.type !== "open-native-capture" || completed <= completedObjects) {
-          throw new VMError("PROTOCOL_ERROR", "Snapshot capture progress is stale or unexpected");
-        }
-        completedObjects = completed;
-        clearTimeout(deadline);
-        deadline = setTimeout(timedOut, SNAPSHOT_CAPTURE_REQUEST_TIMEOUT_MILLISECONDS);
-      } });
+      this.#pending.set(id, {
+        resolve, reject, cleanup,
+        imageProgress: value => {
+          if (request.type !== "prepare-native-image" && request.type !== "open-native-capture") {
+            throw new VMError("PROTOCOL_ERROR", "Unexpected image preparation progress");
+          }
+          // A large image object can receive more verified bytes before the object count advances.
+          if (request.type === "open-native-capture" && value.completedBytes > completedImageBytes) {
+            completedImageBytes = value.completedBytes;
+            continueCapture();
+          }
+          imageProgress?.(value);
+        },
+        progress: completed => {
+          if (request.type !== "open-native-capture" || completed <= completedObjects) {
+            throw new VMError("PROTOCOL_ERROR", "Snapshot capture progress is stale or unexpected");
+          }
+          completedObjects = completed;
+          continueCapture();
+        },
+      });
       const envelope: RequestEnvelope = {
         version: SNAPSHOT_CHANNEL_VERSION,
         id,
@@ -371,6 +389,8 @@ function decodeRequest(value: unknown): SnapshotStorageRequest {
     case "seal-native-capture":
     case "put-native-chunk":
     case "commit-native-capture":
+    case "inspect-native-cold-root":
+    case "stage-native-cold-root":
     case "stage-native-cold-workspace":
     case "publish-native-cold":
     case "complete-native-cold":
@@ -512,7 +532,7 @@ export function cancellableWorkspaceOperation(type: SnapshotStorageRequest["type
     || type === "native-live-index-put" || type === "native-live-index-seal" || type === "native-payload-consolidate") return true;
   if (type === "prepare-native-image" || type === "reclaim-native-cache" || type === "open-native-capture" || type === "seal-native-capture" || type === "put-native-chunk" || type === "commit-native-capture"
     || type === "stream-native-restore" || type === "prepare-native-restore" || type === "read-native-restore" || type === "publish-native-restore" || type === "publish-native-cold") return true;
-  return type === "stage-native-cold-workspace" || type === "stage-native-workspace" || type === "inspect-workspace-base" || type === "read-build-policy" || type === "commit-build-policy" || type === "commit-workspace-streams" || type === "stage-workspace-streams" || type === "open-workspace-read" || type === "read-workspace-frame";
+  return type === "stage-native-cold-root" || type === "inspect-native-cold-root" || type === "stage-native-cold-workspace" || type === "stage-native-workspace" || type === "inspect-workspace-base" || type === "read-build-policy" || type === "commit-build-policy" || type === "commit-workspace-streams" || type === "stage-workspace-streams" || type === "open-workspace-read" || type === "read-workspace-frame";
 }
 
 function decodeResponse(value: unknown): ResponseEnvelope | CaptureProgress | ImageProgress {

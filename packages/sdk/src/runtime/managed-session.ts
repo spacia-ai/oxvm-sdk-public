@@ -165,7 +165,9 @@ export class ManagedSession {
       },
       ...(shipped === undefined ? {} : { shipped: {
         ...(shipped.kind==="listed"?{kind:"listed" as const}:{kind:"reference" as const,source:referenceIdentity(shipped)}),
-        install:()=>this.#installShipped(shipped,options,report,signal),
+        install: () => this.#installShipped(shipped, options, report, signal, () => {
+          attempted = true;
+        }),
       } }),
     }, resume);
     const running = start.kind === "resumed" ? restoredImage ?? prepared : prepared;
@@ -323,12 +325,14 @@ export class ManagedSession {
     options: ManagedImageBootOptions,
     report: ProgressReport | undefined,
     signal: AbortSignal | undefined,
+    onInstall: () => void,
   ): Promise<SnapshotInfo> {
     const { trustedKeyId, trustedPublicKey } = options;
     if (trustedKeyId === undefined || trustedPublicKey === undefined) {
       throw new VMError("PERMISSION_DENIED", "a shipped restore point needs a trusted key", { reason: "shipped-untrusted" });
     }
     const publicKey = trustedPublicKey.slice();
+    onInstall();
     return withProgressPort(
       report === undefined ? undefined : (progress) => {
         report({ step: "download", ...progress });

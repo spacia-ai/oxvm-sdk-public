@@ -101,13 +101,18 @@ export function installCallSites(realmValue: unknown): () => void {
   if (previousLimit === undefined) Object.defineProperty(constructor, "stackTraceLimit", { configurable: true, enumerable: true, writable: true, value: 10 });
   const captureStackTrace = (target: unknown, constructorOpt?: unknown): void => {
     if ((typeof target !== "object" || target === null) && typeof target !== "function") throw new TypeError("Invalid argument");
-    const raw: unknown = Reflect.get(Reflect.construct(constructorValue, []), "stack");
+    // SpiderMonkey cuts its stack text at `Error.stackTraceLimit`, and this function's own frames would use the
+    // limit up (an old `depd` sets it to 2). The engine's text is taken whole; the limit is applied to the caller's frames below.
+    const limit: unknown = Reflect.get(constructor, "stackTraceLimit");
+    Reflect.set(constructor, "stackTraceLimit", Infinity);
+    let raw: unknown;
+    try { raw = Reflect.get(Reflect.construct(constructorValue, []), "stack"); }
+    finally { Reflect.set(constructor, "stackTraceLimit", limit); }
     // The first line is this function's own frame.
     let frames = (typeof raw === "string" ? raw.split("\n") : []).filter(line => line !== "").slice(1).map(parseFrame);
     const above: unknown = typeof constructorOpt === "function" ? Reflect.get(constructorOpt, "name") : "";
     const cut = typeof above !== "string" || above === "" ? -1 : frames.findIndex(frame => frame.name === above);
     if (cut >= 0) frames = frames.slice(cut + 1);
-    const limit: unknown = Reflect.get(constructor, "stackTraceLimit");
     const sites = frames.slice(0, typeof limit === "number" && limit > 0 ? Math.floor(limit) : 0).map(frame => new CallSite(frame));
     const prepare: unknown = Reflect.get(constructor, "prepareStackTrace");
     const value: unknown = typeof prepare === "function" ? Reflect.apply(prepare, constructor, [target, sites])

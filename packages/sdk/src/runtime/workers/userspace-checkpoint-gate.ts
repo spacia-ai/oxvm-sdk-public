@@ -1,5 +1,7 @@
 import { VMError } from "../errors.js";
 
+type Admission = "operation" | "dispose";
+
 /** Native capture can hold callbacks across storage awaits without moving Linux policy to JS. */
 export class UserspaceCheckpointGate {
   #state: "open" | "draining" | "quiescing" | "frozen" | "closed" = "open";
@@ -11,8 +13,8 @@ export class UserspaceCheckpointGate {
   get executionAllowed(): boolean { return this.#state === "open" || this.#state === "draining"; }
   get closed(): boolean { return this.#state === "closed"; }
 
-  async operation<T>(run: () => Promise<T>): Promise<T> {
-    while (!this.open) await this.wait();
+  async operation<T>(run: () => Promise<T>, admission: Admission = "operation"): Promise<T> {
+    while (!this.open && !(admission === "dispose" && this.closed)) await this.wait(admission);
     this.#active++;
     try { return await run(); }
     finally {
@@ -21,9 +23,13 @@ export class UserspaceCheckpointGate {
     }
   }
 
-  async wait(): Promise<void> {
+  async wait(admission: Admission = "operation"): Promise<void> {
     while (this.#state !== "open") {
-      if (this.#state === "closed") throw new VMError("ABORTED", "Native runtime was retired");
+      if (this.#state === "closed") {
+        // A failed cold start closes admission before the owner can retire its worker.
+        if (admission === "dispose") return;
+        throw new VMError("ABORTED", "Native runtime was retired");
+      }
       const waiting = this.#released ??= Promise.withResolvers<undefined>();
       await waiting.promise;
     }

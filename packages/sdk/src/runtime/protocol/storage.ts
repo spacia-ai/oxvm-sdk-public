@@ -3,6 +3,7 @@ import {decodeImageInfo,type ImageInfo} from "../../image.js";
 import { decodeManagedRuntimes, type ManagedRuntimes } from "../managed-runtimes.js";
 import { exactKeys, integer, record, string } from "../decode.js";
 import { VMError } from "../errors.js";
+import { decodeNativeUtilitySuite, type NativeUtilitySuite } from "../native-utilities.js";
 import { decodeBytes } from "./decoders.js";
 import { decodeUserspaceWorkspaceStart, type UserspaceWorkspaceStart } from "./workspace-start.js";
 
@@ -68,6 +69,7 @@ export type PreparedSystemAot =
     };
 
 export interface PreparedUserspaceRootfs {
+  readonly nativeUtilities?: NativeUtilitySuite;
   readonly update?:{readonly id:string;readonly version:string};
   readonly snapshots?:readonly PreparedShippedListing[];
   readonly identity?: PreparedImageIdentity;
@@ -221,7 +223,7 @@ function decodeNonnegativeNumber(value: unknown, label: string): number {
 
 export function decodePreparedUserspaceRootfs(value: unknown): PreparedUserspaceRootfs {
   const rootfs = record(value, "prepared Userspace rootfs");
-  exactKeys(rootfs, ["id", "version", "cpuProfile", "rootTreeSha256", "fileCount", "totalBytes", "metadata", "runtimes"], ["workspaceBaseSha256", "workspace", "identity", "snapshots", "update"]);
+  exactKeys(rootfs, ["id", "version", "cpuProfile", "rootTreeSha256", "fileCount", "totalBytes", "metadata", "runtimes"], ["workspaceBaseSha256", "workspace", "identity", "snapshots", "update", "nativeUtilities"]);
   if (rootfs["workspace"] !== undefined && rootfs["workspaceBaseSha256"] === undefined) {
     throw new VMError("PROTOCOL_ERROR", "prepared workspace details require the verified workspace base");
   }
@@ -242,6 +244,7 @@ export function decodePreparedUserspaceRootfs(value: unknown): PreparedUserspace
   }
   return {
     ...(identity===undefined?{}:{identity}),
+    ...(rootfs["nativeUtilities"] === undefined ? {} : { nativeUtilities: decodeNativeUtilitySuite(rootfs["nativeUtilities"]) }),
     ...(update===undefined?{}:{update:{id:string(update["id"],"rootfs update id"),version:string(update["version"],"rootfs update version")}}),
     id: string(rootfs["id"], "rootfs id"),
     version: string(rootfs["version"], "rootfs version"),

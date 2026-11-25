@@ -52,7 +52,7 @@ export async function readImageBundle(bundleDir: string, trust?: TrustedImageKey
   if (hash(manifestBytes) !== image.manifestSHA256) throw new VMError("PROTOCOL_ERROR", "manifest digest mismatch");
   const base = new URL(image.manifestUrl, "https://image.invalid"); const manifestValue = decodeBundleJSON(manifestBytes);
   const manifest = mode === "userspace" ? decodeUserspaceRootfsManifest(manifestValue, base) : decodeManagedImageManifest(manifestValue, base);
-  if (manifest.id !== lock["id"] || manifest.version !== lock["version"] || ("entries" in manifest ? manifest.schemaVersion !== 5 && manifest.schemaVersion !== 6 && manifest.schemaVersion !== 7 && manifest.schemaVersion !== 8 : manifest.schemaVersion !== 9)) throw new VMError("PROTOCOL_ERROR", "image lock disagrees with its whole-image manifest");
+  if (manifest.id !== lock["id"] || manifest.version !== lock["version"] || ("entries" in manifest ? manifest.schemaVersion !== 5 && manifest.schemaVersion !== 6 && manifest.schemaVersion !== 7 && manifest.schemaVersion !== 8 && manifest.schemaVersion !== 9 : manifest.schemaVersion !== 9)) throw new VMError("PROTOCOL_ERROR", "image lock disagrees with its whole-image manifest");
   if (lock["sourceDateEpoch"] !== undefined && lock["sourceDateEpoch"] !== manifest.sourceDateEpoch) throw new VMError("PROTOCOL_ERROR", "locked build epoch differs from its signed manifest");
   if (trust !== undefined) {
     const anchor = { keyId: trust.keyId, publicKey: imagePublicKeyBytes(trust) };

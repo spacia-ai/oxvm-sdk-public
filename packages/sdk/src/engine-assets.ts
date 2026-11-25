@@ -2,7 +2,7 @@ import type { BootProgress } from "./contracts.js";
 import type { RuntimeMode } from "./values.js";
 import { engineRelease, engineReleaseId } from "./engine.generated.js";
 import { VMError } from "./runtime/errors.js";
-import { abortIfRequested, fetchPinnedBytes } from "./pinned-assets.js";
+import { abortIfRequested, fetchPinnedBytes, type PinnedAssetCache } from "./pinned-assets.js";
 import { pinnedEngineCompliance } from "./engine-compliance.js";
 import { retainEngineCompliance } from "./engine-assets-compliance.js";
 import { engineLoad, inOrder } from "./engine-load.js";
@@ -31,9 +31,9 @@ export const LAZY_ENGINE_ARTIFACTS: ReadonlySet<string> = new Set(["oxidevm_tls.
  * execute. A failure is reported in a fixed order, the compliance materials first and then the modules in release
  * order, and stops the downloads still running.
  */
-export async function loadEngineAssets(mode: RuntimeMode, base: string, signal?: AbortSignal, progress?: (progress: BootProgress) => void): Promise<LoadedEngineAssets> {
+export async function loadEngineAssets(mode: RuntimeMode, base: string, signal?: AbortSignal, progress?: (progress: BootProgress) => void, cache: PinnedAssetCache = "ordinary"): Promise<LoadedEngineAssets> {
   abortIfRequested(signal);
-  const compliance = pinnedEngineCompliance(), load = engineLoad(signal, progress);
+  const compliance = pinnedEngineCompliance(), load = engineLoad(signal, progress, cache);
   // The compliance manifest goes first: it is small and names four more files, and a server may answer requests of one
   // priority in the order they arrive, so behind the modules it would wait for all of them.
   const retained = retainEngineCompliance(base, compliance, engineReleaseId, load);
@@ -50,7 +50,7 @@ export async function loadEngineAssets(mode: RuntimeMode, base: string, signal?:
     if (artifact === undefined || !LAZY_ENGINE_ARTIFACTS.has(name)) return Promise.reject(new VMError("CORE_LOAD_FAILED", `SDK release does not contain ${name}`));
     let loading = lazy.get(name);
     if (loading === undefined) {
-      loading = fetchPinnedBytes(new URL(artifact.name, base), artifact.sha256, "engine", signal, undefined, artifact.bytes);
+      loading = fetchPinnedBytes(new URL(artifact.name, base), artifact.sha256, "engine", signal, undefined, { expectedBytes: artifact.bytes, cache });
       lazy.set(name, loading);
       // A failed or cancelled load is tried again by the next caller.
       loading.catch(() => { if (lazy.get(name) === loading) lazy.delete(name); });

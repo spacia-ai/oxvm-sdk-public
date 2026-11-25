@@ -5,12 +5,14 @@ import {MemoryDirectory} from "./opfs-double.test-support.js";
 import {canonicalManagedImageBytes,decodeManagedImageManifest,managedImageIdentityBytes} from "../managed-image.js";
 import {managedBaseMarker} from "../managed-disk-state.js";
 import {managedImageStem,readDiskHead,writeDiskHead,writeGenerationRecord} from "./managed-disk-head.js";
-import {pinManagedImage,setWorkspacePins} from "./managed-image-pins.js";
+import {loadPinnedImage,pinManagedImage,setWorkspacePins} from "./managed-image-pins.js";
+import {record} from "../decode.js";
 import {writeOpfsFile} from "./snapshot-objects.js";
 import {sha256Hex} from "./snapshot-content.js";
 import {prepareManagedDisk} from "./managed-image-cache.js";
 import {currentSystemImage} from "./current-system-image.js";
 import {ManagedBases} from "./managed-base.js";
+import {cachedTestImage} from "./managed-image.test-support.js";
 async function signedRetainedSystemImage() {
   const origin=new MemoryDirectory(),oxidevm=await origin.getDirectoryHandle("oxidevm",{create:true});
   const workspace=await (await oxidevm.getDirectoryHandle("workspaces",{create:true})).getDirectoryHandle("ws",{create:true});
@@ -95,4 +97,26 @@ it("does not replace an unavailable live disk image with another globally instal
       {cachedOnly:true,manifestSHA256:await sha256Hex(new TextEncoder().encode(f.text))})).rejects.toMatchObject({code:"STORAGE_NOT_FOUND"});
     expect((await readDiskHead(disks))?.generation).toBe(generation);expect(fetcher).not.toHaveBeenCalled();
   }finally{fetcher.mockRestore();}
+});
+
+it.each([2,8])("restores a retained schema %i profile without claiming whole-image authentication",async(schemaVersion)=>{
+  const images=new MemoryDirectory("images"),image=await cachedTestImage(images,[1]);
+  const source=await loadPinnedImage(images,image.ref.identity);
+  if(source===undefined)throw new Error("Missing cached test image");
+  const input=schemaVersion===2?record(JSON.parse(source.manifestText) as unknown,"fixture manifest"):
+    {...record(JSON.parse(source.manifestText) as unknown,"fixture manifest"),schemaVersion,vcpus:{minimum:1,maximum:1},workspaceBaseSha256:"c".repeat(64)};
+  const text=JSON.stringify(input),manifest=decodeManagedImageManifest(input,source.url);
+  const ref={...image.ref,identity:await sha256Hex(managedImageIdentityBytes(input,text,manifest))};
+  await pinManagedImage(images,"test",{ref,url:source.url,manifestText:text,kernel:new Uint8Array([0x4b,0x45,0x52])});
+  const trusted={keyId:"shipped-start-key",publicKey:new Uint8Array(32)};
+  const result=await currentSystemImage(images,ref,trusted);
+  expect(result).toEqual({id:ref.id,version:ref.version,runtimes:image.manifest.runtimes,...(schemaVersion===8?{workspaceBaseSha256:"c".repeat(64)}:{})});
+  expect(result.identity).toBeUndefined();
+});
+
+it("refuses a retained signed system image when its trust key differs",async()=>{
+  const f=await signedRetainedSystemImage();
+  const ref={id:f.manifest.id,version:f.manifest.version,identity:await sha256Hex(managedImageIdentityBytes(JSON.parse(f.text) as unknown,f.text,f.manifest))};
+  await expect(currentSystemImage(f.images,ref,{...f.trusted,keyId:"different-key"}))
+    .rejects.toMatchObject({code:"PROTOCOL_ERROR"});
 });

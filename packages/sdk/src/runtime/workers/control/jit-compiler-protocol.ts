@@ -5,8 +5,9 @@ import { isAttentionCounter, type AttentionCounter } from "../../host-attention.
 
 /** The JIT compiler worker's protocol: translated module bytes in, a compiled
  * `WebAssembly.Module` out. Version 2 adds the browser error's name to a failed compile, so
- * running out of executable code memory is told apart from a rejected module. */
-export const JIT_COMPILER_PROTOCOL_VERSION = 2;
+ * running out of executable code memory is told apart from a rejected module.
+ * Version 3 lets Userspace request zero-budget entry warm-up. */
+export const JIT_COMPILER_PROTOCOL_VERSION = 3;
 
 /** Bound on the error name a failed compile carries. */
 const MAX_ERROR_NAME = 64;
@@ -18,6 +19,7 @@ export type JitCompilerRequest =
       readonly version: typeof JIT_COMPILER_PROTOCOL_VERSION;
       readonly type: "attach";
       readonly ready: AttentionCounter | null;
+      readonly warmEntries: boolean;
     }
   | {
       readonly version: typeof JIT_COMPILER_PROTOCOL_VERSION;
@@ -55,12 +57,16 @@ export function decodeJitCompilerRequest(value: unknown): JitCompilerRequest {
   }
   const type = string(message["type"], "JIT compiler request type");
   if (type === "attach") {
-    exactKeys(message, ["version", "type", "ready"]);
+    exactKeys(message, ["version", "type", "ready", "warmEntries"]);
     const ready = message["ready"];
+    const warmEntries = message["warmEntries"];
     if (ready !== null && !isAttentionCounter(ready)) {
       throw protocol("JIT compiler ready counter is invalid");
     }
-    return { version: JIT_COMPILER_PROTOCOL_VERSION, type, ready };
+    if (typeof warmEntries !== "boolean") {
+      throw protocol("JIT compiler warm-up flag is invalid");
+    }
+    return { version: JIT_COMPILER_PROTOCOL_VERSION, type, ready, warmEntries };
   }
   if (type !== "compile") throw protocol("JIT compiler request type is invalid");
   exactKeys(message, ["version", "type", "id", "epoch", "bytes"]);

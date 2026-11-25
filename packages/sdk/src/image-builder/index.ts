@@ -1,4 +1,5 @@
 export type * from "./contracts.js";
+export type { NativeUtilityRequirement } from "../runtime/native-utilities.js";
 export type * from "./snapshot-contracts.js";
 export {loadSnapshotRecipe} from "./snapshot-recipe.js";
 export {inspectSnapshot} from "./snapshot-bundle.js";

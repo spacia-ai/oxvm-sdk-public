@@ -3,6 +3,9 @@ import { exactKeys, record } from "../../decode.js";
 import { serializeUnknownError, VMError } from "../../errors.js";
 import { decodeJSIdentity, descriptor, JS_PROCESS_PROTOCOL_VERSION, protocol } from "../../js-process/codec.js";
 import { syncFiles } from "../../js-process/files.js";
+import { atFiles } from "../../js-process/at-operations.js";
+import { clockHost, randomHost } from "../../js-process/clock-random.js";
+import { fileSystemStats } from "../../js-process/filesystem-stat.js";
 import { nativeModulePathInfo } from "./files.js";
 import { process as linuxProcess, umaskOperation } from "../../js-process/process.js";
 import { createProcessUmask } from "../assistance/node-process-umask.js";
@@ -50,10 +53,11 @@ function failed(error: unknown): void {
   }
   post({ version: JS_PROCESS_PROTOCOL_VERSION, type: "failure", error: serialized });
 }
-self.onmessage = (event: MessageEvent<unknown>) => {
+// A listener, not the `onmessage` slot: the program may assign that name (see restrictProcessControls).
+self.addEventListener("message", (event: MessageEvent<unknown>) => {
   if (started) protocol("A native JS worker cannot serve another process"); started = true;
   void run(event.data).catch(failed);
-};
+});
 self.addEventListener("unhandledrejection", (event: PromiseRejectionEvent) => {
   event.preventDefault(); const error: unknown = event.reason; applicationException(error, "unhandledRejection", event.promise);
 });
@@ -117,6 +121,8 @@ async function run(input: unknown): Promise<void> {
       exactPromiseQueries: (program.profile.requiredCapabilities & 1) !== 0,
       umask: createProcessUmask(mask => client.sync(umaskOperation(mask)), program.profile.runtime, thread === null),
       modulePathInfo: path => nativeModulePathInfo(client, path),
+      wasiHost: { fs: files, at: atFiles(client), clock: clockHost(client), random: randomHost(client) },
+      fileSystems: fileSystemStats(client),
       workerThreads: (context, scheduler, process) => {
         bridge.values.bindAsyncContext(context); bridge.values.bindNativeImmediate(run => { scheduler.nativeImmediate(run); });
         return workers = new NativeWorkers({ client, bridge, identity, control: threadControl, thread, metadata: thread === null ? null : threadData, ...(autoSelectFamily === undefined ? {} : { autoSelectFamily }) }, context, scheduler, process);

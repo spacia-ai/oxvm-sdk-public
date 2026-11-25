@@ -4,7 +4,7 @@ import { GuestProcessTransport } from "./runtime/guest-process.js";
 import { PROTOCOL_VERSION } from "./runtime/protocol.js";
 import { VMError } from "./runtime/errors.js";
 
-function guest() {
+function guest(lifetime?: AbortSignal) {
   const channel = new MessageChannel();
   const signals: string[] = [];
   let sequence = 0;
@@ -19,11 +19,25 @@ function guest() {
   });
   const exit = (termination: { kind: "exit"; code: number } | { kind: "signal"; signal: number }) => channel.port2.postMessage({ version: PROTOCOL_VERSION, sessionId: 7, sequence: ++sequence, type: "exit", termination });
   const transport = new GuestProcessTransport(channel.port1, 42, 7, {
+    ...(lifetime === undefined ? {} : { lifetime }),
     write: data => Promise.resolve(data.length), closeStdin: () => Promise.resolve(),
     signal: name => { signals.push(name); exit({ kind: "signal", signal: 9 }); return Promise.resolve(); },
     signalNamed: (name, scope) => { signals.push(`${name}:${scope}`); exit({ kind: "signal", signal: 9 }); return Promise.resolve(); },
   });
   return { transport, signals, emit, exit, close: () => channel.port2.close() };
+}
+for (const terminal of [false, true]) {
+  it(`preserves a late public ${terminal ? "terminal" : "process"} exit observer after owner loss`, async () => {
+    const lifetime = new AbortController();
+    const owner = guest(lifetime.signal);
+    const handle = adaptProcess(owner.transport, terminal);
+    const reason = new VMError("ABORTED", "process owner was retired by restore");
+    lifetime.abort(reason);
+    // The caller can observe exit after restore retires the old owner.
+    await new Promise(resolve => setTimeout(resolve, 0));
+    await expect(handle.exit).rejects.toBe(reason);
+    owner.close();
+  });
 }
 it("preserves an unnamed real-time signal's exact number", async () => {
   const owner = guest();

@@ -33,6 +33,35 @@ const base = "a".repeat(64);
 const signal = () => new AbortController().signal;
 const journal = "staging/00000000-0000-4000-8000-000000000000/0";
 
+it("journals bounded groups of new chunks before writing any of their bodies", async () => {
+  const backend = new Backend(), store = new WorkspaceStore(backend);
+  const write = vi.spyOn(backend, "write");
+  const snapshot = new Uint8Array(17 * 1024 * 1024);
+  for (let offset = 0; offset < snapshot.byteLength; offset += 1024 * 1024) {
+    snapshot.fill(offset / (1024 * 1024) + 1, offset, offset + 1024 * 1024);
+  }
+  await store.commitStreams(base, {
+    snapshot: workspaceBytesInput(snapshot), delta: workspaceBytesInput(new Uint8Array()),
+  }, signal());
+
+  const tracked = new Set<string>();
+  let journalWrites = 0;
+  for (const [path, bytes] of write.mock.calls) {
+    if (path.startsWith("staging/")) {
+      journalWrites += 1;
+      const paths: unknown = parseJson(bytes);
+      if (!Array.isArray(paths)) throw new Error("Missing staging paths");
+      for (const item of paths) {
+        if (typeof item !== "string") throw new Error("Invalid staging path");
+        tracked.add(item);
+      }
+    } else if (path.startsWith("chunks/")) expect(tracked.has(path)).toBe(true);
+  }
+  expect(tracked.size).toBe(18);
+  expect(journalWrites).toBe(4);
+  expect(backend.largestWrite).toBe(1024 * 1024);
+});
+
 it("reuses a captured snapshot without reading or hashing its file chunks and rejects stale references", async () => {
   const backend = new Backend(), store = new WorkspaceStore(backend);
   const snapshot = new Uint8Array(2 * 1024 * 1024 + 1).fill(7);
@@ -254,7 +283,7 @@ it("cancels pending producer reads and holds the writer lease until retirement",
     const abort = () => read.resolve(undefined);
     signal.addEventListener("abort", abort, { once: true });
     try {
-      yield* source(1024 * 1024);
+      yield* source(8 * 1024 * 1024);
       started.resolve(undefined);
       await read.promise;
     } finally {
@@ -264,7 +293,7 @@ it("cancels pending producer reads and holds the writer lease until retirement",
     }
   }
   const pending = store.commitStreams(base, {
-    snapshot: { bytes: 1024 * 1024 + 1, source: signal => producer(waiting(signal)) },
+    snapshot: { bytes: 8 * 1024 * 1024 + 1, source: signal => producer(waiting(signal)) },
     delta: { bytes: 0, source: () => producer(source(0)) },
   }, controller.signal);
   const cancelled = expect(pending).rejects.toMatchObject({ code: "ABORTED" });
@@ -284,12 +313,12 @@ it("fences publication and retains staging when a rejected frame cannot retire i
   await store.commit(base, new Uint8Array([42]));
   async function* broken(): AsyncGenerator<Uint8Array<ArrayBuffer>, void, unknown> {
     try {
-      yield* source(1024 * 1024);
+      yield* source(8 * 1024 * 1024);
       yield new Uint8Array(65537);
     } finally { /* Retirement is acknowledged independently below. */ }
   }
   await expect(store.commitStreams(base, {
-    snapshot: { bytes: 1024 * 1024 + 65537, source: () => ({ frames: broken(), retire: () => Promise.reject(new Error("producer retirement rejected")) }) },
+    snapshot: { bytes: 8 * 1024 * 1024 + 65537, source: () => ({ frames: broken(), retire: () => Promise.reject(new Error("producer retirement rejected")) }) },
     delta: { bytes: 0, source: () => producer(source(0)) },
   }, signal())).rejects.toMatchObject({
     code: "STORAGE_ERROR", detail: { reason: "workspace-producer-retirement-failed", cleanupFailed: true },
@@ -355,6 +384,25 @@ it("reclaims a replaced delta and keeps the chunks of a reused snapshot", async 
   await expect(store.readGeneration(base)).resolves.toMatchObject({ generation: 2 });
   await expect(store.readDelta(base)).resolves.toEqual(new Uint8Array(10));
   expect((await store.read(base))?.byteLength).toBe(3 * 1024 * 1024 + 7);
+});
+
+it("journals superseded workspace chunks once before selecting the new generation", async () => {
+  const backend = new Backend(), store = new WorkspaceStore(backend);
+  const empty = workspaceBytesInput(new Uint8Array());
+  const delta = { bytes: 6 * 1024 * 1024, source: () => producer(source(6 * 1024 * 1024)) };
+  await store.commitStreams(base, { snapshot: empty, delta }, signal());
+  const previous = [...backend.files.keys()].filter(path => path.startsWith("chunks/"));
+  expect(previous).toHaveLength(7);
+  const writes = vi.spyOn(backend, "write");
+  await store.commitStreams(base, { snapshot: { reuse: 1 }, delta: empty }, signal());
+  const journal = writes.mock.calls.filter(([path]) => path.startsWith("staging/"));
+  expect(journal).toHaveLength(1);
+  const record = journal[0];
+  if (record === undefined) throw new Error("Missing superseded workspace journal");
+  expect(journalPaths(record[1]).sort()).toEqual(previous.sort());
+  expect(writes.mock.calls.indexOf(record)).toBeLessThan(writes.mock.calls.findIndex(([path]) => path === "active.json"));
+  expect(previous.every(path => !backend.files.has(path))).toBe(true);
+  await expect(new WorkspaceStore(backend).readGeneration(base)).resolves.toMatchObject({ generation: 2 });
 });
 
 it("keeps the published generation when a commit over a reused snapshot fails before publication", async () => {

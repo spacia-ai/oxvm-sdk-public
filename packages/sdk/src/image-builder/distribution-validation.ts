@@ -15,7 +15,7 @@ export async function validateImageDistribution(bundleDir: string, options: { re
   if (inspected.inspection.authentication.kind !== "verified") throw new VMError("INVALID_ARGUMENT", "distribution validation requires independent author trust");
   const evidence = await validateDistributionBundle(inspected.read, options.signal);
   if (options.components !== undefined) validateDistributionComponents(decodeBundleJSON(evidence.sbom), { packages: evidence.sources }, options.components);
-  return { inspection: inspected.inspection, files: inspected.files, evidence };
+  return { inspection: inspected.inspection, manifest: inspected.read.manifest, files: inspected.files, evidence };
 }
 
 /** Inspection and browser qualification use the identical signed evidence closure. */

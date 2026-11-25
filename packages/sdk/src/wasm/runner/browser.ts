@@ -67,7 +67,7 @@ export function browserContext(linux: LinuxProcessContext, client: LinuxClient, 
   const local = globalThis.fetch.bind(globalThis);
   return {
     ...linux,
-    filesAt: atFiles(client), clock: clockHost(client), random: randomHost(client), processSync: processSync(client),
+    filesAt: atFiles(client, launch?.fileServicesVersion), clock: clockHost(client), random: randomHost(client), processSync: processSync(client, launch?.childServicesVersion),
     browser: probeBrowser(globalThis),
     importAdapter: importAdapterFromBlob,
     signals: clientSignals(client),

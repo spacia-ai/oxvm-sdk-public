@@ -123,3 +123,51 @@ it("rejects oversized unchanged source before publishing its executable identity
     expect(sources.emitScript("", "/valid.cjs", role)).toContain("sourceURL=oxidevm:compiled/1/%2Fvalid.cjs");
   }
 });
+
+it("forgets its oldest bodies when the budget fills, so a long-running program keeps loading code", () => {
+  // A development server recompiles and reloads its bundles for as long as it runs (Next.js does on every changed route).
+  const sources = new ExecutableSources(undefined, undefined, 100);
+  const first = sources.emitScript("a".repeat(40), "/one.cjs", "commonjs"), second = sources.emitScript("b".repeat(40), "/two.cjs", "commonjs");
+  const url = (body: string): string => /sourceURL=(\S+)/u.exec(body)?.[1] ?? "";
+  expect([url(first), url(second)]).toEqual(["oxidevm:compiled/1/%2Fone.cjs", "oxidevm:compiled/2/%2Ftwo.cjs"]);
+  expect(sources.find(url(first), 3, 1)?.path).toBe("/one.cjs");
+  // The third does not fit beside both: the oldest goes, and its frames are then reported unmapped.
+  const third = sources.emitScript("c".repeat(40), "/three.cjs", "commonjs");
+  expect(url(third)).toBe("oxidevm:compiled/3/%2Fthree.cjs");
+  expect(sources.find(url(first), 3, 1)).toBeUndefined();
+  expect([sources.find(url(second), 3, 1)?.path, sources.find(url(third), 3, 1)?.path]).toEqual(["/two.cjs", "/three.cjs"]);
+  // Mapped bodies take part in the same accounting.
+  const map = JSON.stringify({ version: 3, sources: ["/m.js"], names: [], mappings: "AAAA" });
+  const mapped = sources.emit({ code: "x", map: map.padEnd(90, " ") }, "/mapped.cjs", "commonjs");
+  expect(sources.find(url(mapped), 3, 1)?.path).toBe("/mapped.cjs");
+  expect([sources.find(url(second), 3, 1), sources.find(url(third), 3, 1)]).toEqual([undefined, undefined]);
+  // One body larger than the whole budget is still refused, and forgets nothing.
+  expect(failure(() => sources.emitScript("d".repeat(101), "/large.cjs", "commonjs"))).toMatchObject({ code: "QUOTA_EXCEEDED", detail: { path: "/large.cjs" } });
+  expect(sources.find(url(mapped), 3, 1)?.path).toBe("/mapped.cjs");
+  expect(url(sources.emitScript("", "/after.cjs", "commonjs"))).toBe("oxidevm:compiled/5/%2Fafter.cjs");
+});
+
+it("does not count a program's own source map again each time the same file is reloaded", () => {
+  // Next.js's development server reloads its route bundles; each reload registers the bundle's map under the same path.
+  const payload = { version: 3, sources: ["route.ts"], names: [], mappings: "AAAA;", sourcesContent: ["x".repeat(4000)] };
+  const source = (text: string): string => `${text}\n//# sourceMappingURL=data:application/json;base64,${btoa(JSON.stringify(payload))}`;
+  const size = JSON.stringify(payload).length, sources = new ExecutableSources(undefined, undefined, size * 2 + 800);
+  sources.setSourceMapsSupport(true);
+  for (let reload = 0; reload < 50; reload++) sources.registerApplication("/app/route.js", source(`// ${String(reload)}`));
+  expect(sources.findSourceMap("/app/route.js")).toBeDefined();
+  // A second file fits beside it; a third pushes the oldest out instead of failing the load.
+  sources.registerApplication("/app/two.js", source("two"));
+  sources.registerApplication("/app/three.js", source("three"));
+  expect([sources.findSourceMap("/app/route.js"), sources.findSourceMap("/app/two.js") !== undefined, sources.findSourceMap("/app/three.js") !== undefined]).toEqual([undefined, true, true]);
+  // Loaded code gives way before a source map does.
+  const url = (body: string): string => /sourceURL=(\S+)/u.exec(body)?.[1] ?? "";
+  const body = url(sources.emitScript("y".repeat(500), "/body.cjs", "commonjs"));
+  expect(sources.find(body, 3, 1)?.path).toBe("/body.cjs");
+  sources.registerApplication("/app/four.js", source("four"));
+  expect([sources.find(body, 3, 1), sources.findSourceMap("/app/two.js"), sources.findSourceMap("/app/three.js") !== undefined, sources.findSourceMap("/app/four.js") !== undefined]).toEqual([undefined, undefined, true, true]);
+  // A file that lost its map gives its share back.
+  sources.registerApplication("/app/three.js", "no map");
+  expect(sources.findSourceMap("/app/three.js")).toBeUndefined();
+  const kept = url(sources.emitScript("z".repeat(size), "/kept.cjs", "commonjs"));
+  expect([sources.find(kept, 3, 1)?.path, sources.findSourceMap("/app/four.js") !== undefined]).toEqual(["/kept.cjs", true]);
+});

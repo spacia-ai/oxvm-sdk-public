@@ -87,7 +87,7 @@ import {
 import { interactiveWindowEnd } from "./userspace-run-slices.js";
 import type { UserspaceAttentionChannel } from "../protocol/userspace-slices.js";
 import { decodeAttentionAttachment, HostAttention, isAttentionAttachment, type AttentionWatch } from "../host-attention.js";
-import { runUserspaceSlice, type UserspaceSlicePorts } from "./userspace-run-loop.js";
+import { COLD_INTERPRETER_WORK, runUserspaceSlice, type UserspaceSlicePorts } from "./userspace-run-loop.js";
 
 const MAX_COMPLETED_TRACES = 64;
 const MAX_MANAGED_CACHE_BYTES = 512 * 1024 * 1024;
@@ -237,7 +237,7 @@ async function receive(value: unknown): Promise<void> {
     };
     let result: unknown;
     if (decoded.type === "stdin") result = await admitUserspaceInput(checkpointGate, execute);
-    else result = await checkpointGate.operation(execute);
+    else result = await checkpointGate.operation(execute, decoded.type === "dispose" ? "dispose" : "operation");
     if (!canceled.delete(decoded.id) || answeredWhenCancelled(decoded)) {
       self.postMessage({ id: decoded.id, version: PROTOCOL_VERSION, ok: true, value: result }, result instanceof MessagePort ? [result] : []);
     }
@@ -674,7 +674,16 @@ function bindRuntimeServices(runtime: RuntimeState, previous?: RuntimeState, ori
     moduleFrame: () => moduleFrame,
     attention: { watch: counter => hostAttention.watch("js-process", counter) },
     knowledge: { remember: (notice, failure) => { void accelerationKnowledge?.remember(notice, failure); } },
-    active: () => runtimeState === runtime && !disposing, wake: () => scheduleRun(runtime) });
+    active: () => runtimeState === runtime && !disposing,
+    wake: outputPid => {
+      // A module can publish output before the next guest slice.
+      if (outputPid !== undefined && checkpointGate.executionAllowed && !disposing && runtimeState === runtime) {
+        const process = processes.get(outputPid);
+        if (process?.runtime === runtime && process.awaitingAck === undefined) sendOutput(process);
+      }
+      scheduleRun(runtime);
+    },
+  });
   runtime.hostService = new UserspaceHostService({
     take: mask => takeHostRequest(runtime, mask), service: (request, signal) => serviceHostRequest(runtime, request, signal),
     active: () => checkpointGate.executionAllowed && !disposing && runtimeState === runtime,
@@ -741,18 +750,22 @@ async function configureCheckpoints(configuration: NativeCheckpointConfiguration
       previous.jitRuntime.invalidate();
       // The native discard retired the sole heap. Remount in the same Wasm instance.
       mountRuntimeRootfs(previous,configuration.mount.rootfs,configuration.mount.cpuProfile,configuration.mount.workspaceBaseSha256);
-      const replacement:RuntimeState={...previous,startup:"scaffold",rootTreeSha256:configuration.mount.rootTreeSha256,workspaceBaseSha256:configuration.mount.workspaceBaseSha256,pendingResult:undefined};
+      const replacement:RuntimeState={...previous,startup:"scaffold",rootTreeSha256:configuration.mount.rootTreeSha256,workspaceBaseSha256:configuration.mount.workspaceBaseSha256,pendingResult:undefined,coldInterpreterWork:0};
       delete replacement.hostService;delete replacement.rootPersistence;delete replacement.workspacePersistence;
       previous.runtimeProbes?.dispose();previous.jsProcesses?.dispose();
       bindRuntimeServices(replacement,previous,"remounted");configureRuntimeRoot(replacement);
       workspaceCommit.reset();workspaceFailure=undefined;runtimeState=replacement;runtimeMounting=undefined;
       await Promise.resolve();
     },
-    beginCold: async signal => {
+    beginCold: async (sourceId, storage, signal) => {
       await checkpointGate.freeze(async () => {
         runtimeWakeTimer.cancel(); runtimeRunScheduled = false;
         current().checkpoints.pauseClock();
-        await current().rootPersistence?.initialize(signal);
+        const root = current().rootPersistence;
+        if (root !== undefined) {
+          await root.initialize(signal);
+          await root.rebase(sourceId, storage, signal);
+        }
         previewRuntime.close();
       });
       return current().checkpoints.beginCold(imageBytes(currentImage()));
@@ -765,9 +778,11 @@ async function configureCheckpoints(configuration: NativeCheckpointConfiguration
         async foreign=>decodeWorkspaceBaseMetadata(await client.request({type:"inspect-workspace-base",workspaceBaseSha256:foreign},[],signal)));
     },
     coldPublished: () => {
-      if (interceptors !== undefined) assertStatus(call(current().instance, "oxidevm_userspace_command_enable"), "enable cold command interceptor");
-      enableNativeAcceleration(current(), "enable cold native acceleration");
-      current().startup="ready";workspaceCommit.reset();workspaceFailure=undefined;resumeCheckpointClock(current());checkpointGate.resume();moduleCommands.reapply(nativeModuleCommandTable(current()));
+      const runtime = current();
+      if (interceptors !== undefined) assertStatus(call(runtime.instance, "oxidevm_userspace_command_enable"), "enable cold command interceptor");
+      enableNativeAcceleration(runtime, "enable cold native acceleration");
+      runtime.coldInterpreterWork = COLD_INTERPRETER_WORK;
+      runtime.startup="ready";workspaceCommit.reset();workspaceFailure=undefined;resumeCheckpointClock(runtime);checkpointGate.resume();moduleCommands.reapply(nativeModuleCommandTable(runtime));
     },
     coldFailed: async () => {
       previewRuntime.retire();
@@ -811,7 +826,7 @@ async function configureCheckpoints(configuration: NativeCheckpointConfiguration
       const prepared = attachments.prepare(saved, recovering, processes.values(), attachment => candidate.validateAttachment(attachment));
       const previous = current();
       // Fresh browser adapters bind the restored native state; initialize would replay newer files.
-      const replacement: RuntimeState = { ...previous, ...image, startup:"ready", pendingResult: undefined };
+      const replacement: RuntimeState = { ...previous, ...image, startup:"ready", pendingResult: undefined, coldInterpreterWork: 0 };
       delete replacement.hostService; delete replacement.rootPersistence; delete replacement.workspacePersistence;
       bindRuntimeServices(replacement, previous, "restored", "later");
       return { attachments: prepared.attachments, publish: () => {
@@ -910,6 +925,7 @@ function scheduleRun(_active: ProcessState | RuntimeState, delay = 0): void {
   const runtime = runtimeState;
   if (!checkpointGate.executionAllowed || disposing || runtime === undefined || !hasNativeWork(runtime)) return;
   if (delay === 0) {
+    workspaceCommit.pauseIdle();
     runtimeWakeTimer.cancel();
     if (runtimeRunScheduled) return;
     runtimeRunScheduled = true;
@@ -924,6 +940,7 @@ function scheduleRun(_active: ProcessState | RuntimeState, delay = 0): void {
 
 function run(active: RuntimeState): void {
   if (!checkpointGate.executionAllowed || disposing || runtimeState !== active || !hasNativeWork(active)) return;
+  workspaceCommit.pauseIdle();
   try {
     runUserspaceSlice(active, slicePorts);
   } catch (error) {
@@ -1066,7 +1083,7 @@ function acknowledge(active: ProcessState, value: unknown): void {
     if (!canResumeAfterOutputAck(active)) return;
     if (!finishCompletedProcess(active)) {
       scheduleRun(active);
-      void scheduleWorkspaceCommit();
+      void active.runtime.rootPersistence?.schedule();
     }
   } catch (error) {
     failProcess(active, error);
@@ -1084,20 +1101,23 @@ function finishResult(active: RuntimeState): void {
     for (const process of [...processes.values()]) {
       failProcess(process, new VMError("GUEST_CRASH", "Userspace runtime faulted"));
     }
-  } else if (result?.kind === "step-limit") {
+  } else if (result?.kind === "step-limit" || result?.kind === "native-yield") {
     if (hasNativeWork(active)) scheduleRun(active);
   } else if (result !== undefined && rearmsWakeTimer(result.kind)) {
-    if (hasNativeWork(active)) {
-      if (preparesAgainAfter(result.kind)) scheduleRun(active);
-      else scheduleNextWake(active);
+    const hasWork = hasNativeWork(active);
+    if (hasWork && preparesAgainAfter(result.kind)) {
+      scheduleRun(active);
+      void active.rootPersistence?.schedule();
+    } else {
+      if (hasWork) scheduleNextWake(active);
+      void scheduleWorkspaceCommit("idle");
     }
-    void scheduleWorkspaceCommit();
   }
 }
 
-function scheduleWorkspaceCommit(): Promise<void> {
+function scheduleWorkspaceCommit(mode: "required" | "idle" = "required"): Promise<void> {
   const root = runtimeState?.rootPersistence?.schedule();
-  const workspace = workspaceCommit.schedule();
+  const workspace = workspaceCommit.schedule(mode);
   const pending = root === undefined ? workspace : Promise.all([workspace, root]).then(() => undefined);
   void pending.catch(() => {});
   return pending;

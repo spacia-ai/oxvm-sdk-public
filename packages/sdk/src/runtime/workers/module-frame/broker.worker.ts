@@ -2,7 +2,7 @@
 import { exactKeys, record } from "../../decode.js";
 import { VMError } from "../../errors.js";
 import { NESTED_FRAME_PROBE } from "../../module-frame-policy.js";
-import { MODULE_FRAME_BOOTSTRAP_VERSION } from "../../protocol/module-frame.js";
+import { MODULE_FRAME_BOOTSTRAP_VERSION, MODULE_PREPARED_RUNNER_NAME } from "../../protocol/module-frame.js";
 import { ModuleBroker, serveBrokerControl } from "./broker.js";
 
 // The module frame's broker (engine ADR 0028). The frame's bootstrap starts it as a classic blob: worker, because
@@ -50,7 +50,10 @@ self.onmessage = (event: MessageEvent<unknown>) => {
   const control = init["port"], runner = init["runner"];
   if (init["version"] !== MODULE_FRAME_BOOTSTRAP_VERSION || init["type"] !== "broker-init" || !(control instanceof MessagePort) || !(runner instanceof Blob)) throw new VMError("PROTOCOL_ERROR", "Invalid module broker bootstrap");
   const runnerUrl = URL.createObjectURL(runner.type === "text/javascript" ? runner : new Blob([runner], { type: "text/javascript" }));
-  const broker = new ModuleBroker({ startRunner: pid => new Worker(runnerUrl, { name: `oxidevm-module-${String(pid)}` }) });
+  const broker = new ModuleBroker({
+    startRunner: pid => new Worker(runnerUrl, { name: `oxidevm-module-${String(pid)}` }),
+    prepareRunner: () => new Worker(runnerUrl, { name: MODULE_PREPARED_RUNNER_NAME }),
+  });
   serveBrokerControl(control, broker);
   void probe().then(facts => { control.postMessage({ version: MODULE_FRAME_BOOTSTRAP_VERSION, type: "broker-probe", probe: facts }); });
 };

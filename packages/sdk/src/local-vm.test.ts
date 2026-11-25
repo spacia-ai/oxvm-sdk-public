@@ -11,8 +11,8 @@ import { canonicalUserspaceRootfsBytes, decodeUserspaceRootfsManifest, userspace
 const state = vi.hoisted(() => ({ engine: Promise.resolve(), prepared: new Array<Record<string, unknown>>() }));
 vi.mock("./license-admission.js", () => ({ admitLicense: () => Promise.resolve({ tier: "development" }) }));
 vi.mock("./runtime/userspace-process.js", async () => {
-  const { nativeBackend } = await import("./runtime/userspace-vm.test-support.js");
-  return { UserspaceProcessBackend: { create: () => Promise.resolve(nativeBackend()) } };
+  const { startNativeBackend } = await import("./runtime/userspace-vm.test-support.js");
+  return { UserspaceProcessBackend: { start: startNativeBackend } };
 });
 vi.mock("./engine-assets.js", async importOriginal => ({
   ...await importOriginal<typeof EngineAssets>(),

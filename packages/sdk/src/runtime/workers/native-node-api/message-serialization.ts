@@ -22,7 +22,7 @@ export function encodeSynchronousMessage(input: unknown): Uint8Array | null {
     else if (value === undefined) node.push("undefined");
     else if (typeof value === "number") node.push("number", Object.is(value, -0) ? "-0" : String(value));
     else if (typeof value === "bigint") node.push("bigint", String(value));
-    else if (typeof value !== "object" || value instanceof SharedArrayBuffer || value instanceof MessagePort || value instanceof WebAssembly.Module) throw unsupported;
+    else if (typeof value !== "object" || value instanceof SharedArrayBuffer || value instanceof MessagePort || value instanceof WebAssembly.Module || value instanceof WebAssembly.Memory) throw unsupported;
     else if (value instanceof ArrayBuffer) node.push("buffer", Buffer.from(value).toString("base64"));
     else if (value instanceof DataView) node.push("view", "DataView", next(value.buffer), value.byteOffset, value.byteLength);
     else if (ArrayBuffer.isView(value)) {

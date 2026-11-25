@@ -10,10 +10,11 @@ import {
 } from "./decode.js";
 import { decodeEd25519Signature, verifyEd25519 } from "./ed25519.js";
 import { VMError } from "./errors.js";
+import { decodeNativeUtilitySuite, type NativeUtilitySuite } from "./native-utilities.js";
 import { decodeManagedImageSnapshots,type ManagedImageSnapshot,managedImageUrl } from "./managed-image.js";
 import { canonicalImageBytes, rememberArtifactURL } from "./image-provenance.js";
 import { decodeUserspaceRootfsPacks, type UserspaceRootfsPacks } from "./userspace-rootfs-packs.js";
-export const USERSPACE_ROOTFS_SCHEMA = 8;
+export const USERSPACE_ROOTFS_SCHEMA = 9;
 export { ROOTFS_PACK_BYTES, decodeRootfsPackIndex } from "./userspace-rootfs-packs.js";
 export type { RootfsPackIndex, RootfsPackArtifact, UserspaceRootfsPacks } from "./userspace-rootfs-packs.js";
 
@@ -41,7 +42,8 @@ export type UserspaceRootfsEntry = { readonly ownership?: FileOwnership; readonl
 export interface UserspaceRootfsManifest {
   readonly manifestUrl?: URL;
   readonly resources?: { readonly memoryMiB: number; readonly maxProcesses?: number };
-  readonly schemaVersion: 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8;
+  readonly schemaVersion: 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9;
+  readonly nativeUtilities?: NativeUtilitySuite;
   readonly packs?: UserspaceRootfsPacks;
   readonly snapshots?:readonly ManagedImageSnapshot[];
   readonly kind: "linux-user-rootfs";
@@ -88,8 +90,8 @@ export function decodeUserspaceRootfsManifest(
     "schemaVersion", "kind", "id", "version", "architecture", "cpuProfile",
     "sourceDateEpoch", "rootTreeSha256", "fileCount", "totalBytes", "blobs",
     "entries", "runtimes", "provenance", ...(schemaVersion >= 3 ? ["workspaceBaseSha256"] : []), ...(schemaVersion >= 8 ? ["packs"] : []),
-  ], [...(schemaVersion >= 5 ? ["resources"] : []),...(schemaVersion >= 7 ? ["snapshots"] : [])]);
-  if (schemaVersion !== 1 && schemaVersion !== 2 && schemaVersion !== 3 && schemaVersion !== 4 && schemaVersion !== 5 && schemaVersion !== 6 && schemaVersion !== 7 && schemaVersion !== USERSPACE_ROOTFS_SCHEMA) {
+  ], [...(schemaVersion >= 5 ? ["resources"] : []),...(schemaVersion >= 7 ? ["snapshots"] : []), ...(schemaVersion >= 9 ? ["nativeUtilities"] : [])]);
+  if (schemaVersion !== 1 && schemaVersion !== 2 && schemaVersion !== 3 && schemaVersion !== 4 && schemaVersion !== 5 && schemaVersion !== 6 && schemaVersion !== 7 && schemaVersion !== 8 && schemaVersion !== USERSPACE_ROOTFS_SCHEMA) {
     throw protocolError("unsupported Userspace rootfs schema");
   }
   if (string(source["kind"], "kind") !== "linux-user-rootfs") {
@@ -118,6 +120,7 @@ export function decodeUserspaceRootfsManifest(
   const packs = schemaVersion >= 8 ? decodeUserspaceRootfsPacks(source["packs"], rootfsClosure({blobs,provenance}), manifestUrl) : undefined;
   return {
     schemaVersion,
+    ...(source["nativeUtilities"] === undefined ? {} : { nativeUtilities: decodeNativeUtilitySuite(source["nativeUtilities"]) }),
     ...(packs === undefined ? {} : { packs }),
     ...(source["snapshots"]===undefined?{}:{snapshots:decodeManagedImageSnapshots(source["snapshots"],manifestUrl)}),    ...(schemaVersion >= 5 ? { manifestUrl: new URL(manifestUrl.href) } : {}),
     ...(source["resources"] === undefined ? {} : { resources: decodeResources(source["resources"]) }),

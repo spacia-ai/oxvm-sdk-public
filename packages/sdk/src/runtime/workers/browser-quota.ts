@@ -25,6 +25,17 @@ export interface QuotaReader {
   persisted(): Promise<boolean>;
 }
 
+/** Estimated space left in this origin. With no estimate, the browser decides when a write runs. */
+export async function availableStorageBytes(): Promise<number | undefined> {
+  try {
+    const manager = typeof navigator === "object" ? navigator.storage : undefined;
+    const estimate = await manager?.estimate();
+    if (estimate?.quota === undefined || estimate.usage === undefined) return undefined;
+    const available = estimate.quota - estimate.usage;
+    return Number.isFinite(available) ? Math.max(0, Math.floor(available)) : undefined;
+  } catch { return undefined; }
+}
+
 /**
  * The browser's storage estimate and persistence for this origin; each is null where the browser
  * does not report it or refuses to.

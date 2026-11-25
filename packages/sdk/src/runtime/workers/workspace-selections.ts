@@ -121,7 +121,17 @@ export class WorkspaceSelections {
   }
 
   /** A retained generation uses the same bounded stream lease as a normal reopen. */
-  async retainedWorkspace(id:string,signal:AbortSignal,expectedBase?:string):Promise<WorkspaceReadLease|undefined> {
+  retainedWorkspace(id: string, signal: AbortSignal, expectedBase?: string): Promise<WorkspaceReadLease | undefined> {
+    return this.#retainedRead(id, "", signal, expectedBase);
+  }
+
+  retainedRoot(id: string, identity: string, signal: AbortSignal): Promise<WorkspaceReadLease | undefined> {
+    const scope = scopes(identity)[1];
+    if (scope === undefined) fail("Root file scope is missing");
+    return this.#retainedRead(id, scope, signal, identity);
+  }
+
+  async #retainedRead(id: string, scope: string, signal: AbortSignal, expectedBase?: string): Promise<WorkspaceReadLease | undefined> {
     await this.#serialize(async()=>{await this.#kept(id,signal);this.#reads.set(id,(this.#reads.get(id)??0)+1);});
     let retired=false;
     // A writer may await this producer's retirement while holding the mutation
@@ -129,11 +139,11 @@ export class WorkspaceSelections {
     // a later turn instead of recursively acquiring the writer's turn.
     const retire=async()=>{if(retired)return;retired=true;await this.#serialize(()=>{const count=this.#reads.get(id)??0;if(count<=1)this.#reads.delete(id);else this.#reads.set(id,count-1);return Promise.resolve();});};
     try {
-    const selection=await this.#kept(id,signal),ref=selection.get("");
+    const selection=await this.#kept(id,signal),ref=selection.get(scope);
     if(ref===undefined||ref===null){await retire();return undefined;}
-    const manifest=validateManifest("",await this.#manifest(ref,signal));
+    const manifest=validateManifest(scope,await this.#manifest(ref,signal));
     if(expectedBase!==undefined&&manifest.workspaceBaseSha256!==expectedBase) fail("Retained workspace base differs from requested source");
-    const lease=await new WorkspaceStore(this.backend).openRetainedRead(manifest,signal);
+    const lease=await new WorkspaceStore(scoped(this.backend, scope)).openRetainedRead(manifest,signal);
     let retirement:Promise<void>|undefined;
     return {...lease,workspaceBaseSha256:manifest.workspaceBaseSha256,retire:()=>retirement??=lease.retire().finally(retire)};
     } catch(error){await retire();throw error;}
@@ -288,10 +298,10 @@ export class WorkspaceSelections {
         requireActive(signal);
         return bytes;
       },
-      write: async (path, bytes) => {
+      write: async (path, bytes, operation) => {
         if (this.#staged !== staged) return Promise.reject(new VMError("STORAGE_ERROR", "File publication conflicts with a staged restore"));
         const scope = activeScope(path);
-        return scope === undefined ? this.#raw.write(await this.#journalPath(path, staged), bytes) : this.#select(scope, bytes, staged);
+        return scope === undefined ? this.#raw.write(await this.#journalPath(path, staged), bytes, operation) : this.#select(scope, bytes, staged);
       },
       remove: async path => {
         if (this.#staged !== staged) return Promise.reject(new VMError("STORAGE_ERROR", "File publication conflicts with a staged restore"));
@@ -513,7 +523,7 @@ function scoped(raw: WorkspaceStoreBackend, scope: string): WorkspaceStoreBacken
     ...(raw.mutate === undefined ? {} : { mutate: raw.mutate.bind(raw) }),
     async *list(prefix) { for await (const path of raw.list(scope + prefix)) yield path.slice(scope.length); },
     read: (path, maximum, signal) => raw.read(scope + path, maximum, signal),
-    write: (path, bytes) => raw.write(scope + path, bytes),
+    write: (path, bytes, operation) => raw.write(scope + path, bytes, operation),
     remove: path => raw.remove(scope + path),
   };
 }

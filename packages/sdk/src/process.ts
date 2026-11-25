@@ -20,6 +20,8 @@ export function adaptProcess(process: RuntimeProcess, terminal: boolean): Proces
     }),
     kill: (signal: Parameters<ProcessHandle["kill"]>[0] = "SIGTERM", options?: Parameters<ProcessHandle["kill"]>[1]) => process.sendSignal(signal, options?.scope ?? "process"),
   };
+  // Restore can retire this derived promise before its public caller observes it.
+  void common.exit.catch(() => {});
   if (!terminal) return { ...common, kind: "process", stdout: process.stdout, stderr: process.stderr };
   return { ...common, kind: "terminal", output: terminalOutput(process.stdout, process.stderr), resize: size => process.resize(size), interrupt: () => process.interrupt() };
 }

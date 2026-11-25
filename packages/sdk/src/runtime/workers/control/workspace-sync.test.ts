@@ -197,3 +197,24 @@ it("cancels a progressing peer immediately when another capture opening fails", 
     await failed;
   } finally { channel.port1.close(); channel.port2.close(); vi.useRealTimers(); }
 });
+
+it("retains the capture failure and failed retirement receipt together", async () => {
+  const channel = new MessageChannel(), client = new SnapshotStorageClient(channel.port2);
+  const original = new VMError("STORAGE_ERROR", "native capture failed", { step: "capture-open" });
+  const retirement = new VMError("PROTOCOL_ERROR", "capture abort receipt unavailable");
+  const capture = { bytes: 12, retire: () => Promise.reject(retirement), source: () => {
+    throw new Error("A failed opening must not start publication");
+  } };
+  const agent = { supportsStreamedRestore: true, syncFilesystems: async () => {},
+    captureWorkspace: (_id: number, format: "snapshot" | "delta") => format === "snapshot"
+      ? Promise.reject(original) : Promise.resolve(capture) };
+  try {
+    await expect(synchronizeWorkspace(agent, client, new AssistanceTraffic(7), {
+      binding: { session: "11111111-2222-4333-8444-555555555555", generation: 1 }, base: "a".repeat(64),
+      requestId: 1, signal: new AbortController().signal,
+    })).rejects.toMatchObject({ code: "STORAGE_ERROR", message: "native capture failed", detail: {
+      step: "capture-open", cleanupFailed: true,
+      cleanupError: { code: "PROTOCOL_ERROR", message: "capture abort receipt unavailable" },
+    } });
+  } finally { channel.port1.close(); channel.port2.close(); }
+});

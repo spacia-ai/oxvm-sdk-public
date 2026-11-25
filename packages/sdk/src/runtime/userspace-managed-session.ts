@@ -1,12 +1,13 @@
 import type {ShippedInstallIdentity} from "./protocol.js";
 import type { UserspaceWorkspaceStart } from "./protocol/workspace-start.js";
 import { VMError } from "./errors.js";
+import { assertImageNativeUtilities } from "./native-utilities.js";
 import { managedImageUrl } from "./managed-image.js";
 import { decodeManagedResume, progressReport, startManaged,prepareInitialStart,referenceIdentity, type ResumedSession } from "./managed-start.js";
 import {bootShippedSource} from "./protocol/shipped-source.js";
 import { withProgressPort } from "./progress-port.js";
 import { decodeSnapshotRef, type ControlOperations, type PreparedUserspaceRootfs, type RestoredSnapshot, type SnapshotInfo, type SnapshotRef, type StorageOperations } from "./protocol.js";
-import type { SnapshotEvent, StartProgress } from "./snapshot-types.js";
+import type { ManagedStart, SnapshotEvent, StartProgress } from "./snapshot-types.js";
 import type { ManagedImageBootOptions, ManagedImageInfo, ProcessHandle } from "./vm-types.js";
 import type { WorkerClient } from "./worker-client.js";
 import { decodeImagePreparationReport, type ImageAcquisitionReason } from "./protocol/image-preparation.js";
@@ -21,10 +22,13 @@ interface NativeManagedHost {
   restored(): Promise<void>;
 }
 
+export type UserspaceManagedImageInfo = ManagedImageInfo & { readonly start: ManagedStart };
+
 /** Shared managed-start decisions, backed by native mounts, checkpoints and process attachments. */
 export class UserspaceManagedSession {
   readonly #host: NativeManagedHost;
   #rootfs: PreparedUserspaceRootfs | undefined;
+  #starting = false;
   #configured = false;
   #active = false;
   #requested: {readonly manifestUrl:string;readonly manifestSHA256?:string;readonly trustedKeyId:string;readonly trustedPublicKey:Uint8Array} | undefined;
@@ -32,8 +36,14 @@ export class UserspaceManagedSession {
   get rootfs(): PreparedUserspaceRootfs | undefined { return this.#rootfs; }
   get active(): boolean { return this.#active; }
 
-  async boot(manifestUrl: string | URL, options: ManagedImageBootOptions = {}): Promise<ManagedImageInfo> {
-    if (this.#configured) throw new VMError("INVALID_ARGUMENT", "Create a new VM before starting another native session");
+  async boot(manifestUrl: string | URL, options: ManagedImageBootOptions = {}, engineReady?: Promise<void>): Promise<UserspaceManagedImageInfo> {
+    if (this.#starting || this.#configured) throw new VMError("INVALID_ARGUMENT", "Create a new VM before starting another native session");
+    this.#starting = true;
+    try { return await this.#boot(manifestUrl, options, engineReady); }
+    finally { this.#starting = false; }
+  }
+
+  async #boot(manifestUrl: string | URL, options: ManagedImageBootOptions, engineReady: Promise<void> | undefined): Promise<UserspaceManagedImageInfo> {
     const resume = decodeManagedResume(options.resume ?? "none"), shipped = bootShippedSource(options.shipped,"userspace",globalThis.location.href);
     const report = progressReport(options.onProgress), signal = options.signal;
     if (options.trustedKeyId === undefined || options.trustedPublicKey === undefined) {
@@ -54,21 +64,26 @@ export class UserspaceManagedSession {
       ...(options.imagePreparation === undefined ? {} : { imagePreparation: options.imagePreparation }),
       boot: resume === "pre-resume" || resume === "fresh-image" || resume === "update-image" ? resume : "live",
     }, { signal });
-    this.#rootfs = prepared;
-    const configure = async () => {
+    assertImageNativeUtilities(prepared.nativeUtilities);
+    const configure = async (cancellation = signal) => {
       if (this.#configured) return;
       const rootfs = prepared.metadata.slice();
       await this.#host.control.request("configure-userspace-checkpoints", {
         mount: { rootTreeSha256: prepared.rootTreeSha256, workspaceBaseSha256: prepared.workspaceBaseSha256 ?? prepared.rootTreeSha256,
           cpuProfile: prepared.cpuProfile, rootfs },
         destination: { manifestUrl: href, trusted },
-      }, { signal, transfer: [rootfs.buffer] });
+      }, { signal: cancellation, transfer: [rootfs.buffer], cancellation: "settled" });
       this.#configured = true;
     };
     if (options.imagePreparation === "before-ready") {
-      await configure();
-      await this.#install("first-install", signal, report);
+      if (engineReady === undefined) {
+        await configure();
+        await this.#install("first-install", signal, report);
+      } else {
+        await this.#installAndConfigure(engineReady, configure, signal, report);
+      }
     }
+    this.#rootfs = prepared;
     let coldDetails: UserspaceWorkspaceStart | undefined;
     const start = await startManaged({
       initialStart:()=>Promise.resolve(initial),
@@ -119,7 +134,23 @@ export class UserspaceManagedSession {
     await this.#install("repair", signal);
   }
 
-  async #install(reason: ImageAcquisitionReason, signal?: AbortSignal, report?: (progress: StartProgress) => void): Promise<void> {
+  async #installAndConfigure(engineReady: Promise<void>, configure: (signal: AbortSignal) => Promise<void>, signal?: AbortSignal, report?: (progress: StartProgress) => void): Promise<void> {
+    const stop = new AbortController(), dispatched = Promise.withResolvers<undefined>();
+    const notifyDispatched = () => { dispatched.resolve(undefined); };
+    const cancellation = signal === undefined ? stop.signal : AbortSignal.any([signal, stop.signal]);
+    let failure: { readonly cause: unknown } | undefined;
+    const settle = (work: Promise<void>) => work.catch((cause: unknown) => {
+      failure ??= { cause };
+      stop.abort();
+    });
+    const installing = settle(this.#install("first-install", cancellation, report, notifyDispatched)).finally(notifyDispatched);
+    // The first-install request enters the control queue before the scaffold can pass it.
+    const configuring = settle(dispatched.promise.then(() => engineReady).then(() => configure(cancellation)));
+    await Promise.all([installing, configuring]);
+    if (failure !== undefined) throw failure.cause;
+  }
+
+  async #install(reason: ImageAcquisitionReason, signal?: AbortSignal, report?: (progress: StartProgress) => void, dispatched?: () => void): Promise<void> {
     const observing = new AbortController();
     let totalBytes = 0;
     try {
@@ -132,7 +163,9 @@ export class UserspaceManagedSession {
           }
         }, observing.signal);
       }
-      await this.#host.control.request("prepare-image", { reason }, { signal, cancellation: "settled" });
+      const installing = this.#host.control.request("prepare-image", { reason }, { signal, cancellation: "settled" });
+      dispatched?.();
+      await installing;
       report?.({ step: "prepare", stage: "commit", completedBytes: totalBytes, totalBytes });
     } finally { observing.abort(); }
   }

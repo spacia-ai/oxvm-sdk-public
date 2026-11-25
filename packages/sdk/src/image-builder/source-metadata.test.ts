@@ -1,4 +1,4 @@
-import { mkdtemp, mkdir, writeFile, rm } from "node:fs/promises";
+import { mkdtemp, mkdir, readdir, writeFile, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { expect, it } from "vitest";
@@ -13,7 +13,11 @@ it("retains archive permissions and numeric ownership independently of host extr
     const archive = join(directory, "source.tar");
     await c({ file: archive, cwd: source, jobs: 1, noMtime: true, onWriteEntry(entry) { if (entry.stat === undefined) throw new Error("archive entry has no stat"); entry.stat.mode = 0o100640; entry.stat.uid = 123; entry.stat.gid = 456; } }, ["file"]);
     const staging = join(directory, "staging"); await mkdir(staging);
-    const resolved = await materializeSource({ kind: "archive", artifact: { path: archive, sha256: await hashFile(archive) } }, staging, { recipeDir: directory, signingKeyFile: "unused.pem" });
+    const sha256 = await hashFile(archive);
+    const resolved = await materializeSource({ kind: "archive", artifact: { path: archive, sha256 } }, staging, { recipeDir: directory, signingKeyFile: "unused.pem" });
+    expect(resolved.identity).toBe(sha256);
+    expect(await hashFile(archive)).toBe(sha256);
+    expect(await readdir(join(staging, "verified-inputs"))).toEqual([]);
     const tree = await collectRootfs(resolved.root, undefined, undefined, resolved.metadata);
     expect(tree.entries).toEqual([{ path: "file", type: "file", mode: 0o640, ownership: { uid: 123, gid: 456 }, blob: hash("content") }]);
   } finally { await rm(directory, { recursive: true, force: true }); }

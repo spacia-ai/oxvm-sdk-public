@@ -15,6 +15,26 @@ import {
 const manifestUrl = new URL("https://profiles.example/rootfs/manifest.json");
 const hash = "a".repeat(64);
 
+it("schema 9 authenticates native utility requirements and keeps ordinary images valid", () => {
+  const original = base();
+  const entries = original.entries.map(entry => ({ ...entry, ownership: { uid: 1000, gid: 1000 }, times: { accessNs: "0", modificationNs: "0" } }));
+  const refs = [...new Map([...original.blobs, ...[original.provenance.sbom, original.provenance.notices,
+    original.provenance.correspondingSources, original.provenance.reproducibility]].map(blob => [blob.sha256, blob])).values()];
+  let offset = 0;
+  const blobs = refs.map(blob => { const extent = { chunk: hash, offset, bytes: blob.bytes, fileOffset: 0 }; offset += blob.bytes;
+    return { sha256: blob.sha256, extents: [extent] }; });
+  const packs = { index: { version: 1, chunks: [{ sha256: hash, bytes: offset }], blobs },
+    artifacts: [{ sha256: hash, encoding: "gzip", url: "./packs/a.gz", encodedBytes: 10, encodedSha256: hash }] };
+  const nativeUtilities = { identity: "oxidevm-rust-toybox", abi: 1, catalogSha256: hash };
+  const input = { ...original, schemaVersion: 9, workspaceBaseSha256: hash, entries, packs, nativeUtilities };
+  const decoded = decodeUserspaceRootfsManifest(input, manifestUrl);
+  expect(decoded.nativeUtilities).toEqual(nativeUtilities);
+  expect(canonicalUserspaceRootfsBytes(decoded)).not.toEqual(canonicalUserspaceRootfsBytes(
+    decodeUserspaceRootfsManifest({ ...input, nativeUtilities: { ...nativeUtilities, abi: 2 } }, manifestUrl)));
+  expect(decodeUserspaceRootfsManifest({ ...input, nativeUtilities: undefined }, manifestUrl).nativeUtilities).toBeUndefined();
+  expect(() => decodeUserspaceRootfsManifest({ ...input, schemaVersion: 8 }, manifestUrl)).toThrow();
+});
+
 it("schema 8 authenticates complete pack mappings while preserving the logical tree", () => {
   const original = base(), entries = original.entries.map(entry => ({...entry,ownership:{uid:1000,gid:1000},times:{accessNs:"0",modificationNs:"0"}}));
   const refs = [...new Map([...original.blobs,...[original.provenance.sbom,original.provenance.notices,original.provenance.correspondingSources,original.provenance.reproducibility]].map(blob=>[blob.sha256,blob])).values()];

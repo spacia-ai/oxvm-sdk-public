@@ -80,10 +80,19 @@ describe("persistent Userspace root storage", () => {
     expect(backend.files.has(journal)).toBe(false);
   });
   it("recovers prefixed staging through the OPFS backend", async () => {
-    const backend = opfsWorkspaceStoreBackend(new MemoryDirectory());
+    const directory = new MemoryDirectory();
+    const backend = opfsWorkspaceStoreBackend(directory);
     await commit(await openUserspaceRootStore(backend, root), root, 7);
     await commit(await openUserspaceRootStore(backend, root), root, 8);
     await expect((await openUserspaceRootStore(backend, root)).read(root)).resolves.toEqual(new Uint8Array([8]));
+    const chunks = directory.find(`${prefix}chunks`);
+    if (!(chunks instanceof MemoryDirectory)) throw new Error("missing Userspace root chunks");
+    expect(chunks.names()).toHaveLength(2);
+    for (const name of chunks.names()) {
+      const file = chunks.file(name, false);
+      expect(file.commits).toBe(0);
+      expect(file.syncWrites).toBe(1);
+    }
   });
 
   it("keeps the committed generation after OPFS quota failure", async () => {

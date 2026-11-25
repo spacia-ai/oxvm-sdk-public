@@ -23,6 +23,9 @@ function fixture() {
   ports.port1.start();
   return { client, started, cancelled,
     progress: (completedObjects: number) => ports.port1.postMessage({ version: SNAPSHOT_CHANNEL_VERSION, id: 1, completedObjects }),
+    imageProgress: (completedBytes: number) => ports.port1.postMessage({
+      version: SNAPSHOT_CHANNEL_VERSION, id: 1, completedBytes, totalBytes: 4096,
+    }),
     finish: () => ports.port1.postMessage(snapshotStorageResponse(1, undefined)),
     barrier: () => client.request({ type: "native-session" }),
     close: () => { client.close(); ports.port1.close(); },
@@ -44,6 +47,42 @@ it("keeps a cold image capture alive while verified objects advance beyond the r
     }
     f.finish();
     expect(await outcome).toBe("saved");
+  } finally { f.close(); vi.useRealTimers(); }
+});
+
+it("keeps a native capture alive while image bytes advance before an object is written", async () => {
+  vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout"] });
+  const f = fixture(), report = vi.fn();
+  try {
+    const result = f.client.request(request, [], undefined, report);
+    const outcome = result.then(() => "saved", (error: unknown) => error);
+    await f.started.promise;
+    for (const bytes of [1024, 2048, 3072, 4096]) {
+      await vi.advanceTimersByTimeAsync(TIMEOUT - 1);
+      f.imageProgress(bytes);
+      await f.barrier();
+    }
+    f.finish();
+    expect(await outcome).toBe("saved");
+    expect(report.mock.calls).toEqual([1024, 2048, 3072, 4096].map(completedBytes => [{ completedBytes, totalBytes: 4096 }]));
+  } finally { f.close(); vi.useRealTimers(); }
+});
+
+it("ignores repeated or lower byte counts when renewing a native capture deadline", async () => {
+  vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout"] });
+  const f = fixture();
+  try {
+    const outcome = f.client.request(request).catch((error: unknown) => error);
+    await f.started.promise;
+    await vi.advanceTimersByTimeAsync(TIMEOUT - 4);
+    f.imageProgress(1024); await f.barrier();
+    await vi.advanceTimersByTimeAsync(TIMEOUT - 2);
+    f.imageProgress(1024); await f.barrier();
+    await vi.advanceTimersByTimeAsync(1);
+    f.imageProgress(512); await f.barrier();
+    await vi.advanceTimersByTimeAsync(1);
+    expect(await outcome).toMatchObject({ code: "STORAGE_ERROR", detail: { reason: "storage-timeout" } });
+    expect(await f.cancelled.promise).toBe(1);
   } finally { f.close(); vi.useRealTimers(); }
 });
 

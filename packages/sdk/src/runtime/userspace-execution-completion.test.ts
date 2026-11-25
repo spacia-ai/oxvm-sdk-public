@@ -9,6 +9,18 @@ function result(tag: number): Uint8Array {
 }
 
 describe("Userspace execution completion", () => {
+  it("decodes native work without admitting the command marker to the JIT", () => {
+    const bytes = new Uint8Array(24), view = new DataView(bytes.buffer);
+    bytes.set(new TextEncoder().encode("OXLR"));
+    view.setUint16(4, 3, true); view.setUint32(8, 12, true);
+    view.setUint8(12, 4); view.setUint16(14, 1, true); view.setBigUint64(16, 4096n, true);
+    expect(decodeUserspaceRunResult(bytes, 6)).toEqual({ kind: "native-yield", work: 4096n, model: 1 });
+    expect(() => decodeUserspaceRunResult(bytes, 5)).toThrow();
+    view.setUint16(14, 2, true);
+    expect(() => decodeUserspaceRunResult(bytes, 6)).toThrow();
+    view.setUint16(14, 1, true); view.setBigUint64(16, 0n, true);
+    expect(() => decodeUserspaceRunResult(bytes, 6)).toThrow();
+  });
   it("distinguishes a bounded kernel yield from a blocked or exited runtime", () => {
     for (const [status, tag, kind] of [[3, 0, "exit"], [4, 3, "blocked"], [5, 1, "step-limit"]] as const) {
       expect(decodeUserspaceRunResult(result(tag), status).kind).toBe(kind);

@@ -317,6 +317,8 @@ describe("Userspace worker protocol", () => {
       guestClockIdleTicks: 2_560_000n,
       guestClockKernelTicks: 64n,
       kernelAccountingModel: 1,
+      guestClockNativeTicks: 0n,
+      nativeAccountingModel: 1,
       realtimeOffsetSteps: 1n,
       workerRunTurns: 4,
       workerYields: 3,
@@ -400,6 +402,8 @@ describe("Userspace worker protocol", () => {
     for (const invalid of [
       { guestClockKernelTicks: 63n }, { kernelAccountingModel: 0 },
       { guestClockKernelTicks: undefined }, { kernelAccountingModel: undefined },
+      { guestClockNativeTicks: 1n }, { nativeAccountingModel: 2 },
+      { guestClockNativeTicks: -1n }, { nativeAccountingModel: undefined },
     ]) {
       expect(() => userspaceResponseDecoders["read-execution-profile"]({ ...profile, ...invalid })).toThrow();
     }

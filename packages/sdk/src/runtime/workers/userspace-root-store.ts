@@ -18,7 +18,7 @@ export async function openUserspaceRootStore(backend: WorkspaceStoreBackend, roo
       }
     },
     read: (path, maximum, signal) => backend.read(prefix + relative(path), maximum, signal),
-    write: (path, bytes) => backend.write(prefix + relative(path), bytes),
+    write: (path, bytes, operation) => backend.write(prefix + relative(path), bytes, operation),
     remove: path => backend.remove(prefix + relative(path)),
   };
   if (scoped.mutate === undefined) await recoverRootPublication(scoped, rootTreeSha256);

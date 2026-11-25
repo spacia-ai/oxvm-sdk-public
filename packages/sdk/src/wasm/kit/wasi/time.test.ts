@@ -78,7 +78,7 @@ describe("poll_oneoff (OBL-POLL)", () => {
     const { call, subscribe, events } = setup((_entries, timeout) => { waits.push(timeout); return []; });
     subscribe(0, 9n, 0, 10n, true);
     expect(call("poll_oneoff", SUBS, EVENTS, 1, COUNT)).toBe(0);
-    expect(waits).toEqual([0]);
+    expect(waits).toEqual([]);
     expect(events()).toEqual([{ userdata: 9n, error: 0, type: 0 }]);
   });
 

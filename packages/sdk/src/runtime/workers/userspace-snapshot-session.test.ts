@@ -26,6 +26,7 @@ function setup(workspaceBaseSha256?: string) {
   let restoreFailure = false, destructive = false;
   let captureFinish = false;
   let newerFiles={workspace:false,root:false};
+  let nativeUtilities: { readonly identity: "oxidevm-rust-toybox"; readonly abi: number; readonly catalogSha256: string } | undefined;
   const capture = { transfer: async (sink: CheckpointSink) => {
     await sink("graph", 0, new Uint8Array([1])); return { graphBytes: 1, payloadBytes: 0 };
   }, finish: (committed: boolean) => { captureFinish = committed; order.push(`capture-finish:${String(committed)}`); }, abort: () => { order.push("capture-abort"); } };
@@ -82,7 +83,7 @@ function setup(workspaceBaseSha256?: string) {
     if (request.type === "open-native-capture") { selected = request.snapshot; return undefined; }
     if (request.type === "commit-native-capture") return selected;
     if (request.type === "prepare-native-restore") return { manifest: { ...manifest, ...request.snapshot }, attachment,newerFiles,
-      rootfs: { id: "alpine", version: "v1", rootTreeSha256: HASH, ...(workspaceBaseSha256 === undefined ? {} : { workspaceBaseSha256 }), cpuProfile: "x86-64-v2", fileCount: 0, totalBytes: 0, metadata: new Uint8Array(4), runtimes: { supportingFiles: [] } } };
+      rootfs: { id: "alpine", version: "v1", rootTreeSha256: HASH, ...(nativeUtilities === undefined ? {} : { nativeUtilities }), ...(workspaceBaseSha256 === undefined ? {} : { workspaceBaseSha256 }), cpuProfile: "x86-64-v2", fileCount: 0, totalBytes: 0, metadata: new Uint8Array(4), runtimes: { supportingFiles: [] } } };
     if (request.type === "stream-native-restore") return serveRestoreStream(request.port,
       request.area === "graph" ? [{area:"native-graph",index:0,read:()=>Promise.resolve(Uint8Array.of(1))}] : [], new AbortController().signal);
     if (request.type === "read-native-restore") return new Uint8Array([1]);
@@ -91,8 +92,18 @@ function setup(workspaceBaseSha256?: string) {
   } };
   const events: SnapshotEventRecord[] = [];
   return { setFileDifferences:(value:typeof newerFiles)=>{newerFiles=value;}, order, requests, host, events, session: new UserspaceSnapshotSession(host, storage, event => events.push(event)), failStorage: (type: SnapshotStorageRequest["type"]) => { storageFailure = type; },
-    failRestore: () => { restoreFailure = true; }, captureCommitted: () => captureFinish };
+    failRestore: () => { restoreFailure = true; }, captureCommitted: () => captureFinish,
+    mismatchNativeUtilities: () => { nativeUtilities = { identity: "oxidevm-rust-toybox", abi: 65535, catalogSha256: "b".repeat(64) }; } };
 }
+
+it("preserves the live runtime when a restore requires a mismatched native suite", async () => {
+  const f = setup();
+  f.mismatchNativeUtilities();
+  await expect(f.session.restore(snapshot)).rejects.toMatchObject({ code: "NATIVE_UTILITY_MISMATCH" });
+  expect(f.order).not.toContain("restore-begin");
+  expect(f.order).not.toContain("runtime-publish");
+  expect(f.order).toContain("resume");
+});
 
 it("rejects active browser work before opening or preparing a capture", async () => {
   const f = setup();

@@ -39,7 +39,7 @@ export interface ModuleBindings {
 /** Suspend before the first statement so V8 retains native lexical initialization.
  * Export cells close over that scope; SWC only lowers the outer module wrapper.
  */
-export function lowerModuleBindings(source: string, filename: string): ModuleBindings {
+export function lowerModuleBindings(source: string, filename: string, sourceMarker?: string): ModuleBindings {
   const tree = parseModule(source, filename);
   lowerAsyncSuper(tree);
   const imports: ModuleImport[] = [];
@@ -101,6 +101,12 @@ export function lowerModuleBindings(source: string, filename: string): ModuleBin
       if (t.isIdentifier(path.node.callee, { name: "eval" }) && path.scope.getBinding("eval") === undefined && !literalLexicalRead(path)) {
         throw new SyntaxError("direct lexical eval is not supported by assisted modules");
       }
+    },
+    Function(path) { if (sourceMarker !== undefined) markFunction(path, source, sourceMarker); },
+    Class(path) {
+      const { start, end, body } = path.node;
+      if (sourceMarker === undefined || typeof start !== "number" || typeof end !== "number") return;
+      body.body.unshift(t.staticBlock([t.expressionStatement(t.stringLiteral(`${sourceMarker}${String(start)}:${String(end)}`))]));
     },
     MetaProperty(path) {
       if (path.node.meta.name === "import" && path.node.property.name === "meta") {
@@ -192,6 +198,26 @@ export function lowerModuleBindings(source: string, filename: string): ModuleBin
   ))];
   const printed = printModule(tree, source, filename);
   return { imports, exports, forwards, stars, dependencies: Array.from(dependencies), runtimeName, factoryName, implementation, topLevelAwait, ...printed };
+}
+
+/**
+ * Leaves the range of a function's own source text inside it (function-sources.ts reads it back): a directive in a
+ * block body, the first operand of a sequence in an arrow's expression body. Neither changes what the function does.
+ * Functions the lowering made have no range. An empty async function stays untouched, because the compiler keeps
+ * exactly that shape native. A class member's text starts after `static`.
+ */
+function markFunction(path: NodePath<t.Function>, source: string, marker: string): void {
+  const { node } = path, { body, end } = node;
+  let start = node.start;
+  if (typeof start !== "number" || typeof end !== "number") return;
+  if ((t.isClassMethod(node) || t.isClassPrivateMethod(node)) && node.static) {
+    const keyword = /^static\s+/u.exec(source.slice(start, end));
+    if (keyword === null) return;
+    start += keyword[0].length;
+  }
+  const text = `${marker}${String(start)}:${String(end)}`;
+  if (!t.isBlockStatement(body)) node.body = t.sequenceExpression([t.stringLiteral(text), body]);
+  else if (!(node.async === true && node.params.length === 0 && body.body.length === 0 && body.directives.length === 0)) body.directives.push(t.directive(t.directiveLiteral(text)));
 }
 
 function defaultExpression(expression: t.Expression): t.MemberExpression {

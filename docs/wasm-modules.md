@@ -282,8 +282,7 @@ ADR 0028):
   whose document comes from the runtime's own origin, so the sandbox gives it an
   opaque origin. A broker worker runs there, with one runner worker per module
   process. The broker relays every request of a module process to the VM's
-  Userspace worker; a synchronous request pays a relay of about 0.1 ms
-  (diagnostic measurement on a loaded host).
+  Userspace worker.
 - Module code has no access to your page's cookies, IndexedDB, OPFS,
   CacheStorage, Web Locks or BroadcastChannels, and no network of its own
   (`connect-src blob:`); its network is the VM's (see [Networking](#networking)).
@@ -319,6 +318,16 @@ refused, because without that policy module code would have the browser's
 network. WebKit fails `blob-workers` today (under COEP no `blob:` worker starts in
 the frame), so Safari refuses modules. Safari itself has not been tested; the
 evidence comes from Playwright's WebKit on Linux.
+
+### Performance
+
+A module waits for the VM to answer each synchronous request. The time varies
+by operation, data size, browser, and system load. Many small requests in
+sequence can add delay. Use larger reads or writes when they let you make fewer
+requests.
+
+Measure a representative workload in your target browser. Time the first
+command launch and repeat launches separately.
 
 ### Bundlers and security policy
 

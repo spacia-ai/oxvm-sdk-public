@@ -30,6 +30,8 @@ export interface NetSyncSockets {
   read(fd: number, max: number): Uint8Array;
   /** Never blocks: what has arrived (up to `max` bytes, empty at the peer's end of stream), or null when nothing has. */
   readNow(fd: number, max: number): Uint8Array | null;
+  /** Waits up to ms for the VM's stream readiness, with no data transfer. */
+  waitReadable?(fd: number, ms: number): void;
   write(fd: number, bytes: Uint8Array): number;
   shutdown(fd: number): void;
   close(fd: number): void;

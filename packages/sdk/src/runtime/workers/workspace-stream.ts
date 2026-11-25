@@ -3,8 +3,9 @@ import { VMError } from "../errors.js";
 import type { WorkspaceSnapshotReuse } from "../protocol/workspace-publication.js";
 import type { WorkspaceStoreBackend } from "./workspace-store.js";
 
-const CHUNK_BYTES = 1024 * 1024;
+export const CHUNK_BYTES = 1024 * 1024;
 const FRAME_BYTES = 64 * 1024;
+const STAGING_BATCH_CHUNKS = 8;
 const PAGE_ENTRIES = 1024;
 const MAX_PAGES = 1024;
 const METADATA_BYTES = 128 * 1024;
@@ -77,11 +78,19 @@ export async function stageWorkspaceStream(backend: WorkspaceStoreBackend, input
   let received = 0;
   let used = 0;
   let buffer = new Uint8Array(Math.min(CHUNK_BYTES, input.bytes));
+  let batch: Uint8Array<ArrayBuffer>[] = [];
+  const store = (chunks: readonly Uint8Array<ArrayBuffer>[]) => storeChunks(backend, chunks, signal, staging);
   const flushPage = async (): Promise<void> => {
     if (entries.length === 0) return;
     const page = new TextEncoder().encode(JSON.stringify(entries));
-    pages.push(await storeChunk(backend, page, signal, staging));
+    pages.push(...await store([page]));
     entries = [];
+  };
+  const flushBatch = async (): Promise<void> => {
+    if (batch.length === 0) return;
+    entries.push(...await store(batch));
+    batch = [];
+    if (entries.length === PAGE_ENTRIES) await flushPage();
   };
   await consumeFrames(input, signal, async frame => {
     active(signal);
@@ -98,8 +107,8 @@ export async function stageWorkspaceStream(backend: WorkspaceStoreBackend, input
       buffer.set(frame.subarray(offset, offset + take), used);
       offset += take; used += take;
       if (used === buffer.length) {
-        entries.push(await storeChunk(backend, buffer, signal, staging));
-        if (entries.length === PAGE_ENTRIES) await flushPage();
+        batch.push(buffer);
+        if (batch.length === STAGING_BATCH_CHUNKS) await flushBatch();
         const remaining = input.bytes - received + frame.byteLength - offset;
         buffer = new Uint8Array(Math.min(CHUNK_BYTES, remaining));
         used = 0;
@@ -108,6 +117,7 @@ export async function stageWorkspaceStream(backend: WorkspaceStoreBackend, input
   });
   active(signal);
   if (received !== input.bytes || used !== 0) invalid("workspace stream ended before its declared length");
+  await flushBatch();
   await flushPage();
   return { bytes: input.bytes, pages };
 }
@@ -138,8 +148,10 @@ async function consumeFrames(input: WorkspaceStreamInput, signal: AbortSignal,
 /** Journal old references before replacing the active manifest. Recovery can
  * then reclaim them using the same bounded reachability scan as failed staging. */
 export async function trackWorkspaceStream(backend: WorkspaceStoreBackend, ref: WorkspaceStreamRef, staging: WorkspaceStreamStaging): Promise<void> {
-  for await (const entry of streamChunks(backend, ref, new AbortController().signal)) await staging.track(`chunks/${entry.sha256}`);
-  for (const page of ref.pages) await staging.track(`chunks/${page.sha256}`);
+  await staging.track((async function* () {
+    for await (const entry of streamChunks(backend, ref, new AbortController().signal)) yield `chunks/${entry.sha256}`;
+    for (const page of ref.pages) yield `chunks/${page.sha256}`;
+  })());
 }
 
 export async function* readWorkspaceStream(backend: WorkspaceStoreBackend, ref: WorkspaceStreamRef, signal: AbortSignal): AsyncGenerator<Uint8Array<ArrayBuffer>, void, unknown> {
@@ -217,17 +229,29 @@ function decodeChunk(value: unknown, maximum: number): Chunk {
   return { sha256, bytes: integer(input["bytes"], "workspace chunk bytes", 1, maximum) };
 }
 
-async function storeChunk(backend: WorkspaceStoreBackend, bytes: Uint8Array<ArrayBuffer>, signal: AbortSignal, staging: WorkspaceStreamStaging): Promise<Chunk> {
+async function storeChunks(backend: WorkspaceStoreBackend, chunks: readonly Uint8Array<ArrayBuffer>[], signal: AbortSignal, staging: WorkspaceStreamStaging): Promise<Chunk[]> {
+  const absent = new Map<string, Uint8Array<ArrayBuffer>>();
+  const entries: Chunk[] = [];
+  for (const bytes of chunks) {
+    active(signal);
+    const sha256 = await hash(bytes);
+    const path = `chunks/${sha256}`;
+    if (!absent.has(path)) {
+      const existing = await backend.read(path, CHUNK_BYTES, signal);
+      if (existing === undefined) absent.set(path, bytes);
+      else if (existing.length !== bytes.length || await hash(existing) !== sha256) invalid("existing workspace chunk is corrupt");
+    }
+    entries.push({ sha256, bytes: bytes.length });
+  }
   active(signal);
-  const sha256 = await hash(bytes);
-  const path = `chunks/${sha256}`;
-  const existing = await backend.read(path, CHUNK_BYTES, signal);
+  // The complete ownership page must commit before any new body can be published.
+  await staging.track(absent.keys());
+  for (const [path, bytes] of absent) {
+    active(signal);
+    await backend.write(path, bytes, "immutable-chunk");
+  }
   active(signal);
-  if (existing !== undefined) {
-    if (existing.length !== bytes.length || await hash(existing) !== sha256) invalid("existing workspace chunk is corrupt");
-  } else { await staging.track(path); await backend.write(path, bytes); }
-  active(signal);
-  return { sha256, bytes: bytes.length };
+  return entries;
 }
 
 async function readChunk(backend: WorkspaceStoreBackend, chunk: Chunk, maximum: number, signal: AbortSignal): Promise<Uint8Array<ArrayBuffer>> {
@@ -255,10 +279,19 @@ export class WorkspaceStreamStaging {
 
   constructor(backend: WorkspaceStoreBackend) { this.#backend = backend; }
 
-  async track(path: string): Promise<void> {
-    this.#paths.push(path);
-    // The chunk writer must not run until even a partial ownership page is
-    // durable. A crash may leave this intent, but never an unowned new object.
+  async track(paths: Iterable<string> | AsyncIterable<string>): Promise<void> {
+    let dirty = false;
+    for await (const item of paths) {
+      const path: unknown = item;
+      if (typeof path !== "string") invalid("workspace staging path is invalid");
+      this.#paths.push(path);
+      dirty = this.#paths.length < PAGE_ENTRIES;
+      if (!dirty) await this.#persistPage();
+    }
+    if (dirty) await this.#persistPage();
+  }
+
+  async #persistPage(): Promise<void> {
     await this.#backend.write(`${this.#root}/${this.#page}`, new TextEncoder().encode(JSON.stringify(this.#paths)));
     if (this.#paths.length === PAGE_ENTRIES) {
       this.#page += 1;

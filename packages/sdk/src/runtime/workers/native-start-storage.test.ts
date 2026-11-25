@@ -20,6 +20,7 @@ function coldOnly(): NativeColdFiles {
     releaseCheckpoint: () => Promise.resolve(),
     currentRootfs: () => ({ id: "alpine", version: "v1", cpuProfile: "x86-64-v2", rootTreeSha256: ROOT, fileCount: 0, totalBytes: 0, metadata: new Uint8Array(), runtimes: { supportingFiles: [] } }),
     beginCheckpointVerification: () => Promise.resolve(() => undefined),
+    previousRootfs: () => Promise.reject(new Error("Unexpected previous rootfs lookup")),
   } });
 }
 

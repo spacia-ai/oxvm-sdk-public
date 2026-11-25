@@ -149,3 +149,38 @@ export class Console {
   profileEnd(label?: unknown): void { this.#console.profileEnd(label); }
   clear(): void { this.#console.clear(); }
 }
+
+const CONTEXT_METHODS = ["dir", "dirXml", "table", "groupEnd", "clear", "count", "countReset", "profile", "profileEnd", "debug", "error", "info", "log", "warn",
+  "trace", "group", "groupCollapsed", "assert", "time", "timeLog", "timeEnd", "timeStamp"] as const;
+/**
+ * The global console's `context(name)`. In Node it comes from V8's inspector console: each call makes a new object
+ * of these methods, which report to an attached inspector and write nothing to stdout or stderr. No inspector
+ * attaches to this process, so the methods do nothing.
+ */
+export function context(name?: unknown): object {
+  void name;
+  const made = {};
+  Object.setPrototypeOf(made, {});
+  for (const key of CONTEXT_METHODS) {
+    // Inspector-only output: nothing to write here.
+    const method = { [key](value?: unknown): void { void value; } }[key];
+    Object.defineProperty(made, key, { value: method, writable: true, enumerable: true, configurable: true });
+  }
+  return made;
+}
+
+/**
+ * The global console's `createTask(name)`, also V8's: a task labels the asynchronous stacks an inspector shows for
+ * what runs inside it. Without an inspector, `run` only calls the function and returns its result.
+ */
+export function createTask(...args: readonly unknown[]): { run(...args: readonly unknown[]): unknown } {
+  const name = args[0];
+  if (typeof name !== "string" || name === "") throw new Error("First argument must be a non-empty string.");
+  return {
+    run(...values: readonly unknown[]): unknown {
+      const work = values[0];
+      if (typeof work !== "function") throw new Error("First argument must be a function.");
+      return Reflect.apply(work, undefined, []);
+    },
+  };
+}

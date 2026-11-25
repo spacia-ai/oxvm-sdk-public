@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { createGuestModules } from "./guest-modules.ts";
+import { moduleLocation } from "./module-files.ts";
 
 function fixture() {
   const sources = new Map([
@@ -179,10 +180,14 @@ it("resolves package exports with the user conditions of --conditions beside Nod
     .toEqual(["/workspace/node_modules/cond/dev.js", "/workspace/node_modules/cond/worker.mjs", "/workspace/node_modules/cond/required.js"]);
 });
 
-it("refuses an import URL with a query as a typed limitation, so the process is remembered even when the program catches it", () => {
+it("makes a file URL's query and fragment part of an imported module's identity, and of nothing else", () => {
   const { modules } = fixture();
   // ESLint imports its configuration as file:///…/eslint.config.js?mtime=…; Node keys the module by the whole URL.
-  let refusal: unknown;
-  try { modules.resolve("file:///workspace/esm/value.js?mtime=1", "/workspace/main.cjs", "import"); } catch (error) { refusal = error; }
-  expect(refusal).toMatchObject({ code: "FEATURE_NOT_AVAILABLE", detail: { lateFailure: "unavailable-builtin", subject: "an import URL with a query or fragment" } });
+  const identity = modules.resolve("file:///workspace/esm/value.js?mtime=1", "/workspace/main.cjs", "import");
+  expect(moduleLocation(identity)).toEqual({ path: "/workspace/esm/value.js", suffix: "?mtime=1" });
+  expect(moduleLocation(modules.resolve("file:///workspace/esm/value.js?a=1#b", "/workspace/main.cjs", "import"))).toEqual({ path: "/workspace/esm/value.js", suffix: "?a=1#b" });
+  expect(modules.resolve("file:///workspace/esm/value.js", "/workspace/main.cjs", "import")).toBe("/workspace/esm/value.js");
+  expect(modules.resolve("file:///workspace/esm/value.js?", "/workspace/main.cjs", "import")).toBe("/workspace/esm/value.js");
+  expect(() => modules.resolve("file:///workspace/esm/missing.js?mtime=1", "/workspace/main.cjs", "import")).toThrow(expect.objectContaining({ code: "ERR_MODULE_NOT_FOUND" }));
+  expect(() => modules.resolve("file:///workspace/esm%2Fvalue.js?mtime=1", "/workspace/main.cjs", "import")).toThrow(expect.objectContaining({ code: "ERR_INVALID_MODULE_SPECIFIER" }));
 });

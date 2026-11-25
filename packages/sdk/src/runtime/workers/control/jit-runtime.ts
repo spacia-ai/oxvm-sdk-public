@@ -366,15 +366,7 @@ export class JitRuntime {
     before: SystemTraceCpu | undefined,
     durationMilliseconds: number,
   ): CoreRunExit {
-    loaded.runtimeStats.interpretedInstructions += exit.steps;
-    loaded.traceProfile.worker.interpreterBatches += 1;
-    loaded.traceProfile.worker.interpreterMilliseconds +=
-      durationMilliseconds;
-    const reasonProfile =
-      loaded.traceProfile.worker.interpreterReasons[reason];
-    reasonProfile.batches += 1;
-    reasonProfile.instructions += exit.steps;
-    reasonProfile.milliseconds += durationMilliseconds;
+    this.recordInterpreterWork(loaded, exit.steps, reason, durationMilliseconds);
     if (before !== undefined) {
       const traceExit = systemExit(exit);
       recordSystemTrace(loaded, {
@@ -390,6 +382,34 @@ export class JitRuntime {
       });
     }
     return exit;
+  }
+
+  private recordInterpreterWork(
+    loaded: Core,
+    steps: bigint,
+    reason: SystemInterpreterReason,
+    durationMilliseconds: number,
+  ): void {
+    loaded.runtimeStats.interpretedInstructions += steps;
+    loaded.traceProfile.worker.interpreterBatches += 1;
+    loaded.traceProfile.worker.interpreterMilliseconds += durationMilliseconds;
+    const reasonProfile = loaded.traceProfile.worker.interpreterReasons[reason];
+    reasonProfile.batches += 1;
+    reasonProfile.instructions += steps;
+    reasonProfile.milliseconds += durationMilliseconds;
+  }
+
+  /** Accounts for a Userspace interpreter batch whose syscall handling stays in Rust. */
+  runLinuxInterpreterBatch(loaded: Core, run: () => void, retired: () => bigint): void {
+    const before = retired();
+    const startedAt = this.startTiming(loaded);
+    run();
+    const milliseconds = this.elapsed(startedAt);
+    const after = retired();
+    if (after < before || after === 0xffff_ffff_ffff_ffffn) {
+      throw new VMError("VM_FAULT", "Userspace interpreter retirement count is invalid");
+    }
+    this.recordInterpreterWork(loaded, after - before, "admission", milliseconds);
   }
 
   runGuardFallback(loaded: Core, maximumSteps: number): CoreProbeExit {

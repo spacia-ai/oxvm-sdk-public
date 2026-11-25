@@ -4,13 +4,13 @@ import { vi } from "vitest";
 import { canonicalUserspaceRootfsBytes, decodeUserspaceRootfsManifest, userspaceTreeIdentity } from "../userspace-rootfs.js";
 import { sha256Hex } from "./snapshot-content.js";
 export const ROOTFS_CHECKPOINT_URL = "https://profiles.example/rootfs/manifest.json";
-export async function signedCheckpointRootfsFixture(version = "2026.10.13",schemaVersion:2|3|6|8=2,content = new Uint8Array([1, 2, 3]),fileRoot="bin", signingKeys?:CryptoKeyPair) {
+export async function signedCheckpointRootfsFixture(version = "2026.10.13",schemaVersion:2|3|6|8|9=2,content = new Uint8Array([1, 2, 3]),fileRoot="bin", signingKeys?:CryptoKeyPair) {
   const evidence = new Uint8Array([4]);
   const blobHash = await sha256Hex(content), evidenceHash = await sha256Hex(evidence);
   const evidenceRef = { url: "./evidence", bytes: 1, sha256: evidenceHash };
   const encoded=new Map<string,Uint8Array<ArrayBuffer>>();
   let packs:{index:RootfsPackIndex;artifacts:{sha256:string;encoding:"gzip";url:string;encodedBytes:number;encodedSha256:string}[]}|undefined;
-  if(schemaVersion===8) {
+  if(schemaVersion>=8) {
     const artifacts:{sha256:string;encoding:"gzip";url:string;encodedBytes:number;encodedSha256:string}[]=[];
     const index=await packRootfsContents([{sha256:blobHash,bytes:content.length},{sha256:evidenceHash,bytes:1}],async function*(blob){yield await Promise.resolve(blob.sha256===blobHash?content:evidence);},async(chunk,bytes)=>{
       const data=new Uint8Array(await new Response(new Blob([bytes]).stream().pipeThrough(new CompressionStream("gzip"))).arrayBuffer());
@@ -19,7 +19,7 @@ export async function signedCheckpointRootfsFixture(version = "2026.10.13",schem
     });packs={index,artifacts};
   }
   const input = {
-    schemaVersion, ...(packs===undefined?{}:{packs}), ...(schemaVersion>=3?{workspaceBaseSha256:"0".repeat(64)}:{}),kind: "linux-user-rootfs", id: "test-rootfs", version,
+    schemaVersion, ...(schemaVersion === 9 ? { nativeUtilities: { identity: "oxidevm-rust-toybox", abi: 65535, catalogSha256: "b".repeat(64) } } : {}), ...(packs===undefined?{}:{packs}), ...(schemaVersion>=3?{workspaceBaseSha256:"0".repeat(64)}:{}),kind: "linux-user-rootfs", id: "test-rootfs", version,
     architecture: "x86_64", cpuProfile: "x86-64-v2", sourceDateEpoch: 1_786_060_800,
     rootTreeSha256: "0".repeat(64), fileCount: 2, totalBytes: content.length,
     blobs: [{ sha256: blobHash, bytes: content.length, url: "./unread" }],

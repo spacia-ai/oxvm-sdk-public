@@ -3,7 +3,7 @@ import { instantiateRuntime } from "./userspace-runtime.js";
 import { USERSPACE_API_VERSION } from "../userspace-abi.js";
 
 it("rejects older APIs and requires alias provenance exports under the current API", async () => {
-  for (const version of [146, 147, USERSPACE_API_VERSION]) {
+  for (const version of [146, 147, 149, 151, USERSPACE_API_VERSION]) {
     const name = new TextEncoder().encode("oxidevm_userspace_api_version");
     const exports = [2, 6, ...new TextEncoder().encode("memory"), 2, 0, name.length, ...name, 0, 0];
     const module = new WebAssembly.Module(new Uint8Array([

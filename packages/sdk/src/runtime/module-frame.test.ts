@@ -8,16 +8,17 @@ vi.mock("./execution-frame.js", () => ({ openExecutionFrame: frame.open }));
 afterEach(() => { frame.open.mockReset(); });
 
 const URL_OF_FRAME = new URL("https://app.test/assets/module-frame/index.html");
-const sources = { broker: new Blob(["broker"]), runner: new Blob(["runner"]) };
+const files = { broker: new Blob(["broker"]), runner: new Blob(["runner"]) };
+const sources = Promise.resolve(files);
 const PROBE = { documentIsolated: true, opaqueOrigin: true, agentCluster: true, framePolicy: true, brokerIsolated: true, sharedMemory: true, atomicsWait: true, runnerIsolated: true, wasm: true };
 const ready = (nonce: string, probe: Readonly<Record<string, boolean>> = PROBE) => ({ version: MODULE_FRAME_BOOTSTRAP_VERSION, type: "module-ready", nonce, probe, liveness: new MessageChannel().port1 });
 
 /** An execution frame that answers its bootstrap with `answer`, decoded by the opener's own decoder. */
 function answering(answer: (nonce: string) => unknown) {
   const { port1, port2 } = new MessageChannel(), seen: unknown[] = [];
-  frame.open.mockImplementation((url: URL, bootstrap: (port: MessagePort, nonce: string) => object, decode: (input: unknown, nonce: string) => unknown, _signal: unknown, isolation: unknown) => {
-    seen.push({ url: url.href, bootstrap: bootstrap(port2, "nonce-1"), isolation });
-    return Promise.resolve().then(() => ({ frame: {}, port: port1, receipt: decode(answer("nonce-1"), "nonce-1"), dispose: () => undefined }));
+  frame.open.mockImplementation(async (url: URL, bootstrap: (port: MessagePort, nonce: string) => Promise<object>, decode: (input: unknown, nonce: string) => unknown, _signal: unknown, isolation: unknown) => {
+    seen.push({ url: url.href, bootstrap: await bootstrap(port2, "nonce-1"), isolation });
+    return { frame: {}, port: port1, receipt: decode(answer("nonce-1"), "nonce-1"), dispose: () => undefined };
   });
   return seen;
 }
@@ -25,9 +26,9 @@ function answering(answer: (nonce: string) => unknown) {
 describe("opening the module frame (ADR 0028)", () => {
   it("opens an opaque frame on the opener's URL with the broker and runner as Blobs, and keeps its port", async () => {
     const seen = answering(nonce => ready(nonce));
-    const opened = await openModuleFrame(URL_OF_FRAME, sources);
+    const opened = await openModuleFrame(URL_OF_FRAME, files);
     expect([opened.port, opened.liveness]).toEqual([expect.any(MessagePort), expect.any(MessagePort)]);
-    expect(seen).toEqual([{ url: URL_OF_FRAME.href, isolation: "opaque", bootstrap: { version: MODULE_FRAME_BOOTSTRAP_VERSION, type: "module-bootstrap", nonce: "nonce-1", port: expect.any(MessagePort) as unknown, broker: sources.broker, runner: sources.runner } }]);
+    expect(seen).toEqual([{ url: URL_OF_FRAME.href, isolation: "opaque", bootstrap: { version: MODULE_FRAME_BOOTSTRAP_VERSION, type: "module-bootstrap", nonce: "nonce-1", port: expect.any(MessagePort) as unknown, ...files } }]);
   });
 
   it("frame-cross-origin-isolation", async () => {
@@ -39,6 +40,12 @@ describe("opening the module frame (ADR 0028)", () => {
     // Firefox blocks a frame whose CORP its opaque origin fails; the opener sees only that nothing loaded in time.
     frame.open.mockRejectedValue(new VMError("CORE_LOAD_FAILED", "Execution bootstrap exceeded ten seconds"));
     await expect(openModuleFrame(URL_OF_FRAME, sources)).rejects.toMatchObject({ code: "FEATURE_NOT_AVAILABLE", detail: { reason: "wasm-module-isolation-unavailable", capability: "frame-load" } });
+  });
+
+  it("preserves a script download failure", async () => {
+    answering(nonce => ready(nonce));
+    const failure = new VMError("CORE_LOAD_FAILED", "The SDK asset is unavailable", { reason: "module-frame-asset" });
+    await expect(openModuleFrame(URL_OF_FRAME, Promise.reject(failure))).rejects.toBe(failure);
   });
 
   it("reports the capability the frame names, and each missing fact of its probe", async () => {

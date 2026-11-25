@@ -19,7 +19,7 @@ async function setup(quota?: MemoryQuota) {
 }
 
 describe("native snapshot capture", () => {
-  it.each([1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20])("records the actual native graph version %s", async version => {
+  it.each([1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 1850, 1852, 1854, 1856])("records the actual native graph version %s", async version => {
     const { capture } = await setup();
     await capture.put("graph", 0, nativeGraphFixture(version));
     await capture.seal({ capturedAtUnixMs: 100, graphBytes: 85, payloadBytes: 0 });

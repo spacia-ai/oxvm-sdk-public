@@ -5,7 +5,7 @@ import type {RootfsStore} from "./rootfs-store.js";
 import type {WorkspaceSelections} from "./workspace-selections.js";
 /** Both native storage ports resolve the same admitted source and immutable read lease. */
 export function checkpointWorkspaceRead(rootfs:RootfsStore|undefined,selections:WorkspaceSelections|undefined,
- selection:NonNullable<WorkspaceReadRequest["selection"]>,base:string,signal:AbortSignal):Promise<WorkspaceReadLease|undefined> {
+ selection:Exclude<NonNullable<WorkspaceReadRequest["selection"]>, { readonly kind: "native-root" }>,base:string,signal:AbortSignal):Promise<WorkspaceReadLease|undefined> {
  switch(selection.kind) {
   case "workspace-base-file":if(rootfs===undefined)throw unavailable();return rootfs.openWorkspaceBaseFile(base,selection.path,selection.sha256,selection.bytes,signal);
   case "rootfs":if(rootfs===undefined)throw unavailable();return rootfs.openCachedFile(selection.path,selection.sha256,selection.bytes,signal,selection.snapshotId);

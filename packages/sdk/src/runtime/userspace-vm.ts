@@ -7,12 +7,12 @@ import type { PreviewKeeperHost } from "./preview-keeper.js";
 import { requireGuestExecution } from "./assistance-admission.js";
 import { validateSpawnSpec } from "./vm-options.js";
 import { nativeGuestCommand } from "./guest-command.js";
-import type { RuntimeVMOptions, DependencyInstallHandle, DependencyPreparationOptions, ListeningPort, ManagedImageInfo, ManagedImageBootOptions, SpawnSpec, ProcessHandle, PreviewHandle, PreviewIsolation, RuntimeVM, RuntimeVMDiagnostics } from "./vm-types.js";
+import type { RuntimeVMOptions, DependencyInstallHandle, DependencyPreparationOptions, ListeningPort, ManagedImageBootOptions, SpawnSpec, ProcessHandle, PreviewHandle, PreviewIsolation, RuntimeVM, RuntimeVMDiagnostics } from "./vm-types.js";
 import { decodeWatchOptions, pollDelay, watchListeningPorts } from "./listening-ports.js";
 import { VMError, serializeUnknownError, withCleanupFailure } from "./errors.js";
 import { UserspaceProcessBackend } from "./userspace-process.js";
 import { UserspaceWorkspaceFiles } from "./userspace-workspace-files.js";
-import { UserspaceManagedSession } from "./userspace-managed-session.js";
+import { UserspaceManagedSession, type UserspaceManagedImageInfo } from "./userspace-managed-session.js";
 import { SnapshotObserver } from "./snapshot-observer.js";
 import type { RuntimeVMSnapshots } from "./snapshot-types.js";
 import {
@@ -48,12 +48,80 @@ interface UserspaceProfileOptions {
   readonly syscallTraceCapacity?: number;
 }
 
+type UserspaceOptions = Extract<RuntimeVMOptions, { mode: "userspace" }>;
+
+interface ManagedUserspaceBoot {
+  readonly manifestUrl: string | URL;
+  readonly options: ManagedImageBootOptions;
+  readonly onCreated?: (vm: RuntimeVM) => void;
+  readonly closeFailure?: (failure: unknown, cleanup: unknown) => unknown;
+}
+
+export interface BootedUserspaceRuntimeVM {
+  readonly vm: RuntimeVM;
+  readonly image: UserspaceManagedImageInfo;
+}
+
 export async function createUserspaceRuntimeVM(
-  options: Extract<RuntimeVMOptions, { mode: "userspace" }>,
+  options: UserspaceOptions,
   profileOptions?: UserspaceProfileOptions,
   jitInstall?: SystemJitInstallMode,
   jitTier?: UserspaceJitTier,
 ): Promise<RuntimeVM> {
+  const opening = openUserspaceRuntimeVM(options, profileOptions, jitInstall, jitTier);
+  try {
+    await opening.initialized;
+    try { await opening.vm.connectRuntimeRelay(options); }
+    catch (error) { await opening.vm.dispose().catch(() => undefined); throw error; }
+    return opening.vm;
+  } catch (error) {
+    opening.terminate();
+    throw error;
+  }
+}
+
+/** The storage worker can authenticate and durably install the image while the execution worker loads its engine. */
+export async function bootUserspaceRuntimeVM(
+  options: UserspaceOptions,
+  boot: ManagedUserspaceBoot,
+  profileOptions?: UserspaceProfileOptions,
+  jitInstall?: SystemJitInstallMode,
+  jitTier?: UserspaceJitTier,
+): Promise<BootedUserspaceRuntimeVM> {
+  const stop = new AbortController();
+  const signal = boot.options.signal === undefined ? stop.signal : AbortSignal.any([stop.signal, boot.options.signal]);
+  const startup = openUserspaceRuntimeVM(options, profileOptions, jitInstall, jitTier, signal);
+  const { vm } = startup;
+  const ready = startup.initialized.then(async () => {
+    await vm.connectRuntimeRelay(options);
+    boot.onCreated?.(vm);
+  }).catch((failure: unknown) => { stop.abort(); throw failure; });
+  // Install can fail before the engine settles, or be cancelled by engine failure. In both cases preserve engine
+  // failure precedence and wait for the storage owner's settled installation reply before closing its ports.
+  void ready.catch(() => undefined);
+  const selected = { ...boot.options, signal };
+  try {
+    const image = options.network === "local" && selected.imagePreparation === "before-ready"
+      ? await startup.stored.then(() => vm.bootDuringInitialization(boot.manifestUrl, selected, ready))
+      : await ready.then(() => vm.bootManagedImage(boot.manifestUrl, selected));
+    return { vm, image };
+  } catch (error) {
+    const failure = await ready.then(() => error, (cause: unknown) => cause);
+    try { await startup.initialized; }
+    catch { startup.terminate(); throw failure; }
+    try { await vm.dispose(); }
+    catch (cleanup) { throw (boot.closeFailure ?? withCleanupFailure)(failure, cleanup); }
+    throw failure;
+  }
+}
+
+function openUserspaceRuntimeVM(
+  options: UserspaceOptions,
+  profileOptions: UserspaceProfileOptions | undefined,
+  jitInstall: SystemJitInstallMode | undefined,
+  jitTier: UserspaceJitTier | undefined,
+  signal?: AbortSignal,
+): { readonly vm: BrowserUserspaceVM; readonly stored: Promise<void>; readonly initialized: Promise<void>; terminate(): void } {
   const storage = new WorkerClient<StorageOperations>(
     new Worker(new URL("./workers/storage.worker.js", import.meta.url), {
       name: "oxidevm-storage",
@@ -83,9 +151,15 @@ export async function createUserspaceRuntimeVM(
     [linuxNetwork.port1],
   );
   let backend: UserspaceProcessBackend | undefined;
+  const terminate = () => {
+    backend?.terminate();
+    storage.terminate();
+    network.terminate();
+    snapshot.port2.close();
+  };
   try {
     // The backend's workers load their scripts while storage initializes; its Userspace worker initializes after.
-    const initialized = storage.request(
+    const stored = storage.request(
       "initialize",
       {
         workspaceId: options.workspaceId,
@@ -102,7 +176,7 @@ export async function createUserspaceRuntimeVM(
     const wasmUrl = typeof SharedArrayBuffer === "function" && globalThis.crossOriginIsolated
       ? options.userspaceSharedWasmUrl ?? defaultUrl
       : defaultUrl;
-    backend = await UserspaceProcessBackend.create(
+    const starting = UserspaceProcessBackend.start(
       {
         wasmUrl, memoryMiB: options.memoryMiB,
         ...(options.userspaceWasmModule === undefined ? {} : { wasmModule: options.userspaceWasmModule }),
@@ -117,19 +191,13 @@ export async function createUserspaceRuntimeVM(
         ...(options.nativeOperationSet === undefined ? {} : { nativeOperationSet: options.nativeOperationSet }),
         ...(options.initialUser === undefined ? {} : { initialUser: options.initialUser }),
         ...(options.rootPersistence === undefined ? {} : { rootPersistence: options.rootPersistence }),
-      }, snapshot.port2, initialized,
+      }, snapshot.port2, stored, signal,
     );
-    const vm = new BrowserUserspaceVM(options, storage, network, backend);
-    if (options.network === "relay" && options.relayUrl !== undefined) {
-      try { await vm.network.connect({kind: "server", url: options.relayUrl}); }
-      catch (error: unknown) { await vm.dispose().catch(() => {}); throw error; }
-    }
-    return vm;
+    backend = starting.backend;
+    void starting.initialized.catch(() => undefined);
+    return { vm: new BrowserUserspaceVM(options, storage, network, backend), stored, initialized: starting.initialized, terminate };
   } catch (error) {
-    backend?.dispose().catch(() => undefined);
-    storage.terminate();
-    network.terminate();
-    snapshot.port2.close();
+    terminate();
     throw error;
   }
 }
@@ -153,6 +221,7 @@ class BrowserUserspaceVM implements RuntimeVM {
   readonly #previewKeeperHost: PreviewKeeperHost | undefined;
   readonly #previews = new Map<number, Promise<PreviewHandle>>();
   readonly #managed: UserspaceManagedSession;
+  #earlyBoot: Promise<UserspaceManagedImageInfo> | undefined;
   #disposed = false;
   #disposePromise: Promise<void> | undefined;
   /** Aborted when disposal starts, so a disposing VM no longer hands its workspace over. */
@@ -163,7 +232,7 @@ class BrowserUserspaceVM implements RuntimeVM {
   get imageIdentity() { return this.#managed.rootfs?.identity; }
 
   constructor(
-    options: Extract<RuntimeVMOptions, { mode: "userspace" }>,
+    options: UserspaceOptions,
     storage: WorkerClient<StorageOperations>,
     network: Worker,
     backend: UserspaceProcessBackend,
@@ -217,10 +286,25 @@ class BrowserUserspaceVM implements RuntimeVM {
   async bootManagedImage(
     manifestUrl: string | URL,
     options: ManagedImageBootOptions = {},
-  ): Promise<ManagedImageInfo> {
+  ): Promise<UserspaceManagedImageInfo> {
     this.#ensureActive();
     await this.network.disconnect();
     return this.#managed.boot(manifestUrl, options);
+  }
+
+  connectRuntimeRelay(options: UserspaceOptions): Promise<void> {
+    if (options.network !== "relay" || options.relayUrl === undefined) return Promise.resolve();
+    return this.network.connect({ kind: "server", url: options.relayUrl });
+  }
+
+  async bootDuringInitialization(manifestUrl: string | URL, options: ManagedImageBootOptions, ready: Promise<void>): Promise<UserspaceManagedImageInfo> {
+    this.#ensureActive();
+    const signal = options.signal === undefined ? this.#disposing.signal : AbortSignal.any([options.signal, this.#disposing.signal]);
+    const networkLocal = ready.then(() => this.network.disconnect());
+    void networkLocal.catch(() => undefined);
+    this.#earlyBoot = this.#managed.boot(manifestUrl, { ...options, signal }, networkLocal);
+    try { return await this.#earlyBoot; }
+    finally { this.#earlyBoot = undefined; }
   }
 
   async spawn(spec: SpawnSpec): Promise<ProcessHandle> {
@@ -440,28 +524,31 @@ class BrowserUserspaceVM implements RuntimeVM {
   async #dispose(): Promise<void> {
     this.#disposed = true;
     const previews = [...this.#previews.values()]; this.#previews.clear();
-    let failure: unknown;
+    const operations = [
+      // Let an early install settle cancellation before we retire its storage and checkpoint ports.
+      ["early-boot", () => this.#earlyBoot?.catch(() => undefined) ?? Promise.resolve()],
+      ["network", () => this.network.dispose()],
+      ["workspace-reserve", () => this.#storage.request("release-workspace-reserve", undefined)],
+      ["userspace", () => this.#backend.dispose()],
+      ["storage", () => this.#storage.request("dispose", undefined)],
+    ] as const;
+    let failure: { stage: typeof operations[number][0] | "preview"; error: unknown } | undefined;
     try {
-      for (const operation of [
-        () => this.network.dispose(),
-        () => this.#backend.dispose(),
-        () => this.#storage.request("dispose", undefined),
-      ]) {
+      for (const [stage, operation] of operations) {
         try { await rejectingTimeout(operation()); }
-        catch (error: unknown) { failure ??= error; }
+        catch (error: unknown) { failure ??= { stage, error }; }
       }
       // Each close is bounded, so one silent preview cannot keep the workers alive.
       const closed = await Promise.allSettled(previews.map(preview => rejectingTimeout(preview.then(handle => handle.close(), () => undefined))));
       const failed = closed.find(result => result.status === "rejected");
-      if (failed?.status === "rejected") failure ??= failed.reason as unknown;
+      if (failed?.status === "rejected") failure ??= { stage: "preview", error: failed.reason };
     } finally {
       this.#storage.terminate();
       this.#network.terminate();
     }
-    if (failure instanceof Error) throw failure;
     if (failure !== undefined) {
-      const serialized = serializeUnknownError(failure);
-      throw new VMError(serialized.code, serialized.message, serialized.detail);
+      const serialized = serializeUnknownError(failure.error);
+      throw new VMError(serialized.code, serialized.message, { ...serialized.detail, disposalStage: failure.stage });
     }
   }
 

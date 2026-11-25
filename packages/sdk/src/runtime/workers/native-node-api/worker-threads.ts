@@ -14,9 +14,10 @@ import type { ProcessScheduler } from "../assistance/process-scheduler.js";
 import type { NativeBridge } from "./bridge.js";
 import { decodeWorkerException, encodeWorkerException } from "./worker-exception.js";
 import { createNodePorts } from "./message-port.js";
+import { createPlatformPortReferences } from "./platform-port-references.js";
 import { NATIVE_TASK_CONTROL_VERSION, type NativeThreadMetadata } from "./thread-metadata.js";
 
-const PlatformChannel = globalThis.MessageChannel;
+const PlatformChannel = globalThis.MessageChannel, PlatformPort = globalThis.MessagePort;
 interface Services { readonly client: LinuxClient; readonly bridge: NativeBridge; readonly identity: JSProcessIdentity; readonly control: MessagePort; readonly thread: NativeThreadIdentity | null; readonly metadata: NativeThreadMetadata | null; readonly autoSelectFamily?: SharedArrayBuffer }
 interface Task {
   readonly id: bigint; readonly tid: number; readonly emitter: EventEmitter; readonly port: InstanceType<ReturnType<typeof createNodePorts>["MessagePort"]>;
@@ -34,10 +35,12 @@ export class NativeWorkers implements WorkerThreadRuntime {
   readonly #tasks = new Map<bigint, Task>();
   readonly #environment = new Map<unknown, unknown>();
   readonly #parentPort;
+  readonly #platformPorts;
   #waiting: PromiseWithResolvers<undefined> | undefined;
   #disposed = false;
   constructor(readonly services: Services, readonly context: AsyncContext, readonly scheduler: ProcessScheduler, readonly process: WorkerThreadProcess) {
     this.#ports = createNodePorts(context, callback => scheduler.enqueue(callback), () => this.#changed());
+    this.#platformPorts = createPlatformPortReferences(PlatformPort.prototype, () => this.#changed());
     const metadata = services.metadata;
     this.#parentPort = metadata === null ? null : this.#ports.wrap(metadata.port);
     let data: unknown = null;
@@ -117,7 +120,10 @@ export class NativeWorkers implements WorkerThreadRuntime {
     if (this.#disposed || this.#tasks.size >= 31) throw new VMError("QUOTA_EXCEEDED", "Native worker capacity exhausted");
     const field = (name: string): unknown => Reflect.get(options, name);
     const limits = field("resourceLimits"), tracking = field("trackUnmanagedFds");
-    if ((tracking !== undefined && tracking !== true) || field("env") === this.module["SHARE_ENV"] || field("name") !== undefined || (limits !== undefined && (typeof limits !== "object" || limits === null || Object.keys(limits).length !== 0))) throw new VMError("FEATURE_NOT_AVAILABLE", "This worker execution option is not qualified");
+    if ((tracking !== undefined && tracking !== true) || field("env") === this.module["SHARE_ENV"] || (limits !== undefined && (typeof limits !== "object" || limits === null || Object.keys(limits).length !== 0))) throw new VMError("FEATURE_NOT_AVAILABLE", "This worker execution option is not qualified");
+    // Node 24.18.1: a truthy `name` must be a string. It labels the thread for debugging only.
+    const name = field("name");
+    if (Boolean(name) && typeof name !== "string") throw Object.assign(new TypeError('The "options.name" property must be of type string.'), { code: "ERR_INVALID_ARG_TYPE" });
     const evaluated = Boolean(field("eval"));
     const source = evaluated ? new Writer().blob(encodeNativeEvalSource(filename)) : new Writer().path(this.#entry(filename));
     const argv = field("argv") ?? [];
@@ -167,7 +173,7 @@ export class NativeWorkers implements WorkerThreadRuntime {
     return code;
   }
   #changed(): void { if (!this.hasPending) { this.#waiting?.resolve(undefined); this.#waiting = undefined; } }
-  get hasPending(): boolean { return !this.#disposed && ([...this.#tasks.values()].some(task => !task.ended && task.referenced) || this.#ports.hasReferences || (this.#parentPort?.hasPendingOutput ?? false)); }
+  get hasPending(): boolean { return !this.#disposed && ([...this.#tasks.values()].some(task => !task.ended && task.referenced) || this.#ports.hasReferences || this.#platformPorts.hasReferences || (this.#parentPort?.hasPendingOutput ?? false)); }
   async idle(): Promise<void> { while (this.hasPending) { this.#waiting ??= Promise.withResolvers<undefined>(); await this.#waiting.promise; } }
   dispose(): void { this.#disposed = true; this.#ports.dispose(); this.services.control.close(); this.#changed(); }
 }

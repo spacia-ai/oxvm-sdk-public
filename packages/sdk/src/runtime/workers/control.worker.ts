@@ -98,6 +98,7 @@ const jitRuntime = new JitRuntime(
 );
 let lastRequestId = 0;
 let responseQueue = Promise.resolve();
+let installingUserspaceImage = false;
 let systemBooted = false;
 let humanConsole: "serial" | "virtio" | undefined;
 let systemMemoryBytes = 0;
@@ -243,7 +244,8 @@ function receive(value: unknown, ports: readonly MessagePort[]): void {
   const ownedPorts = Object.values(request).filter(value => value instanceof MessagePort);
   for (const port of ports) if (!ownedPorts.includes(port)) port.close();
   active.add(request.id);
-  if (isAssistanceControl(request.type) || isDiagnosticRead(request.type)) void respond(request);
+  const mountingDuringInstall = request.type === "configure-userspace-checkpoints" && installingUserspaceImage;
+  if (isAssistanceControl(request.type) || isDiagnosticRead(request.type) || mountingDuringInstall) void respond(request);
   else responseQueue = responseQueue.then(() => respond(request));
 }
 
@@ -344,8 +346,14 @@ async function handle(request: ControlRequest): Promise<unknown> {
       return undefined;
     case "start-userspace-cold":
       return requireUserspaceCheckpoints().request(request.id, "cold-start", {sourceId:request.sourceId});
-    case "prepare-image":
-      return requireUserspaceCheckpoints().request(request.id, "prepare-image", { reason: request.reason ?? "repair" });
+    case "prepare-image": {
+      const checkpoints = requireUserspaceCheckpoints();
+      if (request.reason !== "first-install") return checkpoints.request(request.id, "prepare-image", { reason: request.reason ?? "repair" });
+      installingUserspaceImage = true;
+      try { await checkpoints.request(request.id, "prepare-image", { reason: request.reason }); }
+      finally { installingUserspaceImage = false; }
+      return undefined;
+    }
     case "configure-userspace-checkpoints":
       return requireUserspaceCheckpoints().request(request.id, "configure", { mount: request.mount, destination: request.destination });
     case "restore-userspace-checkpoint":

@@ -1,12 +1,13 @@
 import { readFile } from "node:fs/promises";
-import { afterEach, describe, expect, it } from "vitest";
+import { afterEach, beforeAll, describe, expect, it, vi } from "vitest";
 
 import { HostAttention, postCounted } from "../host-attention.js";
 import { decodeUserspacePendingWork } from "../userspace-abi.js";
 import { admitJSProcess } from "./js-process/admission.js";
 import { engineModulePath } from "./engine-wasm.test-support.js";
-import { callUserspaceU32 as call } from "./userspace-exports.js";
-import { RUN_ACTIONS_PER_SLICE, runUserspaceSlice, type UserspaceSlicePorts } from "./userspace-run-loop.js";
+import { callUserspaceU32 as call, callUserspaceU64 } from "./userspace-exports.js";
+import { RUN_ACTIONS_PER_SLICE, runJitTurn, runUserspaceSlice, type UserspaceSlicePorts } from "./userspace-run-loop.js";
+import * as ioFailure from "./userspace-io-failure.js";
 import { RUN_SLICE_MILLISECONDS } from "./userspace-run-slices.js";
 import type { UserspaceAttentionChannel } from "../protocol/userspace-slices.js";
 import { instantiateRuntime } from "./userspace-runtime.js";
@@ -21,14 +22,52 @@ const RING_ITERATIONS = 0xffff_fff0;
 const runtimes: TestRuntime[] = [];
 afterEach(async () => { for (const runtime of runtimes.splice(0)) await runtime.jitRuntime.dispose(); });
 
-async function cpuLoop(): Promise<RuntimeState> {
+let userspaceModule: WebAssembly.Module;
+beforeAll(async () => {
   const bytes = new Uint8Array(await readFile(engineModulePath("oxidevm_userspace.wasm")));
-  const runtime = await instantiateRuntime(await WebAssembly.compile(bytes.buffer), "run-loop-core-test", { kind: "disabled" }, "immediate");
+  userspaceModule = await WebAssembly.compile(bytes.buffer);
+});
+
+async function mountedRuntime(): Promise<TestRuntime> {
+  const runtime = await instantiateRuntime(userspaceModule, "run-loop-core-test", { kind: "disabled" }, "immediate");
   runtimes.push(runtime);
   mountTestRuntime(runtime, 1);
+  return runtime;
+}
+
+async function cpuLoop(): Promise<RuntimeState> {
+  const runtime = await mountedRuntime();
   spawnRing(runtime, traceRingElf(RING_ITERATIONS));
   return newRuntimeState(runtime, "ready", undefined, undefined);
 }
+
+it("uses the blocked result without asking Rust for a kernel failure record", async () => {
+  const active = newRuntimeState(await mountedRuntime(), "ready", undefined, undefined);
+  const inspectFailure = vi.spyOn(ioFailure, "throwIfUserspaceKernelFailed");
+  try {
+    expect(runJitTurn(active)).toEqual({ kind: "blocked" });
+    expect(inspectFailure).not.toHaveBeenCalled();
+  } finally { inspectFailure.mockRestore(); }
+});
+
+it("spends a bounded cold interpreter budget before selecting JIT work", async () => {
+  const active = await cpuLoop();
+  active.coldInterpreterWork = 103;
+  const jit = vi.spyOn(active.jitRuntime, "runLinuxBlock");
+  const retired = () => callUserspaceU64(active.instance, "oxidevm_userspace_memory_metric", 13);
+  const before = retired();
+  try {
+    expect(runJitTurn(active, 100)).toEqual({ kind: "step-limit" });
+    expect(active.coldInterpreterWork).toBe(3);
+    expect(runJitTurn(active, 100)).toEqual({ kind: "step-limit" });
+    expect(active.coldInterpreterWork).toBe(0);
+    expect(jit).not.toHaveBeenCalled();
+    expect(active.core.runtimeStats.interpretedInstructions).toBe(retired() - before);
+    expect(active.core.traceProfile.worker.interpreterBatches).toBe(2);
+    runJitTurn(active, 100);
+    expect(jit).toHaveBeenCalledOnce();
+  } finally { jit.mockRestore(); }
+});
 
 function counter(): Int32Array<SharedArrayBuffer> {
   return new Int32Array(new SharedArrayBuffer(Int32Array.BYTES_PER_ELEMENT));
@@ -85,6 +124,30 @@ describe("Userspace run slices with host attention", () => {
     expect(slice(active)).toBe(Math.round(RUN_SLICE_MILLISECONDS / ACTION_MILLISECONDS));
     expect(active.slices.ends).toMatchObject({ deadline: 1, "host-attention": 0 });
     expect(RUN_ACTIONS_PER_SLICE).toBeGreaterThan(RUN_SLICE_MILLISECONDS / ACTION_MILLISECONDS);
+  });
+
+  it("continues native work while a guest JIT module waits for installation", async () => {
+    const active = await cpuLoop();
+    const ready = vi.spyOn(active.jitRuntime, "yieldForCompiledModule").mockReturnValue(true);
+    const memory = new WebAssembly.Memory({ initial: 1 });
+    new Uint8Array(memory.buffer, 0, 24).set([
+      0x4f, 0x58, 0x4c, 0x52, 3, 0, 0, 0, 12, 0, 0, 0, 4, 0, 1, 0, 1,
+    ]);
+    const native = { ...active, memory, instance: { exports: {
+      oxidevm_userspace_prepare: () => 6,
+      oxidevm_userspace_result_ptr: () => 0,
+      oxidevm_userspace_result_len: () => 24,
+      oxidevm_userspace_kernel_failure_read: () => 0,
+      oxidevm_userspace_kernel_failure_ptr: () => 0,
+      oxidevm_userspace_kernel_failure_len: () => 0,
+      oxidevm_userspace_pending_work: () => 0,
+    } } };
+    const { slice } = slicePorts(new HostAttention<UserspaceAttentionChannel>());
+    expect(slice(native)).toBe(Math.round(RUN_SLICE_MILLISECONDS / ACTION_MILLISECONDS));
+    expect(native.slices.ends["compiled-module"]).toBe(0);
+    expect(ready).not.toHaveBeenCalled();
+    expect(slice(active)).toBe(1);
+    expect(active.slices.ends["compiled-module"]).toBe(1);
   });
 
   it("keeps the guest at least the service gap it just waited, under continuous host attention", async () => {

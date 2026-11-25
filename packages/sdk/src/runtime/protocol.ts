@@ -323,6 +323,7 @@ export interface StorageOperations {
   >;
   readonly "snapshot-list": Operation<undefined, readonly SnapshotInfo[]>;
   readonly "workspace-persistence": Operation<undefined, "opfs" | "indexeddb">;
+  readonly "release-workspace-reserve": Operation<undefined, undefined>;
   readonly "snapshot-rename": Operation<{ readonly snapshot: SnapshotRef; readonly label: string }, SnapshotInfo>;
   readonly "snapshot-delete": Operation<{ readonly snapshot: SnapshotRef }, undefined>;
   readonly "snapshot-usage": Operation<undefined, SnapshotUsage>;
@@ -475,6 +476,7 @@ export const storageResponseDecoders: OperationDecoders<StorageOperations> = {
   "select-userspace-files":decodeSelectedNativeFiles,
   "inspect-start-image":decodePreparedStartImage,
   "erase-local-data": decodeUndefined,
+  "release-workspace-reserve": decodeUndefined,
   "workspace-persistence": value => {
     if (value !== "opfs" && value !== "indexeddb") throw new VMError("PROTOCOL_ERROR", "storage backend must be durable OPFS or IndexedDB");
     return value;

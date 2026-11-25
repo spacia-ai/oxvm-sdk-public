@@ -54,6 +54,17 @@ export class UserspaceProcessBackend {
     snapshotPort?: MessagePort,
     after: Promise<unknown> = Promise.resolve(),
   ): Promise<UserspaceProcessBackend> {
+    const { backend, initialized } = this.start(options, snapshotPort, after);
+    try { await initialized; return backend; }
+    catch (error) { backend.terminate(); throw error; }
+  }
+
+  static start(
+    options: UserspaceOperations["initialize"]["request"],
+    snapshotPort: MessagePort | undefined,
+    after: Promise<unknown>,
+    signal?: AbortSignal,
+  ): { readonly backend: UserspaceProcessBackend; readonly initialized: Promise<void> } {
     const { storagePort, networkPort, nativeExecutionPort } = options;
     const control = new WorkerClient<ControlOperations>(
       new Worker(new URL("./workers/control.worker.js", import.meta.url), {
@@ -64,22 +75,13 @@ export class UserspaceProcessBackend {
     );
     const channel = new MessageChannel();
     const client = workerClientForPort(channel.port1, userspaceResponseDecoders);
-    try {
-      await inOrder<unknown>([after, control.request("attach-userspace", { port: channel.port2, ...(snapshotPort === undefined ? {} : { snapshotPort }) },
-        { transfer: [channel.port2, ...(snapshotPort === undefined ? [] : [snapshotPort])] })]);
-      await client.request(
-        "initialize",
-        options,
-        storagePort === undefined && networkPort === undefined && nativeExecutionPort === undefined
-          ? {}
-          : { transfer: [storagePort, networkPort, nativeExecutionPort].filter((port): port is MessagePort => port !== undefined) },
-      );
-      return new UserspaceProcessBackend(client, control);
-    } catch (error) {
-      client.terminate();
-      control.terminate();
-      throw error;
-    }
+    const attached = control.request("attach-userspace", { port: channel.port2, ...(snapshotPort === undefined ? {} : { snapshotPort }) },
+      { transfer: [channel.port2, ...(snapshotPort === undefined ? [] : [snapshotPort])] });
+    const transfer = [storagePort, networkPort, nativeExecutionPort].filter((port): port is MessagePort => port !== undefined);
+    const initialized = inOrder<unknown>([after, attached])
+      .then(() => client.request("initialize", options, { signal, transfer }))
+      .finally(() => { for (const port of transfer) port.close(); });
+    return { backend: new UserspaceProcessBackend(client, control), initialized };
   }
 
   get control(): WorkerClient<ControlOperations> { return this.#control; }
@@ -284,10 +286,15 @@ export class UserspaceProcessBackend {
     return this.#disposePromise;
   }
 
+  terminate(): void {
+    this.#client.terminate();
+    this.#control.terminate();
+  }
+
   async #dispose(): Promise<void> {
     this.#disposed = true;
     try { await rejectingTimeout(this.#retire()); }
-    finally { this.#client.terminate(); this.#control.terminate(); }
+    finally { this.terminate(); }
   }
 
   async #retire(): Promise<void> {

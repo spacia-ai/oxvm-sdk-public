@@ -11,28 +11,44 @@ export type ExecutionFrameIsolation = "separate-origin" | "opaque";
 export const EXECUTION_BOOTSTRAP_MS = 10_000;
 
 /** Shared ADR 0012 bootstrap: one isolated document and one origin-bound, one-use port. */
-export async function openExecutionFrame<Result>(url: URL, bootstrap: (port: MessagePort, nonce: string) => object, decode: (input: unknown, nonce: string) => Result, signal?: AbortSignal, isolation: ExecutionFrameIsolation = "separate-origin"): Promise<{ readonly frame: HTMLIFrameElement; readonly port: MessagePort; readonly receipt: Result; dispose(): void }> {
+export async function openExecutionFrame<Result>(url: URL, bootstrap: (port: MessagePort, nonce: string) => object | Promise<object>, decode: (input: unknown, nonce: string) => Result, signal?: AbortSignal, isolation: ExecutionFrameIsolation = "separate-origin"): Promise<{ readonly frame: HTMLIFrameElement; readonly port: MessagePort; readonly receipt: Result; dispose(): void }> {
   if (isolation === "separate-origin" && url.origin === location.origin) throw new VMError("INVALID_ARGUMENT", "JavaScript execution requires a separate origin");
   if (isolation === "opaque" && url.origin !== location.origin) throw new VMError("INVALID_ARGUMENT", "An opaque execution frame is served from its opener's own origin");
   const frame = document.createElement("iframe"), channel = new MessageChannel(), nonce = crypto.randomUUID(), ready = Promise.withResolvers<Result>();
+  const loaded = Promise.withResolvers<Window>();
   let sent = false, disposed = false;
+  let timer: ReturnType<typeof setTimeout> | undefined;
   const dispose = () => { if (disposed) return; disposed = true; channel.port1.close(); channel.port2.close(); frame.remove(); };
   frame.hidden = true; frame.allow = "cross-origin-isolated";
   if (isolation === "opaque") frame.sandbox.add("allow-scripts"); else frame.sandbox.add("allow-scripts", "allow-same-origin");
   frame.src = url.href;
   frame.onload = () => {
-    if (sent || disposed || frame.contentWindow === null) return;
-    sent = true; frame.contentWindow.postMessage(bootstrap(channel.port2, nonce), isolation === "opaque" ? "*" : url.origin, [channel.port2]);
+    if (frame.contentWindow !== null) loaded.resolve(frame.contentWindow);
   };
-  frame.onerror = () => ready.reject(new VMError("CORE_LOAD_FAILED", "Execution document failed to load"));
+  frame.onerror = () => loaded.reject(new VMError("CORE_LOAD_FAILED", "Execution document failed to load"));
+  // The navigation can fail while the bootstrap assets are still loading.
+  void loaded.promise.catch(() => undefined);
   channel.port1.onmessageerror = () => ready.reject(new VMError("PROTOCOL_ERROR", "Execution bootstrap message failed"));
   channel.port1.onmessage = (event: MessageEvent<unknown>) => { try { if (!sent) throw new VMError("PROTOCOL_ERROR", "Execution bootstrap preceded admission"); ready.resolve(decode(event.data, nonce)); } catch (error) { ready.reject(error); } };
   channel.port1.start();
   const abort = () => ready.reject(new VMError("ABORTED", "Execution startup was aborted"));
   signal?.addEventListener("abort", abort, { once: true });
-  const timer = setTimeout(() => ready.reject(bootstrapTimeout(url.origin, sent)), EXECUTION_BOOTSTRAP_MS);
+  const stopped = () => disposed || signal?.aborted === true;
+  const send = async (): Promise<void> => {
+    const message = await bootstrap(channel.port2, nonce);
+    if (stopped()) return;
+    // The bootstrap gets its own deadline once its assets are available.
+    timer = setTimeout(() => ready.reject(bootstrapTimeout(url.origin, sent)), EXECUTION_BOOTSTRAP_MS);
+    const target = await loaded.promise;
+    if (stopped()) return;
+    sent = true;
+    target.postMessage(message, isolation === "opaque" ? "*" : url.origin, [channel.port2]);
+  };
   try {
-    if (signal?.aborted === true) abort(); else document.body.append(frame);
+    if (signal?.aborted === true) abort(); else {
+      document.body.append(frame);
+      void send().catch(ready.reject);
+    }
     const receipt = await ready.promise; channel.port1.onmessage = null; channel.port1.onmessageerror = null;
     return { frame, port: channel.port1, receipt, dispose };
   } catch (error) { dispose(); throw error; }

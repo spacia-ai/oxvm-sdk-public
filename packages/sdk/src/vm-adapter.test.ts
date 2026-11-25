@@ -352,6 +352,38 @@ describe("the VM's module frame (ADR 0028)", () => {
     await vm.dispose();
   });
 
+  it.each(["enable", "isolation failure"] as const)("checks TLS while opening the module frame for %s", async outcome => {
+    const { vm, runtime, lazy, events } = await moduleVM();
+    const frame = Promise.withResolvers<Awaited<ReturnType<ModuleFrameOpener["open"]>>>();
+    frames.open.mockReturnValue(frame.promise);
+    const lookup = vi.fn(() => Promise.resolve([copyKey(tlsPin())]));
+    const enabled = { operation: "enable", registration: 1, commands: ["a"], skipped: [] } as const;
+    const register = vi.fn(() => { events.push("register"); return Promise.resolve(enabled); });
+    runtime.moduleFiles = lookup;
+    runtime.moduleCommands = register;
+    const refusal = isolationUnavailable("blob-workers", "The frame refused the worker");
+    if (outcome === "isolation failure") lazy.mockRejectedValueOnce(new Error("TLS read failed"));
+    const descriptor = encodeLaunchArgument((await buildRelease({ adapter: "export default () => ({ main: () => 0 });",
+      declaration: { ...COMMAND_DECLARATION, requires: { host: ["net.vm"] } } })).descriptor);
+    const registration = ownedModuleCommands(vm).request({ operation: "enable", descriptor, commands: ["a"], concurrency: 1, files: {} });
+    try {
+      expect(lookup).toHaveBeenCalledWith([tlsPin()], {});
+      expect(register).not.toHaveBeenCalled();
+    } finally {
+      if (outcome === "enable") {
+        const channel = new MessageChannel();
+        frame.resolve({ port: channel.port1, dispose: () => { channel.port1.close(); channel.port2.close(); } });
+        await expect(registration).resolves.toEqual(enabled);
+        expect(events).toEqual(["attach", "register"]);
+      } else {
+        frame.reject(refusal);
+        await expect(registration).rejects.toBe(refusal);
+        expect(register).not.toHaveBeenCalled();
+      }
+      await vm.dispose();
+    }
+  });
+
   it("a lost frame ends processes with 125 and the next call reopens it", async () => {
     const { vm, events, modules } = await moduleVM();
     await modules.spawn({}, start).catch(() => undefined);

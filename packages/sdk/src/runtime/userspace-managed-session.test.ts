@@ -32,6 +32,17 @@ function setup() {
 }
 const options = { trustedKeyId: "test", trustedPublicKey: new Uint8Array(32), resume: "latest" as const };
 
+it("rejects a mismatched native suite before configuring or starting a session", async () => {
+  const f = setup();
+  ScriptedWorker.answers.set("prepare-userspace-rootfs", () => ({ ...rootfs,
+    nativeUtilities: { identity: "oxidevm-rust-toybox", abi: 65535, catalogSha256: "b".repeat(64) } }));
+  await expect(f.session.boot("https://example.test/rootfs.json", { ...options, resume: "none" }))
+    .rejects.toMatchObject({ code: "NATIVE_UTILITY_MISMATCH" });
+  expect(f.session.rootfs).toBeUndefined();
+  expect(f.control.operations).not.toContain("configure-userspace-checkpoints");
+  expect(f.storage.operations).not.toContain("select-userspace-files");
+});
+
 it.each(["none", "latest"] as const)("completes image installation before admitting a %s session", async resume => {
   const f = setup(); ScriptedWorker.answers.set("prepare-image", () => undefined);
   await f.session.boot("https://example.test/rootfs.json", { ...options, resume, imagePreparation: "before-ready" });
@@ -60,7 +71,7 @@ it("prepares the selected running image explicitly without restarting its guest"
 it("resumes through the native coordinator and adopts the existing process without spawning a shell", async () => {
   const f = setup(); const image = await f.session.boot("https://example.test/rootfs.json", options);
   expect(image.start).toMatchObject({ kind: "resumed", terminals: [{ key: "process:8", command: "sh", screenTail: new Uint8Array([3]) }] });
-  const terminal = image.start?.kind === "resumed" ? image.start.terminals[0] : undefined;
+  const terminal = image.start.kind === "resumed" ? image.start.terminals[0] : undefined;
   if (terminal?.source !== "process") throw new Error("missing restored terminal");
   await expect(terminal.attach()).rejects.toThrow("attached"); expect(f.attached).toEqual([12]);
   expect(f.replayed).toEqual([new Uint8Array([3])]);
@@ -89,7 +100,7 @@ it("reports cold workspace migration from the selected files rather than image p
 it("resumes without selecting or migrating current workspace files before native reconciliation", async () => {
   const f = setup();
   ScriptedWorker.answers.set("select-userspace-files", () => { throw new Error("cold bulk migration must not run during resume"); });
-  expect((await f.session.boot("https://example.test/rootfs.json", options)).start?.kind).toBe("resumed");
+  expect((await f.session.boot("https://example.test/rootfs.json", options)).start.kind).toBe("resumed");
   expect(f.storage.operations).not.toContain("select-userspace-files");
 });
 

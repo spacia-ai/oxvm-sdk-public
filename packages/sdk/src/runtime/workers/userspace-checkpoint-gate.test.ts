@@ -35,3 +35,16 @@ it("reopens admission after a failed durability barrier and rejects queued work 
   gate.close();
   await expect(blocked).rejects.toMatchObject({ code: "ABORTED" });
 });
+
+it("admits disposal after cold startup retires the checkpoint gate", async () => {
+  const gate = new UserspaceCheckpointGate();
+  await gate.freeze(() => Promise.resolve());
+  const denied = expect(gate.operation(() => Promise.resolve("mutation"))).rejects.toMatchObject({ code: "ABORTED" });
+  const dispose = gate.operation(() => Promise.resolve("disposed"), "dispose");
+  const disposed = expect(dispose).resolves.toBe("disposed");
+  gate.close();
+  await denied;
+  await disposed;
+  await expect(gate.operation(() => Promise.resolve("disposed again"), "dispose")).resolves.toBe("disposed again");
+  expect(gate.executionAllowed).toBe(false);
+});

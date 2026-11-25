@@ -12,6 +12,7 @@ import { VMError } from "./runtime/errors.js";
 import { validateSpawnSpec } from "./runtime/vm-options.js";
 import { exactKeys, integer, record } from "./runtime/decode.js";
 import { abortIfRequested } from "./engine-assets.js";
+import { inOrder } from "./engine-load.js";
 import { adaptProcess, execProcess } from "./process.js";
 import { decodeExposeOptions, PreviewRoutes } from "./preview-routes.js";
 import { readBrowserQuota } from "./runtime/workers/browser-quota.js";
@@ -247,9 +248,17 @@ export async function adaptVM(runtime: RuntimeVM, options: ValidatedVMOptions, i
   const moduleCommands: OwnedModuleCommands = {
     request: async (request, signal) => {
       active();
-      if (request.operation === "enable") await execution.ensure(signal);
+      let sent = request;
+      if (request.operation === "enable") {
+        const frame = execution.ensure(signal);
+        if (runtime.moduleCommands === undefined) await frame;
+        else {
+          const files = withEngineFiles(request.descriptor, request.files, signal);
+          await inOrder<unknown>([frame, files]);
+          sent = { ...request, files: await files };
+        }
+      }
       if (runtime.moduleCommands === undefined) throw new VMError("FEATURE_NOT_AVAILABLE", "This runtime has no module commands", { reason: MODULE_COMMAND_REASONS.unavailable });
-      const sent = request.operation === "enable" ? { ...request, files: await withEngineFiles(request.descriptor, request.files, signal) } : request;
       return runtime.moduleCommands(sent, signal === undefined ? {} : { signal });
     },
     disposed: lifetime.signal,

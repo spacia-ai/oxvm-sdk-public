@@ -1,3 +1,4 @@
+import type { NativeRootRead } from "./native-cold-files.js";
 import type {ManagedBoot} from "../protocol/storage.js";
 import { VMError } from "../errors.js";
 import type { SnapshotCompatibility, SnapshotInfo, SnapshotMachine, SnapshotRef, SnapshotUsage } from "../protocol.js";
@@ -174,6 +175,13 @@ export class SnapshotStore {
     this.#assertIdle();if(this.#native===undefined)throw new VMError("FEATURE_NOT_AVAILABLE","Native checkpoint storage is unavailable");
     return this.#native.selectFiles(request,signal);
   }
+
+  readColdRoot(selection: NativeRootRead, base: string, signal: AbortSignal): ReturnType<NativeSnapshotStore["readColdRoot"]> {
+    if (this.#native === undefined) throw new VMError("FEATURE_NOT_AVAILABLE", "Native system-file storage is unavailable");
+    return this.#native.readColdRoot(selection, base, signal);
+  }
+
+  get priorColdWorkspaceImage(): NativeSnapshotStore["priorColdWorkspaceImage"] { return this.#native?.priorColdWorkspaceImage; }
 
   retainedNativeReadId(id:string):string { return this.#native?.retainedReadId(id)??id; }
 
@@ -714,6 +722,7 @@ export class SnapshotStore {
       newGenerationName(),
       { ref: image.ref, manifest: image.manifest },
       await bases.acquire(images, managedImageStem(image.ref), image.manifest.disk.chunks),
+      { deferReserve: true },
     );
     try {
       for (const chunk of disk.chunks) {

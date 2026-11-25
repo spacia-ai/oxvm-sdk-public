@@ -15,16 +15,6 @@
     "license": "curl"
   },
   {
-    "name": "dash",
-    "version": "0.5.13.5",
-    "license": "BSD-3-Clause AND Apache-2.0"
-  },
-  {
-    "name": "dc",
-    "version": "7.0.3",
-    "license": "BSD-2-Clause"
-  },
-  {
     "name": "dropbear",
     "version": "2026.94",
     "license": "MIT AND BSD-2-Clause AND SSH-short"
@@ -40,11 +30,6 @@
     "license": "GPL-3.0-or-later WITH GCC-exception-3.1"
   },
   {
-    "name": "libarchive",
-    "version": "3.8.10",
-    "license": "BSD-2-Clause AND BSD-3-Clause AND CC0-1.0"
-  },
-  {
     "name": "libffi",
     "version": "3.5.2-r0",
     "license": "MIT"
@@ -58,11 +43,6 @@
     "name": "libtommath",
     "version": "dropbear-2026.94",
     "license": "Unlicense"
-  },
-  {
-    "name": "mksh",
-    "version": "59c-r4",
-    "license": "MirOS AND Unicode-DFS-2016"
   },
   {
     "name": "mpdecimal",
@@ -95,6 +75,11 @@
     "license": "Apache-2.0"
   },
   {
+    "name": "oxidevm-rust-toybox-launcher",
+    "version": "0.0.35",
+    "license": "LicenseRef-OxideVM-Rust-Utilities-1.0"
+  },
+  {
     "name": "python3",
     "version": "3.12.15-r0",
     "license": "PSF-2.0"
@@ -103,11 +88,6 @@
     "name": "sqlite",
     "version": "3.53.4-r0",
     "license": "blessing"
-  },
-  {
-    "name": "toybox",
-    "version": "0.8.15",
-    "license": "0BSD"
   },
   {
     "name": "xz",

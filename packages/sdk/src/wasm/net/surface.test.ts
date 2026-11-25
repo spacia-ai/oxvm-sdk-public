@@ -20,6 +20,26 @@ function vmNetwork() {
 }
 
 describe("host.net.connectSync reads with a timeout (ADR 0029, N-4)", () => {
+  it("uses VM readiness for a timed stream read without sleeping the module worker", () => {
+    const network = new MemoryNetwork("vm");
+    network.listenUnix("/run/echo.sock", { data: () => undefined });
+    const waits: number[] = [];
+    const sync = {
+      ...network.syncSockets(),
+      readNow: () => waits.length === 0 ? null : Uint8Array.of(102),
+      waitReadable: (_fd: number, ms: number) => { waits.push(ms); },
+      sleep: () => { throw new Error("A VM socket can wait without sleeping the runner"); },
+    };
+    const net = createModuleNetwork({
+      ports: { sockets: network.sockets(), sync, tls: null }, reach: "vm",
+      signal: new AbortController().signal, tls: PASS_THROUGH_TLS,
+    }).host;
+    const connection = net?.connectUnixSync("/run/echo.sock");
+    expect(connection?.read(64, { timeoutMs: 25 })).toEqual(Uint8Array.of(102));
+    expect(waits).toEqual([1]);
+    connection?.close();
+  });
+
   it("returns the bytes that arrive within the timeout, and the end of stream as an empty read", () => {
     const connection = vmNetwork().connectSync({ host: "vm", port: 7 });
     connection.write(new TextEncoder().encode("ping"));
