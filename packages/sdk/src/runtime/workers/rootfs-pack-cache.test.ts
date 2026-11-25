@@ -5,6 +5,7 @@ import { RootfsNetworkClient, serveRootfsNetwork } from "./rootfs-network-channe
 import { signedCheckpointRootfsFixture, ROOTFS_CHECKPOINT_URL } from "./rootfs-checkpoint.test-support.js";
 import { record } from "../decode.js";
 import { decodeUserspaceRootfsManifest, rootfsClosure } from "../userspace-rootfs.js";
+import { decodeRootfsPackIndex } from "../userspace-rootfs-packs.js";
 import { packRootfsContents } from "../userspace-rootfs-packing.js";
 import { sha256Hex } from "./snapshot-content.js";
 import { write } from "./rootfs-store-backend.js";
@@ -42,6 +43,93 @@ it("reuses each new pack's verified readback during installation",async()=>{
   expect(reads).toHaveLength(f.index.chunks.length);
 });
 
+it("hashes decoded bytes once and verifies the actual durable readback", async () => {
+  const f = await fixture(new Uint8Array(1024 ** 2 + 3).fill(7));
+  const chunk = f.index.chunks[0];
+  if (chunk === undefined) throw new Error("fixture has no pack");
+  const hashes = vi.spyOn(storage, "sha256");
+  const digest = "5".repeat(64);
+  expect(await f.cache.ensure(f.packed, digest)).toBe(true);
+  expect(hashes.mock.calls.filter(([bytes]) => bytes.length === chunk.bytes)).toHaveLength(1);
+
+  hashes.mockClear();
+  expect(await new RootfsPackCache(f.backend).verify(f.packed, digest)).toBe(true);
+  expect(hashes.mock.calls.filter(([bytes]) => bytes.length === chunk.bytes)).toHaveLength(1);
+});
+
+it("rejects a same-length pack changed by durable storage before publication", async () => {
+  const f = await fixture(new Uint8Array(1024 ** 2 + 3).fill(7));
+  const chunk = f.index.chunks[0];
+  if (chunk === undefined) throw new Error("fixture has no pack");
+  let corrupt = true;
+  const cache = new RootfsPackCache(f.backend, f.network, async (scope, name, bytes) => {
+    await write(f.backend, scope, name, bytes);
+    if (scope !== "packs" || !corrupt) return;
+    const file = f.root.find(`userspace-rootfs/packs/${name}`);
+    if (!(file instanceof MemoryFile)) throw new Error("missing durable readback");
+    const persisted = file.bytes, last = persisted.length - 1;
+    persisted[last] = (persisted[last] ?? 0) ^ 1;
+    file.setBytes(persisted);
+  });
+  const identity = "6".repeat(64);
+  await expect(cache.ensure(f.packed, identity)).rejects.toMatchObject({
+    code: "STORAGE_ERROR", detail: { reason: "image-pack-damaged", stage: "verify", chunk: chunk.sha256 },
+  });
+  expect(cache.verifiedLayout(identity)).toBe(false);
+  expect(f.root.find(`userspace-rootfs/pack-layouts/${identity}.json`)).toBeUndefined();
+  corrupt = false;
+  expect(await cache.ensure(f.packed, identity)).toBe(true);
+});
+
+it("authenticates each single-extent file before completing its pack and never rehashes it at publication", async () => {
+  const f = await fixture(new Uint8Array(7 * 1024 ** 2).fill(7).fill(8, 4 * 1024 ** 2));
+  const small = f.index.blobs.find(blob => blob.extents.length === 1 && blob.extents[0]?.bytes === 1);
+  const first = f.index.chunks.find(chunk => chunk.sha256 === small?.extents[0]?.chunk);
+  const other = f.artifacts.find(artifact => artifact.sha256 !== first?.sha256);
+  if (small === undefined || first === undefined || other === undefined) throw new Error("Fixture needs an unrelated pack");
+  const release = Promise.withResolvers<undefined>(), verifiedPack = Promise.withResolvers<undefined>();
+  const fetch = f.network.fetchBlob.bind(f.network);
+  vi.spyOn(f.network, "fetchBlob").mockImplementation(async (url, ...args) => {
+    if (url.href === new URL(other.url, ROOTFS_CHECKPOINT_URL).href) await release.promise;
+    return fetch(url, ...args);
+  });
+  let logicalChecks = 0;
+  const sha256 = storage.sha256;
+  vi.spyOn(storage, "sha256").mockImplementation(async bytes => {
+    const digest = await sha256(bytes);
+    if (bytes.length === 1 && digest === small.sha256) logicalChecks += 1;
+    return digest;
+  });
+  const identity = "3".repeat(64);
+  const installing = f.cache.ensure(f.packed, identity, undefined, (bytes, _, stage) => {
+    if (stage === "verify" && bytes === first.bytes) verifiedPack.resolve(undefined);
+  });
+  try {
+    await Promise.race([verifiedPack.promise, installing]);
+    expect(logicalChecks).toBe(1);
+    expect(f.cache.verifiedLayout(identity)).toBe(false);
+  } finally {
+    release.resolve(undefined);
+    await installing;
+  }
+  expect(logicalChecks).toBe(1);
+  expect(f.cache.verifiedLayout(identity)).toBe(true);
+});
+
+it("rejects a mismatched single-extent file even when every installed pack matches its digest", async () => {
+  const f = await fixture(new Uint8Array(7 * 1024 ** 2).fill(7).fill(8, 4 * 1024 ** 2));
+  const small = f.index.blobs.find(blob => blob.extents.length === 1 && blob.extents[0]?.bytes === 1);
+  const extent = small?.extents[0], packs = f.packed.packs;
+  if (small === undefined || extent === undefined || packs === undefined) throw new Error("Fixture needs a single extent beside other bytes");
+  const index = decodeRootfsPackIndex({ ...f.index, blobs: f.index.blobs.map(blob => blob === small
+    ? { ...blob, extents: [{ ...extent, offset: extent.offset === 0 ? 1 : extent.offset - 1 }] }
+    : blob) }, rootfsClosure(f.packed));
+  const identity = "3".repeat(64);
+  await expect(f.cache.ensure({ ...f.packed, packs: { ...packs, index } }, identity)).rejects.toMatchObject({ code: "STORAGE_ERROR" });
+  expect(f.cache.verifiedLayout(identity)).toBe(false);
+  expect(f.root.find(`userspace-rootfs/pack-layouts/${identity}.json`)).toBeUndefined();
+});
+
 it("parses a legacy layout once for repeated demand reads without treating its bodies as verified",async()=>{
   const f=await fixture(),digest="4".repeat(64);
   await f.cache.ensure(f.packed,digest);
@@ -72,8 +160,8 @@ it("downloads a legacy transport once, publishes only verified packs and reopens
 
 it("retains a partial installation journal and downloads only missing packs after reopening", async () => {
   const f = await fixture(new Uint8Array(7 * 1024 ** 2).fill(7).fill(8, 4 * 1024 ** 2));
-  const digest = "7".repeat(64), base = new URL(ROOTFS_CHECKPOINT_URL), missing = f.artifacts[1];
-  if (missing === undefined) throw new Error("fixture requires two packs");
+  const digest = "7".repeat(64), base = new URL(ROOTFS_CHECKPOINT_URL), first = f.artifacts[0], missing = f.artifacts[1];
+  if (first === undefined || missing === undefined) throw new Error("fixture requires two packs");
   f.encoded.set(new URL(`transport/${digest}/packs-v1.json`, base).href, new TextEncoder().encode(JSON.stringify({ version: 1, manifestSHA256: digest, packs: { index: f.index, artifacts: f.artifacts } })));
   const body = f.encoded.get(new URL(missing.url, base).href);
   if (body === undefined) throw new Error("missing encoded fixture");
@@ -82,14 +170,18 @@ it("retains a partial installation journal and downloads only missing packs afte
   await expect(f.cache.ensure(f.manifest, digest)).rejects.toMatchObject({ code: "STORAGE_ERROR" });
   const intent = f.root.find(`userspace-rootfs/installations/${digest}.json`);
   if (!(intent instanceof MemoryFile)) throw new Error("missing installation intent");
-  expect(JSON.parse(await (await intent.getFile()).text())).toMatchObject({ version: 1, manifestSHA256: digest, state: "installing" });
+  const journal = record(JSON.parse(await (await intent.getFile()).text()) as unknown, "installation intent");
+  expect(journal).toMatchObject({ version: 1, manifestSHA256: digest, state: "installing", completedChunks: [] });
   expect(await f.cache.index(f.manifest, digest)).toBeUndefined();
+  intent.setBytes(new TextEncoder().encode(JSON.stringify({ ...journal, completedChunks: [first.sha256] })));
   f.encoded.set(new URL(missing.url, base).href, body); f.fetcher.mockClear();
   const reopened = new RootfsPackCache(f.backend, f.network, (scope, name, bytes) => write(f.backend, scope, name, bytes));
   await reopened.discover(f.manifest, digest, base);
   expect(await reopened.ensure(f.manifest, digest)).toBe(true);
   expect(f.fetcher).toHaveBeenCalledOnce();
-  expect(JSON.parse(await (await intent.getFile()).text())).toMatchObject({ state: "installed" });
+  expect(JSON.parse(await (await intent.getFile()).text())).toMatchObject({
+    state: "installed", completedChunks: f.index.chunks.map(chunk => chunk.sha256).sort(),
+  });
   await reopened.reclaim();
   expect(await reopened.verify(f.manifest, digest)).toBe(true);
 });
@@ -283,11 +375,81 @@ async function multiplePacks() {
   return {...f,packed,index,bodies};
 }
 
+it("authenticates a spanning file once its own packs are durable while another pack is still downloading", async () => {
+  const f = await multiplePacks();
+  const span = f.index.blobs.find(blob => blob.extents.length > 1);
+  if (span === undefined) throw new Error("fixture needs a spanning file");
+  const blocked = f.index.chunks.find(chunk => span.extents.every(extent => extent.chunk !== chunk.sha256));
+  if (blocked === undefined) throw new Error("fixture needs an unrelated pack");
+  const files = f.root.directory("userspace-rootfs", false).directory("packs", false);
+  const artifacts = await Promise.all(f.index.chunks.map(async chunk => {
+    const body = f.bodies.get(chunk.sha256);
+    if (body === undefined) throw new Error("fixture pack has no bytes");
+    await files.removeEntry(chunk.sha256);
+    const encoded = new Uint8Array(await new Response(new Blob([body]).stream().pipeThrough(new CompressionStream("gzip"))).arrayBuffer());
+    const url = new URL(`./packs/${chunk.sha256}`, ROOTFS_CHECKPOINT_URL);
+    f.encoded.set(url.href, encoded);
+    return { sha256: chunk.sha256, encoding: "gzip" as const, encodedBytes: encoded.length, encodedSha256: await sha256Hex(encoded), url };
+  }));
+  const release = Promise.withResolvers<undefined>();
+  const fetch = f.network.fetchBlob.bind(f.network);
+  vi.spyOn(f.network, "fetchBlob").mockImplementation(async (url, ...args) => {
+    if (url.pathname.endsWith(blocked.sha256)) await release.promise;
+    return fetch(url, ...args);
+  });
+  let checked = 0;
+  const sha256 = storage.sha256, size = span.extents.reduce((total, extent) => total + extent.bytes, 0);
+  vi.spyOn(storage, "sha256").mockImplementation(async bytes => {
+    const digest = await sha256(bytes);
+    if (bytes.length === size && digest === span.sha256) checked += 1;
+    return digest;
+  });
+  const identity = "3".repeat(64);
+  const installation = f.cache.ensure({ ...f.packed, packs: { index: f.index, artifacts } }, identity);
+  void installation.catch(() => undefined);
+  try {
+    await vi.waitFor(() => { expect(checked).toBe(1); }, { timeout: 2_000 });
+    expect(f.cache.verifiedLayout(identity)).toBe(false);
+  } finally {
+    release.resolve(undefined);
+    expect(await installation).toBe(true);
+  }
+  expect(checked).toBe(1);
+});
+
 it("reads an already cached packed image only once during preparation",async()=>{
   const f=await multiplePacks(),reads=vi.spyOn(Blob.prototype,"arrayBuffer");
   expect(await f.cache.ensure(f.packed,"f".repeat(64))).toBe(true);
   expect(reads).toHaveBeenCalledTimes(f.index.chunks.length);
   expect(f.fetcher).not.toHaveBeenCalled();
+});
+
+it("verifies bounded files across pack boundaries without the streaming hasher", async () => {
+  const f = await multiplePacks();
+  const digest = "f".repeat(64);
+  const split = f.index.blobs.find(blob => blob.extents.length > 1);
+  const first = split?.extents[0];
+  if (split === undefined || first === undefined || first.offset === 0) {
+    throw new Error("Fixture needs a split file with preceding bytes");
+  }
+  const wrongIndex = decodeRootfsPackIndex({
+    ...f.index,
+    blobs: f.index.blobs.map(blob => blob === split ? {
+      ...blob,
+      extents: blob.extents.map(extent => extent === first ? { ...extent, offset: extent.offset - 1 } : extent),
+    } : blob),
+  }, rootfsClosure(f.packed));
+  const wrong = { ...f.packed, packs: { ...f.packed.packs, index: wrongIndex } };
+
+  hashing.mockClear();
+  const retire = f.cache.beginVerification();
+  try {
+    expect(await f.cache.verify(f.packed, digest)).toBe(true);
+    expect(await f.cache.verify(wrong, digest)).toBe(false);
+    expect(hashing).not.toHaveBeenCalled();
+  } finally {
+    retire();
+  }
 });
 
 it("rechecks evicted IndexedDB chunks before accepting complete image verification",async()=>{
@@ -304,7 +466,7 @@ it("rechecks evicted IndexedDB chunks before accepting complete image verificati
 it("names the chunk, stage and space refusal of a failed on-demand acquisition and the miss before it",async()=>{
   const f=await fixture(),digest="7".repeat(64),blob=f.packed.blobs[0];if(blob===undefined)throw new Error("missing blob");
   const misses:unknown[]=[];
-  expect(await f.cache.readBlob(f.packed,digest,blob,undefined,miss=>misses.push(miss))).toBeUndefined();
+  expect(await f.cache.readBlob(f.packed,digest,blob,{ missed: miss=>misses.push(miss) })).toBeUndefined();
   expect(misses).toEqual([{reason:"pack-missing",chunk:expect.stringMatching(/^[0-9a-f]{64}$/u) as unknown}]);
   const refused=new RootfsPackCache(f.backend,f.network,()=>Promise.reject(new DOMException("quota","QuotaExceededError")));
   const failure=refused.acquireBlob(f.packed,digest,blob);
@@ -315,4 +477,43 @@ it("names the chunk, stage and space refusal of a failed on-demand acquisition a
   await expect(failing.acquireBlob(f.packed,digest,blob)).rejects.toMatchObject({code:"STORAGE_ERROR",detail:{reason:"image-pack-write-failed",stage:"write"}});
   expect(await f.cache.acquireBlob(f.packed,digest,blob)).toBe(true);
   expect(await f.cache.readBlob(f.packed,digest,blob)).toBeDefined();
+});
+
+it("serves a verified demand read after quota refusal without recording durable content", async () => {
+  const f = await fixture(), digest = "7".repeat(64), blob = f.packed.blobs[0];
+  if (blob === undefined) throw new Error("missing blob");
+  const refuse = vi.fn(() => Promise.reject(new DOMException("quota", "QuotaExceededError")));
+  const cache = new RootfsPackCache(f.backend, f.network, refuse);
+  await expect(cache.acquireBlob(f.packed, digest, blob)).rejects.toMatchObject({ code: "QUOTA_EXCEEDED" });
+  expect(f.fetcher).toHaveBeenCalledOnce();
+  expect(await cache.readBlob(f.packed, digest, blob, { transient: true })).toEqual(Uint8Array.of(1, 2, 3));
+  expect(f.fetcher).toHaveBeenCalledOnce();
+  expect(refuse).toHaveBeenCalledTimes(1);
+  expect(await cache.readBlob(f.packed, digest, blob)).toBeUndefined();
+  expect(await cache.verify(f.packed, digest)).toBe(false);
+  for (const body of f.encoded.values()) body[0] = 0;
+  const reopened = new RootfsPackCache(f.backend, f.network, refuse);
+  await expect(reopened.readBlob(f.packed, digest, blob, { transient: true })).rejects.toMatchObject({
+    detail: { reason: "image-pack-fetch-failed", stage: "fetch" },
+  });
+});
+
+it("rejects authenticated gzip with incomplete, excess or incorrect pack bytes", async () => {
+  const f = await fixture(), digest = "7".repeat(64), blob = f.packed.blobs[0];
+  const packs = f.packed.packs, artifact = packs?.artifacts[0];
+  const original = artifact === undefined ? undefined : f.encoded.get(artifact.url.href);
+  if (blob === undefined || packs === undefined || artifact === undefined || original === undefined)
+    throw new Error("Missing packed fixture");
+  const excess = new Uint8Array(original.length + 1);
+  excess.set(original);
+  const wrong = new Uint8Array(await new Response(new Blob([new Uint8Array(16)])
+    .stream().pipeThrough(new CompressionStream("gzip"))).arrayBuffer());
+  for (const malformed of [original.slice(0, -1), excess, wrong]) {
+    const image = { ...f.packed, packs: { ...packs,
+      artifacts: [{ ...artifact, encodedBytes: malformed.length, encodedSha256: await sha256Hex(malformed) }] } };
+    f.encoded.set(artifact.url.href, malformed);
+    await expect(f.cache.readBlob(image, digest, blob, { transient: true })).rejects.toMatchObject({
+      detail: { reason: "image-pack-damaged", stage: "decode", chunk: artifact.sha256 },
+    });
+  }
 });

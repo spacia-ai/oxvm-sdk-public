@@ -222,6 +222,17 @@
       }
     },
     {
+      "id": "LicenseRef-OxideVM-Rust-Utilities-1.0",
+      "class": "first-party-proprietary",
+      "packages": ["oxidevm-rust-toybox-launcher"],
+      "obligations": ["license-text", "notices"],
+      "basis": "Owner-approved download, storage and runtime grant for the OxVM Rust utility launcher. Artifact-bound distribution review remains required.",
+      "text": {
+        "url": "https://github.com/spacia-ai/oxidevm-sdk-public/releases/download/image-oxidevm-playground-v0.0.9/SPDXRef-Package-oxidevm-rust-toybox-launcher.LICENSE.txt",
+        "sha256": "172bd61ad8205c1dd6ab7d01fa5ee83bcbcb5f6f0c40e394656578489f0d02ea"
+      }
+    },
+    {
       "id": "GPL-2.0-only",
       "class": "strong-copyleft",
       "obligations": ["license-text", "notices", "corresponding-source", "source-retention", "modification-notices", "no-further-restrictions"],
@@ -248,6 +259,80 @@
       "obligations": ["license-text", "notices", "corresponding-source", "source-retention", "modification-notices", "no-further-restrictions"],
       "basis": "GPL-3.0 §4, §5(a), §6(d), §10; Installation Information (§6) applies only to User Products, which a downloadable image is not",
       "text": { "url": "https://raw.githubusercontent.com/spdx/license-list-data/v3.29.0/text/GPL-3.0-or-later.txt", "sha256": "fb981668c18a279e285fc4d83fba1e836cc84dd4daa73c9697d3cfd2d8aca6e0" }
+    },
+    {
+      "id": "AGPL-3.0-only",
+      "class": "strong-copyleft",
+      "obligations": ["license-text", "notices", "corresponding-source", "source-retention", "modification-notices", "no-further-restrictions"],
+      "basis": "AGPL-3.0 §4–§6 and §10, as for GPL-3.0; §13 adds duties only for modified versions that users interact with remotely, and greenbar conveys the Exercism test runners unmodified for execution on the recipient's own device. Admitted only for the four Exercism test-runner images served by greenbar (ADR 0020 amendment of 2026-11-05) under the conditions of docs/governance/greenbar-agpl-review-2026-11-05.md; owner sign-off and legal review pending.",
+      "text": { "url": "https://raw.githubusercontent.com/spdx/license-list-data/v3.29.0/text/AGPL-3.0-only.txt", "sha256": "d8a6cc31abc16b6748c7a21f21611f5a1ec33f67d22ca23d7da1c19b95496bee" }
+    },
+    {
+      "id": "dtoa",
+      "class": "permissive",
+      "obligations": ["license-text", "notices"],
+      "basis": "David M. Gay's dtoa.c permission notice (CPython's and Ruby's dtoa.c): use, copying, modification and distribution are permitted when the notice is kept. Found in greenbar's images (ADR 0020 amendment of 2026-11-05); prepared review: docs/governance/greenbar-agpl-review-2026-11-05.md; owner sign-off and legal review pending.",
+      "text": { "url": "https://raw.githubusercontent.com/spdx/license-list-data/v3.29.0/text/dtoa.txt", "sha256": "8222bef21419a8734583669c5d94ebe557f8f6309c8c53fcc0bb49953bbc790b" }
+    },
+    {
+      "id": "Ruby-pty",
+      "class": "permissive",
+      "obligations": ["license-text", "notices"],
+      "basis": "Ruby's ext/pty notice: use, modification and redistribution are permitted when the notice is retained. Found in greenbar's images (ADR 0020 amendment of 2026-11-05); prepared review: docs/governance/greenbar-agpl-review-2026-11-05.md; owner sign-off and legal review pending.",
+      "text": { "url": "https://raw.githubusercontent.com/spdx/license-list-data/v3.29.0/text/Ruby-pty.txt", "sha256": "29bb7d95ec28e357a33968dddcc9a6e6bedad3d14d8b4e8ba3e3225d32490a69" }
+    },
+    {
+      "id": "OFL-1.1",
+      "class": "weak-copyleft",
+      "obligations": ["license-text", "notices", "no-further-restrictions"],
+      "basis": "OFL-1.1 §1-§3: the fonts in Ruby's RDoc templates may be bundled and redistributed with software when the copyright notice and license accompany them; they are not sold by themselves, and modified fonts would stay under OFL-1.1. Found in greenbar's images (ADR 0020 amendment of 2026-11-05); prepared review: docs/governance/greenbar-agpl-review-2026-11-05.md; owner sign-off and legal review pending.",
+      "text": { "url": "https://raw.githubusercontent.com/spdx/license-list-data/v3.29.0/text/OFL-1.1.txt", "sha256": "8eea8287e5876b539670cadb82e99f9a7afddec6f6730811be1daf25d2e9bcfd" }
+    },
+    {
+      "id": "Unicode-TOU",
+      "class": "permissive",
+      "obligations": ["license-text", "notices"],
+      "basis": "Unicode Terms of Use for the Unicode data files that Ruby ships: copying and distribution are permitted with the copyright notice. Found in greenbar's images (ADR 0020 amendment of 2026-11-05); prepared review: docs/governance/greenbar-agpl-review-2026-11-05.md; owner sign-off and legal review pending.",
+      "text": { "url": "https://raw.githubusercontent.com/spdx/license-list-data/v3.29.0/text/Unicode-TOU.txt", "sha256": "cb6ba87a4979d8152c726eac13b4480d5bbddd206e0ade0cb91b769e5ca30025" }
+    },
+    {
+      "id": "GPL-1.0-or-later",
+      "class": "strong-copyleft",
+      "obligations": ["license-text", "notices", "corresponding-source", "source-retention", "modification-notices", "no-further-restrictions"],
+      "basis": "Linux UAPI headers tagged GPL-1.0+ in linux-headers 6.3 (greenbar's Ruby image); the 'or later' grant lets them be conveyed on GPL-2.0 terms, and the complete Linux 6.3 source is published. Found in greenbar's images (ADR 0020 amendment of 2026-11-05); prepared review: docs/governance/greenbar-agpl-review-2026-11-05.md; owner sign-off and legal review pending.",
+      "text": { "url": "https://raw.githubusercontent.com/spdx/license-list-data/v3.29.0/text/GPL-1.0-or-later.txt", "sha256": "da37ffd5fcdf0a7d76af862a4330ea1076e1443b51782b2f912148357b7acabe" }
+    },
+    {
+      "id": "LicenseRef-tzdata-2026d",
+      "class": "permissive",
+      "obligations": ["notices"],
+      "packages": ["tzdata"],
+      "basis": "The tz database's LICENSE file, verbatim (tzdata 2026d): all tz code and data files are in the public domain, apart from date.c, newstrftime.3 and strftime.c (BSD-3-Clause), which are tzcode files that the tzdata package does not ship; it ships only zone data compiled from the public-domain data files. The text is the package's complete notice. Found in greenbar's python image (ADR 0020 amendment of 2026-11-05); prepared review: docs/governance/greenbar-agpl-review-2026-11-05.md; owner sign-off and legal review pending.",
+      "text": { "url": "https://greenbar.oxidevm.dev/open-source/exercism-python-test-runner/licenses/LicenseRef-tzdata-2026d.txt", "sha256": "0613408568889f5739e5ae252b722a2659c02002839ad970a63dc5e9174b27cf" }
+    },
+    {
+      "id": "LicenseRef-nkf-0.1.3",
+      "class": "permissive",
+      "obligations": ["license-text", "notices", "mark-altered-versions"],
+      "packages": ["nkf"],
+      "basis": "The complete notice of nkf 0.1.3, a default gem of Ruby 3.3.0 (nkf.so, kconv.rb), concluded BSD-2-Clause AND Zlib AND LicenseRef-nkf-0.1.3: Ruby's COPYING and BSDL for the binding (BSD-2-Clause selected from 'Ruby OR BSD-2-Clause'), the Zlib header of the bundled Network Kanji Filter 2.1.5 (ext/nkf/nkf-utf8/nkf.c), Ruby's LEGAL entry for the nkf-utf8 files (anything may be done with the program as long as the copyright notice appears in all copies; binary distribution requires the original version messages) and the copyright lines. nkf.so is shipped as Ruby builds it from unmodified source, with the version string 2.1.5 (2018-12-15); the command-line program's copyright message is not part of the binding. Its source is ext/nkf/ in Ruby's published source kit. Found in greenbar's ruby image (ADR 0020 amendment of 2026-11-05); prepared review: docs/governance/greenbar-agpl-review-2026-11-05.md; owner sign-off and legal review pending.",
+      "text": { "url": "https://greenbar.oxidevm.dev/open-source/exercism-ruby-test-runner/licenses/LicenseRef-nkf-0.1.3.txt", "sha256": "ce72796abb07753846c0ff646b2e46ed76af66232106d959e88bf9d786fa9249" }
+    },
+    {
+      "id": "LicenseRef-json-2.7.1",
+      "class": "permissive",
+      "obligations": ["license-text", "notices"],
+      "packages": ["json"],
+      "basis": "The complete notice of json 2.7.1, a default gem of Ruby 3.3.0 (json.rb, json/*.rb, json/ext/generator.so and parser.so), concluded BSD-2-Clause AND LicenseRef-json-2.7.1: Ruby's COPYING and BSDL (BSD-2-Clause selected; the gemspec declares Ruby), Unicode, Inc.'s ConvertUTF notice in ext/json/generator/generator.c with Ruby's LEGAL entry for it (use and copying in products supporting the Unicode Standard are permitted as long as the notice remains attached) and the copyright lines. Its source is ext/json/ in Ruby's published source kit. Found in greenbar's ruby image (ADR 0020 amendment of 2026-11-05); prepared review: docs/governance/greenbar-agpl-review-2026-11-05.md; owner sign-off and legal review pending.",
+      "text": { "url": "https://greenbar.oxidevm.dev/open-source/exercism-ruby-test-runner/licenses/LicenseRef-json-2.7.1.txt", "sha256": "95a33965e1e829df54952fd6ab9a73663417825c29104349adfeb2340261f141" }
+    },
+    {
+      "id": "LicenseRef-json-2.6.3",
+      "class": "permissive",
+      "obligations": ["license-text", "notices"],
+      "packages": ["json"],
+      "basis": "The complete notice of the json 2.6.3 gem that the Ruby runner's bundle install adds, concluded BSD-2-Clause AND LicenseRef-json-2.6.3: its LICENSE (the Ruby license; BSD-2-Clause selected), the license section of its README, Unicode, Inc.'s ConvertUTF notice in ext/json/ext/generator/generator.c (use and copying in products supporting the Unicode Standard are permitted as long as the notice remains attached) and the copyright lines. The gem ships its own source in the image. Found in greenbar's ruby image (ADR 0020 amendment of 2026-11-05); prepared review: docs/governance/greenbar-agpl-review-2026-11-05.md; owner sign-off and legal review pending.",
+      "text": { "url": "https://greenbar.oxidevm.dev/open-source/exercism-ruby-test-runner/licenses/LicenseRef-json-2.6.3.txt", "sha256": "5e8588c2895349811efd3ba00a939d5da9670701121e0809df376a1bd4770c13" }
     },
     {
       "id": "LGPL-2.0-or-later",
@@ -439,6 +524,55 @@
   ],
   "exceptions": [
     {
+      "id": "Bison-exception-2.2",
+      "expression": "GPL-3.0-or-later WITH Bison-exception-2.2",
+      "appliesTo": "the Bison/Lrama parser skeleton in Ruby's parse.c, compiled into libruby in greenbar's Ruby image",
+      "treatment": "Lets the parser generated from the skeleton be conveyed under the terms of the program it is part of, so libruby carries no GPL duty for parse.c; Ruby's complete source is published anyway.",
+      "text": { "url": "https://raw.githubusercontent.com/spdx/license-list-data/v3.29.0/text/Bison-exception-2.2.txt", "sha256": "002401c20a16ac592c98b2bd2342acfd20c67dbfeb1ef9aba00a9b1f9fdb1a87" }
+    },
+    {
+      "id": "Linux-syscall-note",
+      "expression": "GPL-2.0-only WITH Linux-syscall-note",
+      "appliesTo": "the Linux UAPI headers in linux-headers 6.3 (greenbar's Ruby image), under every license expression they carry WITH Linux-syscall-note",
+      "treatment": "Programs that use the kernel's system-call interfaces through these headers are not derivative works of the kernel; the headers stay under their GPL terms, so the complete Linux 6.3 source is published.",
+      "text": { "url": "https://raw.githubusercontent.com/spdx/license-list-data/v3.29.0/text/Linux-syscall-note.txt", "sha256": "5bcef4fedbfc08776630e65d5d0d074dd31208037eddb167ca46a9ec4f737764" }
+    },
+    {
+      "id": "Linux-syscall-note",
+      "expression": "GPL-1.0-or-later WITH Linux-syscall-note",
+      "appliesTo": "the Linux UAPI headers in linux-headers 6.3 (greenbar's Ruby image), under every license expression they carry WITH Linux-syscall-note",
+      "treatment": "Programs that use the kernel's system-call interfaces through these headers are not derivative works of the kernel; the headers stay under their GPL terms, so the complete Linux 6.3 source is published.",
+      "text": { "url": "https://raw.githubusercontent.com/spdx/license-list-data/v3.29.0/text/Linux-syscall-note.txt", "sha256": "5bcef4fedbfc08776630e65d5d0d074dd31208037eddb167ca46a9ec4f737764" }
+    },
+    {
+      "id": "Linux-syscall-note",
+      "expression": "GPL-2.0-or-later WITH Linux-syscall-note",
+      "appliesTo": "the Linux UAPI headers in linux-headers 6.3 (greenbar's Ruby image), under every license expression they carry WITH Linux-syscall-note",
+      "treatment": "Programs that use the kernel's system-call interfaces through these headers are not derivative works of the kernel; the headers stay under their GPL terms, so the complete Linux 6.3 source is published.",
+      "text": { "url": "https://raw.githubusercontent.com/spdx/license-list-data/v3.29.0/text/Linux-syscall-note.txt", "sha256": "5bcef4fedbfc08776630e65d5d0d074dd31208037eddb167ca46a9ec4f737764" }
+    },
+    {
+      "id": "Linux-syscall-note",
+      "expression": "LGPL-2.0-or-later WITH Linux-syscall-note",
+      "appliesTo": "the Linux UAPI headers in linux-headers 6.3 (greenbar's Ruby image), under every license expression they carry WITH Linux-syscall-note",
+      "treatment": "Programs that use the kernel's system-call interfaces through these headers are not derivative works of the kernel; the headers stay under their GPL terms, so the complete Linux 6.3 source is published.",
+      "text": { "url": "https://raw.githubusercontent.com/spdx/license-list-data/v3.29.0/text/Linux-syscall-note.txt", "sha256": "5bcef4fedbfc08776630e65d5d0d074dd31208037eddb167ca46a9ec4f737764" }
+    },
+    {
+      "id": "Linux-syscall-note",
+      "expression": "LGPL-2.1-only WITH Linux-syscall-note",
+      "appliesTo": "the Linux UAPI headers in linux-headers 6.3 (greenbar's Ruby image), under every license expression they carry WITH Linux-syscall-note",
+      "treatment": "Programs that use the kernel's system-call interfaces through these headers are not derivative works of the kernel; the headers stay under their GPL terms, so the complete Linux 6.3 source is published.",
+      "text": { "url": "https://raw.githubusercontent.com/spdx/license-list-data/v3.29.0/text/Linux-syscall-note.txt", "sha256": "5bcef4fedbfc08776630e65d5d0d074dd31208037eddb167ca46a9ec4f737764" }
+    },
+    {
+      "id": "Linux-syscall-note",
+      "expression": "LGPL-2.1-or-later WITH Linux-syscall-note",
+      "appliesTo": "the Linux UAPI headers in linux-headers 6.3 (greenbar's Ruby image), under every license expression they carry WITH Linux-syscall-note",
+      "treatment": "Programs that use the kernel's system-call interfaces through these headers are not derivative works of the kernel; the headers stay under their GPL terms, so the complete Linux 6.3 source is published.",
+      "text": { "url": "https://raw.githubusercontent.com/spdx/license-list-data/v3.29.0/text/Linux-syscall-note.txt", "sha256": "5bcef4fedbfc08776630e65d5d0d074dd31208037eddb167ca46a9ec4f737764" }
+    },
+    {
       "id": "GCC-exception-3.1",
       "expression": "GPL-3.0-or-later WITH GCC-exception-3.1",
       "appliesTo": "libgcc and libstdc++ (the gcc runtime libraries)",
@@ -494,7 +628,6 @@
   "notApproved": {
     "rule": "A license absent from this file needs a new review entry before it may appear in a public image.",
     "excluded": [
-      { "id": "AGPL-3.0-only", "reason": "Its network-interaction duty (AGPL-3.0 §13) needs a separate review against Spacia's hosted offering." },
       { "id": "AGPL-3.0-or-later", "reason": "Its network-interaction duty (AGPL-3.0 §13) needs a separate review against Spacia's hosted offering." },
       { "id": "SSPL-1.0", "reason": "Source-available terms with service-offering duties." },
       { "id": "BUSL-1.1", "reason": "Source-available; no general redistribution right for production use." },

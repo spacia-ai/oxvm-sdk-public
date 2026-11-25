@@ -7,7 +7,20 @@ import type { AssistanceCredit } from "./assistance-credit.js";
 
 export type WorkspaceReadKind = "snapshot" | "delta" | "dependencies";
 export interface WorkspaceReadIdentity extends AssistanceBinding { readonly transfer: number }
-export interface WorkspaceReadRequest { readonly workspaceBaseSha256: string; readonly credit: AssistanceCredit;readonly selection?:{readonly kind:"retained";readonly id:string;readonly allowDifferentBase?:true}|{readonly kind:"rootfs";readonly path:string;readonly sha256:string;readonly bytes:number;readonly snapshotId?:string}|{readonly kind:"workspace-base-file";readonly path:string;readonly sha256:string;readonly bytes:number} }
+interface WorkspaceImageFile {
+  readonly path: string;
+  readonly sha256: string;
+  readonly bytes: number;
+}
+export interface WorkspaceReadRequest {
+  readonly workspaceBaseSha256: string;
+  readonly credit: AssistanceCredit;
+  readonly selection?:
+    | { readonly kind: "retained"; readonly id: string; readonly allowDifferentBase?: true }
+    | ({ readonly kind: "rootfs"; readonly snapshotId?: string } & WorkspaceImageFile)
+    | ({ readonly kind: "workspace-base-file" } & WorkspaceImageFile)
+    | { readonly kind: "native-root"; readonly id: string; readonly file?: WorkspaceImageFile };
+}
 export interface WorkspaceReadSelection<Stream> {
   readonly generation: number;
   readonly workspaceBaseSha256?:string;
@@ -30,6 +43,24 @@ export function decodeWorkspaceReadRequest(value: unknown): WorkspaceReadRequest
       if(snapshotId!==undefined&&!/^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/u.test(snapshotId))throw new VMError("PROTOCOL_ERROR","Rootfs checkpoint source is invalid");
       const file={path,sha256:hash(raw["sha256"]),bytes:integer(raw["bytes"],"rootfs file bytes",0,8*1024**3)};
       selection=raw["kind"]==="rootfs"?{kind:"rootfs",...file,...(snapshotId===undefined?{}:{snapshotId})}:{kind:"workspace-base-file",...file};
+    } else if (raw["kind"] === "native-root") {
+      exactKeys(raw, ["kind", "id"], ["file"]);
+      const id = string(raw["id"], "native image update");
+      if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/u.test(id)) {
+        throw new VMError("PROTOCOL_ERROR", "Native image update selection is invalid");
+      }
+      if (raw["file"] === undefined) selection = { kind: "native-root", id };
+      else {
+        const input = record(raw["file"], "earlier image file");
+        exactKeys(input, ["path", "sha256", "bytes"]);
+        const path = string(input["path"], "earlier image file path");
+        if (!path.startsWith("/") || path.length > 4096 || path.includes("\0")
+          || path.slice(1).split("/").some(part => part === "" || part === "." || part === "..")) {
+          throw new VMError("PROTOCOL_ERROR", "Earlier image file path is invalid");
+        }
+        const file = { path, sha256: hash(input["sha256"]), bytes: integer(input["bytes"], "earlier image file bytes", 0, 3 * 1024 ** 3) };
+        selection = { kind: "native-root", id, file };
+      }
     } else throw new VMError("PROTOCOL_ERROR","Workspace selection kind is invalid");
   }
   return { workspaceBaseSha256: hash(input["workspaceBaseSha256"]), credit: publicationCredit(input["credit"], "grant"),...(selection===undefined?{}:{selection}) };

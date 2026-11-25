@@ -27,7 +27,9 @@ describe("service modules", () => {
   it("replaces a stale socket, listens on every endpoint, announces readiness and serves each protocol", async () => {
     const release = await serviceRelease(ECHO);
     const running = launch({ release, staleSockets: ["/workspace/_oxidevm/db.sock"] });
+    const info = vi.spyOn(running.linux.process, "info");
     await untilReady(running);
+    expect(info).toHaveBeenCalledOnce();
     expect(running.linux.unlinked).toEqual(["/workspace/_oxidevm/db.sock"]);
     expect([...running.linux.listening()].sort()).toEqual(["tcp:5432", "unix:/workspace/_oxidevm/db.sock"]);
     expect(records(running.linux.stdoutLines)).toEqual([{ oxidevm: "ready", v: 1, pid: 42, info: { version: "1.2.3", ready: true } }]);
@@ -36,6 +38,16 @@ describe("service modules", () => {
     sql.write(new TextEncoder().encode("hello")); pg.write(new TextEncoder().encode("world"));
     expect(decode(await sql.read(64))).toBe("hello");
     expect(decode(await pg.read(64))).toBe("world");
+    running.linux.endStdin();
+    await expect(running.done).resolves.toBe(0);
+  });
+
+  it("reports the admitted PID without requesting command metadata for a service", async () => {
+    const running = launch({ release: await serviceRelease(ECHO), admittedPid: 71 });
+    const info = vi.spyOn(running.linux.process, "info");
+    await untilReady(running);
+    expect(info).not.toHaveBeenCalled();
+    expect(records(running.linux.stdoutLines)[0]).toMatchObject({ oxidevm: "ready", pid: 71 });
     running.linux.endStdin();
     await expect(running.done).resolves.toBe(0);
   });

@@ -3,10 +3,11 @@ import { USERSPACE_API_VERSION } from "../userspace-abi.js";
 import { PROTOCOL_VERSION } from "./common.js";
 import { decodeNativeGraphVersion, NATIVE_LOGICAL_CHECKPOINT_VERSION, supportsNativeCheckpointVersion } from "./native-capture.js";
 
-it("retains historical owners, ordered urgent notifications and host attention under API141", () => {
-  expect(USERSPACE_API_VERSION).toBe(151);
-  expect(PROTOCOL_VERSION).toBe(184);
-  expect(NATIVE_LOGICAL_CHECKPOINT_VERSION).toBe(102);
+it("retains historical owners, ordered urgent notifications and host attention", () => {
+  expect(USERSPACE_API_VERSION).toBe(153);
+  expect(PROTOCOL_VERSION).toBe(187);
+  expect(supportsNativeCheckpointVersion(622)).toBe(true);
+  expect(supportsNativeCheckpointVersion(180)).toBe(true);
   const graph = new Uint8Array(85), view = new DataView(graph.buffer);
   graph.set(new TextEncoder().encode("OXUG")); view.setUint32(4, 1, true);
   view.setUint32(8, 2, true); view.setUint32(12, 0, true); view.setUint32(16, 49, true);

@@ -28,9 +28,8 @@ import type { JitBatchPolicy } from "./jit-deferred-install.js";
  *   64 MiB `ArrayBuffer` triggered the collection at once (malloc-bytes trigger).
  *
  * V8 compiles each function lazily at its first call, so uncalled members cost nothing, and it
- * collects on its own committed-code thresholds; JavaScriptCore was not measured. Both keep the
- * policy they had before engine families existed: no code budget, and batches sealed whenever
- * the compiler is idle.
+ * collects on its own committed-code thresholds; JavaScriptCore was not measured. The default
+ * policy has no code budget and seals batches whenever the compiler is idle.
  */
 export type JitEngineFamily = SystemJitEngineFamily;
 
@@ -138,6 +137,23 @@ export function jitEnginePolicy(family: JitEngineFamily = detectJitEngineFamily(
     case "other":
       return DEFAULT_JIT_POLICY;
   }
+}
+
+export function userspaceJitEnginePolicy(
+  family: JitEngineFamily = detectJitEngineFamily(),
+): JitEnginePolicy {
+  const policy = jitEnginePolicy(family);
+  // A short wait lets translations that execute together share a Wasm instance.
+  return family === "other"
+    ? { ...policy, batch: { sealMembers: 32, sealWaitMilliseconds: 6 } }
+    : policy;
+}
+
+/** Chromium generates Liftoff code on the first call to a Wasm function. */
+export function warmUserspaceJitEntries(
+  global: { readonly navigator?: { readonly userAgent: string } } = globalThis,
+): boolean {
+  return global.navigator?.userAgent.includes("Chrome/") ?? false;
 }
 
 /** Estimated executable memory of one compiled module of `wasmBytes` bytes. */

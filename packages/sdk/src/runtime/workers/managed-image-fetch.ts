@@ -1,4 +1,5 @@
 import { VMError } from "../errors.js";
+import { Z_FINISH, Z_OK, Z_STREAM_END, ZStream, zlibInflate, zlibInflateEnd, zlibInflateInit2 } from "pako";
 import type { ManagedImageManifest, ManagedImageArtifact } from "../managed-image.js";
 import { sha256Hex } from "./snapshot-content.js";
 
@@ -25,9 +26,8 @@ export async function fetchVerifiedChunk(
   }
   let decoded: Uint8Array<ArrayBuffer>;
   try {
-    const stream = new Blob([encoded])
-      .stream()
-      .pipeThrough(new DecompressionStream("gzip"));
+    // Stream the verified bytes in small slices without the worker's Blob reader.
+    const stream = managedBodyStream(encoded).pipeThrough(new DecompressionStream("gzip"));
     decoded = await readManagedBody(stream, chunk.bytes, signal);
   } catch (error) {
     assertManagedImageActive(signal);
@@ -47,6 +47,36 @@ export async function fetchVerifiedChunk(
     );
   }
   return decoded;
+}
+
+export function managedBodyStream(bytes: Uint8Array<ArrayBuffer>): ReadableStream<Uint8Array<ArrayBuffer>> {
+  let offset = 0;
+  return new ReadableStream<Uint8Array<ArrayBuffer>>({
+    pull(controller) {
+      const end = Math.min(offset + 16 * 1024, bytes.length);
+      if (end > offset) controller.enqueue(bytes.subarray(offset, end));
+      offset = end;
+      if (offset === bytes.length) controller.close();
+    },
+  });
+}
+
+/** Decodes one cached gzip member into its declared, caller-bounded size. */
+export function decodeManagedGzip(encoded: Uint8Array<ArrayBuffer>, length: number): Uint8Array<ArrayBuffer> | undefined {
+  const output = new Uint8Array(length);
+  const stream = new ZStream();
+  if (zlibInflateInit2(stream, 15 + 16) !== Z_OK) return undefined;
+  try {
+    stream.input = encoded;
+    stream.avail_in = encoded.length;
+    stream.output = output;
+    stream.avail_out = output.length;
+    const status = zlibInflate(stream, Z_FINISH);
+    return status === Z_STREAM_END && stream.avail_in === 0 && stream.next_out === length
+      ? output : undefined;
+  } finally {
+    zlibInflateEnd(stream);
+  }
 }
 
 export async function fetchVerified(

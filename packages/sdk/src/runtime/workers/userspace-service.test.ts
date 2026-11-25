@@ -62,9 +62,9 @@ describe("Userspace service boundaries", () => {
     expect(processes.size).toBe(0);
   });
 
-  it("does not poll after an interior step-limit", () => {
-    expect(shouldServicePendingWork("step-limit", false)).toBe(false);
-    expect(shouldServicePendingWork("step-limit", true)).toBe(true);
+  it.each(["step-limit", "native-yield"] as const)("polls after %s only at the end of a slice", result => {
+    expect(shouldServicePendingWork(result, false)).toBe(false);
+    expect(shouldServicePendingWork(result, true)).toBe(true);
   });
 
   it("services every true execution boundary", () => {

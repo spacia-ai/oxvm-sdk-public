@@ -10,14 +10,32 @@ describe("the module frame's broker (ADR 0028)", () => {
   it("async relay into its own mailbox", async () => {
     const { port, runners } = brokerWith(), process = await spawn(port, runners);
     expect(process.start).toMatchObject({ version: JS_PROCESS_PROTOCOL_VERSION, type: "start" });
+    const posts = vi.spyOn(MessagePort.prototype, "postMessage");
     const upstream = next(process.service), notice = next(process.notices);
     process.port.postMessage(request(1, true));
     // The Userspace worker receives the same bounded request asynchronously, and one attention notice for it.
     expect(await upstream).toMatchObject({ sequence: 1, sync: false, operation: 1 });
     expect(await notice).toBeNull();
+    const forwarded = posts.mock.calls.findIndex(([value]) =>
+      typeof value === "object" && value !== null && Reflect.get(value, "sync") === false);
+    expect(forwarded).toBeGreaterThanOrEqual(0);
+    expect(posts.mock.calls.findIndex(([value]) => value === null)).toBeGreaterThan(forwarded);
     process.service.postMessage(reply(1));
     await vi.waitFor(() => { expect(Atomics.load(process.header, 0)).toBe(1); });
     expect([Atomics.load(process.header, 2), process.mailbox.byteLength]).toEqual([1, JS_MAILBOX_BYTES]);
+  });
+
+  it("transfers an owned bulk request after receiving it from the runner", async () => {
+    const { port, runners } = brokerWith(), process = await spawn(port, runners);
+    const posts = vi.spyOn(MessagePort.prototype, "postMessage");
+    const payload = new Uint8Array(64 * 1024).fill(71);
+    const delivered = next(process.service);
+    process.port.postMessage({ ...request(1, true), payload });
+    expect(await delivered).toMatchObject({ sequence: 1, sync: false, payload });
+    const relay = posts.mock.calls.find(([message]) =>
+      typeof message === "object" && message !== null && Reflect.get(message, "sync") === false);
+    expect(relay?.[1]).toHaveLength(1);
+    expect(payload.byteLength).toBe(64 * 1024);
   });
 
   it("notice before nudge", async () => {
@@ -91,6 +109,48 @@ describe("the module frame's broker (ADR 0028)", () => {
     expect(moduleOf(first.start)).toBeInstanceOf(WebAssembly.Module);
     expect(moduleOf(second.start)).toBe(moduleOf(first.start));
     expect(compile).toHaveBeenCalledOnce();
+  });
+
+  it("assigns a ready runner once, with fresh process state", async () => {
+    const attached = new MessageChannel(), started: FakeRunner[] = [], prepared: FakeRunner[] = [];
+    class Runner extends FakeRunner {
+      override postMessage(message: unknown): void {
+        started.push(this);
+        super.postMessage(message);
+      }
+    }
+    const ports = {
+      startRunner: () => new Runner(),
+      prepareRunner: () => {
+        const runner = new Runner();
+        prepared.push(runner);
+        return runner;
+      },
+    };
+    new ModuleBroker(ports).attach(attached.port2);
+    const first = await spawn(attached.port1, started, 7);
+    expect(prepared).toHaveLength(1);
+    const spare = prepared[0];
+    if (spare === undefined) throw new Error("Missing prepared runner");
+    const second = await spawn(attached.port1, started, 8);
+    expect(second.runner).not.toBe(spare);
+    expect(prepared).toHaveLength(1);
+    spare.onmessage?.(new MessageEvent("message", { data: "runner-ready" }));
+    const third = await spawn(attached.port1, started, 9);
+    expect(third.runner).toBe(spare);
+    expect(third.mailbox).not.toBe(first.mailbox);
+    expect(third.words.buffer).not.toBe(second.words.buffer);
+    const failedSpare = prepared[1];
+    if (failedSpare === undefined) throw new Error("Missing replacement runner");
+    failedSpare.onmessageerror?.(new MessageEvent("messageerror"));
+    expect(failedSpare.terminated).toBe(true);
+    const fourth = await spawn(attached.port1, started, 10);
+    expect(fourth.runner).not.toBe(spare);
+    expect(fourth.runner).not.toBe(failedSpare);
+    for (const process of [first, second, third, fourth]) {
+      process.channel.postMessage({ version: MODULE_BROKER_VERSION, type: "stop" });
+      await vi.waitFor(() => { expect(process.runner.terminated).toBe(true); }, { interval: 2 });
+    }
   });
 
   it("refuses a start that carries a compiled module or keys that are not the launch's", async () => {

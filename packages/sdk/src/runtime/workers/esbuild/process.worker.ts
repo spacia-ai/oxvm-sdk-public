@@ -21,7 +21,7 @@ serveOwnedProcess(async (client, context) => {
   if (info.args[1] !== `--service=${ESBUILD.version}` || info.args.length !== 2 && (info.args.length !== 3 || info.args[2] !== "--ping")) throw new VMError("FEATURE_NOT_AVAILABLE", "This compiler worker supports only the pinned esbuild service");
   const moduleUrl = new URL(self.location.href).searchParams.get("module");
   if (moduleUrl === null || new URL(moduleUrl).origin !== self.location.origin) throw new VMError("PROTOCOL_ERROR", "Compiler asset origin is invalid");
-  const bytes = await fetchPinnedBytes(new URL(moduleUrl), ESBUILD.wasmSHA256, "compiler", AbortSignal.timeout(120_000), undefined, ESBUILD.wasmBytes);
+  const bytes = await fetchPinnedBytes(new URL(moduleUrl), ESBUILD.wasmSHA256, "compiler", AbortSignal.timeout(120_000), undefined, { expectedBytes: ESBUILD.wasmBytes });
   const failure = Promise.withResolvers<never>(), failed = (error: unknown) => { failure.reject(error); };
   const filesystem = goFilesystem(client, info.cwd, failed);
   Reflect.set(globalThis, "fs", filesystem.fs);

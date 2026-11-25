@@ -23,7 +23,7 @@ const ref = (n: number) => ({ id: `11111111-2222-4333-8444-55555555555${String(n
 const destination = { manifestUrl: "https://example.com/rootfs.json", trusted: { keyId: "test", publicKey: new Uint8Array(32) } };
 
 it("refuses pre-fast-path storage protocol messages before handling their requests", () => {
-  expect(SNAPSHOT_CHANNEL_VERSION).toBe(15);
+  expect(SNAPSHOT_CHANNEL_VERSION).toBe(16);
   expect(() => decodeSnapshotStorageRequest({version:13,id:1,request:{type:"abort"}})).toThrow();
   expect(() => decodeSnapshotStorageRequest({version:12,id:1,request:{type:"abort"}})).toThrow();
   expect(() => decodeSnapshotStorageRequest({version:10,id:1,request:{type:"abort"}})).toThrow();
@@ -101,6 +101,7 @@ async function setup() {
   const rootfs = { origin: "managed", image: { id: "alpine", version: "v1" }, rootTreeSha256: ROOT, manifest: await objects.put(manifest) } as const;
   const pins = new Set<string>();
   const roots: NativeSnapshotEnvironment["rootfs"] = {
+    previousRootfs: () => Promise.reject(new Error("Unexpected prior root during restore-point storage test")),
     currentCheckpointSource:()=>rootfs,
     prepareImage:(_owner,_signal,progress)=>{progress({completedObjects:1,completedBytes:3,totalBytes:3});return Promise.resolve();},
     compactImage:()=>Promise.resolve(),reclaimAccelerators:()=>Promise.resolve(),

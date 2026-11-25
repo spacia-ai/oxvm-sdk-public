@@ -1,5 +1,5 @@
 import { VMError } from "../runtime/errors.js";
-import { copyKey, COPY_MISSING_REASON, type CopyKey, type ModulePin } from "../runtime/protocol/userspace-module-files.js";
+import { copyKey, COPY_MISSING_REASON, decodeMissingKeys, type CopyKey, type ModulePin } from "../runtime/protocol/userspace-module-files.js";
 import type { PinnedFile } from "./handle.js";
 import type { LaunchDescriptor } from "./runner/descriptor.js";
 import { ADAPTER_FILE, readPinned, type Fetcher } from "./runner/pinned.js";
@@ -36,28 +36,24 @@ export async function readMissingFiles(descriptor: LaunchDescriptor, missing: re
   return supplied;
 }
 
-const lacksFiles = (error: unknown): boolean => error instanceof VMError && error.detail?.["reason"] === COPY_MISSING_REASON;
-
 /**
- * Calls `send` with the files the VM lacks. It first sends none: the VM checks everything else first (availability,
- * names, options, bounds) and refuses with `wasm-module-copy-missing` only when its store lacks a file, so a VM that
- * cannot run the module costs no read, and one that holds every file costs none either. The supply then asks what is
- * missing, reads it and sends again; a store that dropped a file meanwhile (its last registration was turned off) gets
- * one more round.
+ * First calls `send` without files so the VM checks availability, options and bounds before any download.
+ * Reads the pinned files the VM reports as missing and retries once if the store drops another copy in the meantime.
  */
 export async function withModuleFiles<T>(descriptor: LaunchDescriptor, owner: ModuleFileOwner, send: (files: Readonly<Record<CopyKey, Blob>>) => Promise<T>, signal: AbortSignal | undefined, fetcher: Fetcher = pageFetch): Promise<T> {
-  try {
-    return await send({});
-  } catch (error: unknown) {
-    if (!lacksFiles(error)) throw error;
-  }
-  const pins = files(descriptor).map(({ pin }) => ({ sha256: pin.sha256, bytes: pin.bytes }));
+  let supplied: Readonly<Record<CopyKey, Blob>> = {};
   for (let attempt = 0; ; attempt++) {
-    const supplied = await readMissingFiles(descriptor, await owner.missing(pins, signal), signal, fetcher);
     try {
       return await send(supplied);
     } catch (error: unknown) {
-      if (attempt > 0 || !lacksFiles(error)) throw error;
+      if (attempt >= 2 || !(error instanceof VMError) || error.detail?.["reason"] !== COPY_MISSING_REASON) throw error;
+      const pins = files(descriptor).map(({ pin }) => ({ sha256: pin.sha256, bytes: pin.bytes }));
+      const missing = error.detail["missing"];
+      const hinted = missing === undefined ? undefined : decodeMissingKeys({ missing }).missing;
+      const keys = new Set(pins.map(copyKey));
+      // Older runtimes omit the list. The VM adapter separately supplies engine files such as TLS.
+      const wanted = hinted !== undefined && hinted.every(key => keys.has(key)) ? hinted : await owner.missing(pins, signal);
+      supplied = await readMissingFiles(descriptor, wanted, signal, fetcher);
     }
   }
 }

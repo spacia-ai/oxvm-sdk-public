@@ -27,6 +27,19 @@ it("asks getrandom for exactly the bytes it needs and refuses a short, long or m
   for (const count of [-1, RANDOM_CHUNK_BYTES + 1, 1.5]) expect(thrown(() => randomOperation(count))).toMatchObject({ code: "INVALID_ARGUMENT" });
 });
 
+it("caches each stable clock resolution for the lifetime of its host", () => {
+  const clocks: number[] = [];
+  const host = clockHost({ sync<T>(request: LinuxOperation<T>): T {
+    const clock = new Reader(request.payload).u32();
+    clocks.push(clock);
+    return request.decode(empty(BigInt(clock + 1)));
+  } });
+  expect(host.resolution("monotonic")).toBe(2n);
+  expect(host.resolution("realtime")).toBe(1n);
+  expect(host.resolution("monotonic")).toBe(2n);
+  expect(clocks).toEqual([1, 0]);
+});
+
 it("fills any length from bounded chunks, in order, and reads the clocks synchronously", () => {
   const asked: number[] = [];
   let next = 0;

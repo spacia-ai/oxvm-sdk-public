@@ -43,6 +43,45 @@ it("opens once the framed document answers its bootstrap", async () => {
   expect(frame.remove).toHaveBeenCalledOnce();
 });
 
+it("loads the document while the bootstrap assets are pending", async () => {
+  const assets = Promise.withResolvers<undefined>(), posted: unknown[] = [];
+  const frame = fakeFrame(({ message }) => { posted.push(message); });
+  install(frame);
+  const opening = openExecutionFrame(EXECUTION_URL, async (port, nonce) => {
+    await assets.promise;
+    return bootstrapOf(port, nonce);
+  }, input => input);
+
+  frame.onload?.();
+  expect(posted).toHaveLength(0);
+  await vi.advanceTimersByTimeAsync(10_001);
+  assets.resolve(undefined);
+  await vi.waitFor(() => { expect(posted).toHaveLength(1); });
+  portOf(posted[0]).postMessage("ready");
+
+  const connection = await opening;
+  expect(connection.receipt).toBe("ready");
+  connection.dispose();
+});
+
+it("removes an aborted frame without delivering its pending bootstrap", async () => {
+  const assets = Promise.withResolvers<undefined>(), controller = new AbortController();
+  const post = vi.fn();
+  const frame = fakeFrame(post);
+  install(frame);
+  const opening = openExecutionFrame(EXECUTION_URL, async (port, nonce) => {
+    await assets.promise;
+    return bootstrapOf(port, nonce);
+  }, input => input, controller.signal);
+  frame.onload?.();
+  controller.abort();
+  await expect(opening).rejects.toMatchObject({ code: "ABORTED" });
+  expect(frame.remove).toHaveBeenCalledOnce();
+  assets.resolve(undefined);
+  await vi.advanceTimersByTimeAsync(10_000);
+  expect(post).not.toHaveBeenCalled();
+});
+
 it("names the execution origin and this page's ancestors when a loaded document never answers", async () => {
   // A document refused by its own frame-ancestors policy still fires `load`, and its bootstrap message is dropped.
   const frame = fakeFrame(() => undefined);

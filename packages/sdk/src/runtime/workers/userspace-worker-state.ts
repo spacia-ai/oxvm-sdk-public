@@ -35,6 +35,8 @@ export interface RuntimeState {
   actionSteps: number;
   /** Instructions the last action retired when it used up its budget; zero when it ended earlier. */
   actionRetired: number;
+  /** Remaining work allowance for the interpreter before the first JIT action of a cold VM. */
+  coldInterpreterWork: number;
   workerRunTurns: number;
   workerYields: number;
   workerMessages: number;
@@ -65,7 +67,7 @@ export function newRuntimeState(
 ): RuntimeState {
   return {
     ...binding, startup, rootTreeSha256, workspaceBaseSha256, pendingResult: undefined, outputYieldGeneration: -1n,
-    actionSteps: ACTION_STEPS_MIN, actionRetired: 0,
+    actionSteps: ACTION_STEPS_MIN, actionRetired: 0, coldInterpreterWork: 0,
     workerRunTurns: 0, workerYields: 0, workerMessages: 0, hostRequests: 0, hostRequestBytes: 0n,
     pendingWorkPolls: 0, hostRequestServicePolls: 0, outputServicePolls: 0, exitServicePolls: 0, timerServicePolls: 0,
     slices: emptyUserspaceSliceProfile(), storageFailures: new UserspaceStorageFailures(), fairness: new AttentionFairness(), lastException: undefined,

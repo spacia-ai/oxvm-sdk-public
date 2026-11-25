@@ -1,3 +1,4 @@
+import { moduleFileOperations } from "../../../runtime/js-process/at-operations.js";
 import { WASI } from "./errno.js";
 import type { LinuxDirent } from "./host.js";
 import type { GuestMemory } from "./memory.js";
@@ -36,10 +37,11 @@ export function readDirectory(context: WasiContext, memory: GuestMemory, fd: num
   if (entry.kind !== "directory" && entry.kind !== "preopen") throw new WasiError(WASI.notdir);
   memory.check(buffer, capacity);
   if (cookie > 0x7fff_ffff_ffff_ffffn) throw new WasiError(WASI.inval);
-  context.host.fs.seek(entry.host, cookie, "start");
+  const at = context.at, compound = moduleFileOperations(at);
+  if (compound === undefined) context.host.fs.seek(entry.host, cookie, "start");
+  let batch = compound === undefined ? at.getdents(entry.host, BATCH) : compound.getdentsAt(entry.host, BATCH, cookie);
   let used = 0;
   for (;;) {
-    const batch = context.at.getdents(entry.host, BATCH);
     if (batch.length === 0) return used;
     for (const record of batch) {
       const bytes = encodeDirent(record), room = capacity - used;
@@ -47,6 +49,7 @@ export function readDirectory(context: WasiContext, memory: GuestMemory, fd: num
       used += Math.min(room, bytes.byteLength);
       if (used === capacity) return used;
     }
+    batch = at.getdents(entry.host, BATCH);
   }
 }
 

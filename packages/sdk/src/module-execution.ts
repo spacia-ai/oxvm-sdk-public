@@ -28,7 +28,7 @@ export type ModuleFrameOpener = Pick<ModuleExecutionPorts, "open" | "sources" | 
 
 export interface ModuleExecutionPorts {
   /** Opens one frame from the sources (the real one: `openModuleFrame` on the SDK's own assets). */
-  readonly open: (sources: ModuleFrameSources, signal: AbortSignal | undefined) => Promise<ModuleFrameHandle>;
+  readonly open: (sources: Promise<ModuleFrameSources>, signal: AbortSignal | undefined) => Promise<ModuleFrameHandle>;
   /** Reads the broker and runner code from the opener's own SDK assets, once per VM. */
   readonly sources: (signal: AbortSignal | undefined) => Promise<ModuleFrameSources>;
   /** Hands the broker's port to the VM's Userspace worker. */
@@ -59,7 +59,17 @@ export class ModuleExecution {
   }
 
   async #open(signal: AbortSignal | undefined): Promise<Opened> {
-    const sources = await (this.#sources ??= this.#ports.sources(signal).catch((error: unknown) => { this.#sources = undefined; throw error; }));
+    let sources = this.#sources;
+    if (sources === undefined) {
+      const pending = this.#ports.sources(signal);
+      this.#sources = sources = pending;
+      const forget = (): void => { if (this.#sources === pending) this.#sources = undefined; };
+      const unlisten = (): void => { signal?.removeEventListener("abort", forget); };
+      if (signal?.aborted === true) forget();
+      else signal?.addEventListener("abort", forget, { once: true });
+      // A frame can abort before its fetch rejects. Retire that read before a retry.
+      void pending.then(unlisten, () => { unlisten(); forget(); });
+    }
     const frame = await this.#ports.open(sources, signal);
     try {
       if (this.#disposed) throw new VMError("PROTOCOL_ERROR", "VM has been disposed");

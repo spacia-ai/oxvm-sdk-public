@@ -2,6 +2,7 @@
 export {
   acquireLocalDataLease,
   backupFileName,
+  createManagedUserspaceRuntimeVM,
   createRuntimeVM,
   decodeSystemTraceSnapshot,
   describeSnapshotError,
@@ -110,6 +111,8 @@ export function getDiagnostics(vm: VM): RuntimeVMDiagnostics { return ownedRunti
 export { eraseLocalData } from "./local-data.js";
 /** The one engine release this SDK pins: its ID is the SHA-256 of its exact release.json bytes. */
 export { engineRelease, engineReleaseId } from "./engine.generated.js";
+/** Highest Userspace checkpoint graph version accepted by this SDK. */
+export { NATIVE_LOGICAL_CHECKPOINT_VERSION } from "./runtime/protocol/native-capture.js";
 /** The relay protocol version this SDK speaks, generated from its byte-for-byte copy of the engine's relay specification. */
 export { RELAY_VERSION } from "./runtime/workers/relay-generated.js";
 /** For the engine's compatibility check against the Node-API host it builds (ADR 0026, 2.8). */

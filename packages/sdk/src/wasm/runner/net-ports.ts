@@ -1,4 +1,5 @@
 import type { FileDescriptor, LinuxFiles, LinuxSyncFiles } from "../../js-process-types.js";
+import { atFileOperations } from "../../runtime/js-process/at-operations.js";
 import { descriptor, LinuxError } from "../../runtime/js-process/codec.js";
 import { datagram, streamSocket } from "../../runtime/js-process/sockets.js";
 import type { LinuxClient } from "../../runtime/js-process/transport.js";
@@ -50,6 +51,7 @@ export function processSyncSockets(client: LinuxClient, files: LinuxSyncFiles): 
       try { return client.sync(datagram.receiveFrom(socket, Math.min(max, MAX_READ_NOW), { dontWait: true })).bytes; }
       catch (error: unknown) { if (error instanceof LinuxError && error.errno === EAGAIN) return null; throw error; }
     },
+    waitReadable: (socket, ms) => { client.sync(atFileOperations.poll([{ fd: fd(socket), events: 1 }], ms)); },
     write: (socket, bytes) => files.write(fd(socket), bytes, { noSignal: true }),
     shutdown: socket => { client.sync(streamSocket.shutdown(socket, "write")); },
     close: socket => { files.close(fd(socket)); },

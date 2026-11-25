@@ -2,7 +2,7 @@ import type { FileDescriptor, LinuxPollRequest, NativeSyncRunResult, NativeSyncR
 import { VMError } from "../errors.js";
 import { atFileOperations } from "./at-operations.js";
 import { clockOperations } from "./clock-random.js";
-import { LinuxError, protocol, writeBytes } from "./codec.js";
+import { JS_CHILD_SERVICES_VERSION, LinuxError, protocol, writeBytes } from "./codec.js";
 import { files } from "./file-operations.js";
 import { processOperations } from "./process.js";
 import type { LinuxClient } from "./transport.js";
@@ -57,14 +57,22 @@ const retry = (error: unknown): boolean => error instanceof LinuxError && (error
  * timer runs on the blocked worker, and a descendant that keeps a pipe open cannot hold the run past its deadline. On
  * timeout, a limit or any failure the child is killed and reaped before the error reaches the caller.
  */
-export function runSync(client: Pick<LinuxClient, "sync">, spec: NativeSyncRunSpec): NativeSyncRunResult {
+export function runSync(client: Pick<LinuxClient, "sync">, spec: NativeSyncRunSpec, version?: typeof JS_CHILD_SERVICES_VERSION): NativeSyncRunResult {
   const run = validate(spec);
+  const nativePipes = version === JS_CHILD_SERVICES_VERSION;
   const request = processOperations.spawn({
     command: run.command, args: run.args, ...(run.cwd === undefined ? {} : { cwd: run.cwd }), ...(run.env === undefined ? {} : { env: run.env }),
     stdio: { stdin: "pipe", stdout: "pipe", stderr: "pipe" },
-  }, true);
+  }, true, nativePipes);
   const monotonic = (): bigint => client.sync(clockOperations.now("monotonic"));
   const deadline = monotonic() + BigInt(run.timeoutMs) * NS_PER_MS;
+  const poll = (entries: readonly LinuxPollRequest[]) => {
+    if (nativePipes) return client.sync(atFileOperations.pollUntil(entries, deadline));
+    const now = monotonic();
+    if (now >= deadline) throw new LinuxError(ETIMEDOUT);
+    const remaining = Number((deadline - now + NS_PER_MS - 1n) / NS_PER_MS);
+    return client.sync(atFileOperations.poll(entries, remaining));
+  };
   const child = client.sync(request);
   const open = new Set<FileDescriptor>([child.stdin, child.stdout, child.stderr].filter(fd => fd !== null));
   const close = (fd: FileDescriptor): void => { if (open.delete(fd)) client.sync(files.close(fd)); };
@@ -72,7 +80,8 @@ export function runSync(client: Pick<LinuxClient, "sync">, spec: NativeSyncRunSp
   try {
     const { stdin, stdout, stderr } = child;
     if (stdin === null || stdout === null || stderr === null || open.size !== 3) protocol("The native child did not provide its requested pipes");
-    for (const fd of open) client.sync(atFileOperations.setStatusFlags(fd, client.sync(atFileOperations.statusFlags(fd)) | O_NONBLOCK));
+    // Spawn creates fresh pipe ends with no mutable status flags set.
+    if (!nativePipes) for (const fd of open) client.sync(atFileOperations.setStatusFlags(fd, O_NONBLOCK));
     const outputs: readonly Output[] = [{ fd: stdout, limit: run.stdoutLimit, chunks: [], size: 0 }, { fd: stderr, limit: run.stderrLimit, chunks: [], size: 0 }];
     // The input end while input remains, held in a record so every closure and loop pass reads its current state.
     const feed: { fd: FileDescriptor | null; offset: number } = { fd: stdin, offset: 0 };
@@ -81,12 +90,9 @@ export function runSync(client: Pick<LinuxClient, "sync">, spec: NativeSyncRunSp
     for (;;) {
       const reading = outputs.filter(output => open.has(output.fd));
       if (reading.length === 0) break;
-      const now = monotonic();
-      if (now >= deadline) throw new LinuxError(ETIMEDOUT);
-      const remaining = Number((deadline - now + NS_PER_MS - 1n) / NS_PER_MS);
       const entries: LinuxPollRequest[] = reading.map(output => ({ fd: output.fd, events: POLLIN }));
       if (feed.fd !== null) entries.unshift({ fd: feed.fd, events: POLLOUT });
-      for (const event of client.sync(atFileOperations.poll(entries, remaining))) {
+      for (const event of poll(entries)) {
         const feeding = feed.fd;
         if (feeding !== null && event.fd === feeding) {
           // A pipe with no reader polls POLLERR: stop feeding instead of writing into it (EPIPE, SIGPIPE).
@@ -123,12 +129,12 @@ export function runSync(client: Pick<LinuxClient, "sync">, spec: NativeSyncRunSp
 }
 
 /** `host.process`'s synchronous calls (capability `process.sync`) on this process's own Linux channel. */
-export function processSync(client: Pick<LinuxClient, "sync">): ProcessSync {
+export function processSync(client: Pick<LinuxClient, "sync">, version?: typeof JS_CHILD_SERVICES_VERSION): ProcessSync {
   return Object.freeze({
     infoSync: () => client.sync(processOperations.info()),
     spawnSync: spec => client.sync(processOperations.spawn(spec, spec.owned === true)),
     waitSync: pid => client.sync(processOperations.wait(pid)),
     signalSync: (pid, signal) => { client.sync(processOperations.signal(pid, signal)); },
-    runSync: spec => runSync(client, spec),
+    runSync: spec => runSync(client, spec, version),
   } satisfies ProcessSync);
 }

@@ -1,4 +1,5 @@
 import { ExecutableSources, normalizeExecutableSource } from "./executable-sources.ts";
+import { FunctionSources } from "./function-sources.ts";
 import { record, string } from "../../decode.ts";
 import { VMError } from "../../errors.ts";
 import { type AssistanceCompiler, transformSource } from "./compiler.ts";
@@ -12,7 +13,7 @@ import { commonJSNames, commonJSSource, commonJSValues } from "./commonjs-namesp
 import { importAttributes, validateImportAttributes } from "./import-attributes.ts";
 import { createNodeUrl } from "./node-url.ts";
 import { typelessPackageWarning } from "./module-detection.ts";
-import type { LocalModuleFiles } from "./module-files.ts";
+import { moduleLocation, type LocalModuleFiles } from "./module-files.ts";
 import { realmEvaluator } from "./node-vm.ts";
 export type { LocalModuleFiles } from "./module-files.ts";
 
@@ -37,9 +38,12 @@ export function createLocalModuleLoader(
 ) {
   const builtins: Record<string, object> = { ...builtinValues };
   const modules = new Map<string, ModuleRecord>();
+  /** Identities with a query or fragment that `resolve` answered with: SystemJS hands them back to be resolved again. */
+  const issued = new Set<string>();
   const currentDirectory = typeof cwd === "string" ? () => cwd : cwd;
   const urls = createNodeUrl(currentDirectory);
   const sources = new ExecutableSources(path => files.read(path).source, currentDirectory);
+  const functionSources = new FunctionSources();
   const environment: Record<string, unknown> = {};
   // Fixed, bundled SystemJS artifact. Production callers live only in the
   // isolated process worker; neither the IDE nor control worker evaluates code.
@@ -52,6 +56,10 @@ export function createLocalModuleLoader(
 
   function resolve(value: unknown, parent = `${currentDirectory().replace(/\/$/u, "")}/entry.cjs`, kind: "require" | "import" = "require"): string {
     const specifier = string(value, "module specifier");
+    if (issued.has(specifier)) return specifier;
+    // NUL separates an identity's file from its query; a program's own specifier never carries one.
+    if (specifier.includes("\0")) throw Object.assign(new TypeError("A module specifier must be a string without null bytes"), { code: "ERR_INVALID_ARG_VALUE" });
+    parent = moduleLocation(parent).path;
     const builtin = specifier.startsWith("node:") ? specifier.slice(5) : specifier;
     if (Object.hasOwn(builtins, builtin)) return `node:${builtin}`;
     if (specifier.startsWith("node:") || isNodeBuiltin(specifier)) throw unsupportedBuiltin(specifier, parent);
@@ -63,7 +71,12 @@ export function createLocalModuleLoader(
       if (Object.hasOwn(builtins, path.slice(5))) return path;
       throw unsupportedBuiltin(path, parent);
     }
-    admit(path);
+    const location = moduleLocation(path);
+    admit(location.path);
+    if (location.suffix !== "") {
+      if (kind !== "import") throw new VMError("PROTOCOL_ERROR", "Guest returned a module URL identity for require");
+      issued.add(path);
+    }
     return path;
   }
 
@@ -123,17 +136,21 @@ export function createLocalModuleLoader(
       validateImportAttributes(attributes, existing.format, path);
       return existing;
     }
+    // `path` is the module's identity; `file` is what is read, compiled and resolved against.
+    const file = moduleLocation(path).path;
     const input = path.startsWith("node:")
       ? { source: builtinSource(builtins[path.slice(5)] ?? {}), format: "module" as const }
-      : files.read(path, "import");
-    validateImportAttributes(attributes, input.format, path);
-    if ("typelessPackage" in input) warnTypelessPackage(path, input.typelessPackage);
-    if (input.format === "module" && !path.startsWith("node:")) sources.registerApplication(path, input.source);
+      : files.read(file, "import");
+    validateImportAttributes(attributes, input.format, file);
+    if ("typelessPackage" in input) warnTypelessPackage(file, input.typelessPackage);
+    if (input.format === "module" && !path.startsWith("node:")) sources.registerApplication(file, input.source);
     const source = input.format === "commonjs"
-      ? commonJSSource(commonJSNames(path, input.source, files, resolve))
+      ? commonJSSource(commonJSNames(file, input.source, files, resolve))
       : input.format === "json" ? commonJSSource(["default"]) : input.source;
-    const module = createModuleRecord(path, lowerModuleBindings(source, path), input.format,
-      input.format === "json" ? commonjs.importJSON(path, input.source) : undefined);
+    // Only a module's own text is kept: the wrappers written here for CommonJS, JSON and built-ins have no functions to report.
+    const marker = input.format === "module" && !path.startsWith("node:") ? functionSources.register(source) : undefined;
+    const module = createModuleRecord(path, lowerModuleBindings(source, file, marker), input.format,
+      input.format === "json" ? commonjs.importJSON(file, input.source) : undefined);
     modules.set(path, module);
     created.push(path);
     for (const dependency of module.definition.dependencies) {
@@ -174,7 +191,7 @@ export function createLocalModuleLoader(
   function declaration(module: ModuleRecord) {
     const known = declarations.get(module);
     if (known !== undefined) return known;
-    const path = module.path;
+    const { path, suffix } = moduleLocation(module.path);
     const source = transformSource(compiler, module.definition.code, "module", path, module.definition.map);
     const implementation = module.definition.implementation;
     const loweredImplementation = transformSource(compiler, implementation.code, "commonjs", path, implementation.map);
@@ -208,9 +225,9 @@ export function createLocalModuleLoader(
       ...record(runtime, "module runtime"),
       dynamicImport: (specifier: unknown, options?: unknown) => importLocal(specifier, path, options),
       meta: path.startsWith("node:") ? { url: path } : {
-        url: urls.pathToFileURL(path).href, filename: path, dirname: path.slice(0, path.lastIndexOf("/")) || "/",
+        url: urls.pathToFileURL(path).href + suffix, filename: path, dirname: path.slice(0, path.lastIndexOf("/")) || "/",
         // Node answers at once with a URL; SystemJS's own `meta.resolve` returns a promise of a path.
-        resolve: (specifier: unknown) => { const found = resolve(String(specifier), path, "import"); return found.startsWith("node:") ? found : urls.pathToFileURL(found).href; },
+        resolve: (specifier: unknown) => { const found = resolve(String(specifier), path, "import"); if (found.startsWith("node:")) return found; const location = moduleLocation(found); return urls.pathToFileURL(location.path).href + location.suffix; },
       },
     }, implementationFactory));
     const made = { dependencies, setters: declared["setters"], execute };
@@ -300,6 +317,7 @@ export function createLocalModuleLoader(
   }
   return {
     sources,
+    functionSources,
     require: commonjs.require,
     preload: commonjs.preload,
     import: importLocal,

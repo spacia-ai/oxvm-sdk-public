@@ -5,6 +5,7 @@ import { boolean, exactKeys, record } from "../decode.js";
 import { VMError } from "../errors.js";
 import { decodeBytes } from "../protocol/decoders.js";
 import { decodePreparedUserspaceRootfs, type PreparedUserspaceRootfs } from "../protocol/storage.js";
+import { assertImageNativeUtilities } from "../native-utilities.js";
 import { decodeSnapshotRef, validateAppData, type RestoredSnapshot, type SnapshotEventRecord, type SnapshotKind, type SnapshotRef } from "../protocol/snapshots.js";
 import type { UserspaceCapture, UserspaceRestore, CheckpointInput, NativeWorkspaceReconciled, CandidateWorkspaceExport } from "./userspace-checkpoint.js";
 import { decodeNativeAttachments, type NativeAttachments } from "./userspace-attachments.js";
@@ -236,6 +237,7 @@ export class UserspaceSnapshotSession {
     const newerFiles={workspace:boolean(differences["workspace"],"workspace difference"),root:boolean(differences["root"],"root difference")};
     const manifest = decodeSnapshotManifest(value["manifest"]);
     const rootfs = decodePreparedUserspaceRootfs(value["rootfs"]);
+    assertImageNativeUtilities(rootfs.nativeUtilities);
     if (manifest.schema !== USERSPACE_SNAPSHOT_SCHEMA || manifest.id !== snapshot.id || manifest.createdAt !== snapshot.createdAt
       || rootfs.rootTreeSha256 !== manifest.rootfs.rootTreeSha256
       || manifest.compatibility.memoryBytes !== this.#runtime.memoryBytes) {

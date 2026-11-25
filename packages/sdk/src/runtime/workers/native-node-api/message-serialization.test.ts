@@ -15,6 +15,7 @@ it("agrees with structured clone for scalar values, binary aliases, cycles and s
 
 it("keeps platform capabilities on the original transport and rejects malformed graphs", () => {
   expect(encodeSynchronousMessage(new SharedArrayBuffer(8))).toBeNull();
+  expect(encodeSynchronousMessage({ memory: new WebAssembly.Memory({ initial: 1, maximum: 1, shared: true }) })).toBeNull();
   const channel = new MessageChannel();
   try { expect(encodeSynchronousMessage({ port: channel.port1 })).toBeNull(); }
   finally { channel.port1.close(); channel.port2.close(); }

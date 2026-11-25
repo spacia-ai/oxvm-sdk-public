@@ -13,11 +13,18 @@ import { configureMountedRuntime, mountSettings } from "./workers/userspace-sett
 /** Every initialize request a VM sent to its Userspace worker; creation stops right after it. */
 const sent = vi.hoisted(() => ({ requests: new Array<unknown>(), stop: new Error("stopped after the Userspace initialize request") }));
 
-vi.mock("./userspace-process.js", () => ({
-  UserspaceProcessBackend: {
-    create: (options: unknown) => { sent.requests.push(options); return Promise.reject(sent.stop); },
-  },
-}));
+vi.mock("./userspace-process.js", async () => {
+  const { startNativeBackend } = await import("./userspace-vm.test-support.js");
+  return {
+    UserspaceProcessBackend: {
+      start: (...args: Parameters<typeof startNativeBackend>) => {
+        const opening = startNativeBackend(...args);
+        sent.requests.push(args[0]);
+        return { ...opening, initialized: opening.initialized.then(() => { throw sent.stop; }) };
+      },
+    },
+  };
+});
 vi.mock("../verified-image.js", async () => {
   const { decodeSHA256 } = await import("../values.js");
   return {

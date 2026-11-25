@@ -5,7 +5,7 @@ import {managedImageUrl} from "../managed-image.js";
 import type {PreparedImageIdentity} from "../protocol/storage.js";
 import {VMError} from "../errors.js";
 import type {RootfsNetworkClient} from "./rootfs-network-channel.js";
-import {opfsDirectory,read,write,sha256,type Backend,type Scope} from "./rootfs-store-backend.js";
+import {read,write,sha256,type Backend} from "./rootfs-store-backend.js";
 
 /** Only metadata is fetched; failure must not prevent starting the already verified image. */
 export async function requestedRootfsImage(backend:Backend,network:RootfsNetworkClient,
@@ -36,13 +36,13 @@ function updateActive(signal?:AbortSignal):void {
 /** An update offer is signed cached metadata, never a URL-derived guess or a network fetch. */
 export async function cachedRootfsImage(backend:Backend,href:string,trusted:TrustedRootfsKey,digest?:string):Promise<PreparedImageIdentity|undefined> {
  try {
-  const url=managedImageUrl(href);let bytes=digest===undefined?undefined:await readRootfsCache(backend,"manifests",`${digest}.json`,MAX_ROOTFS_METADATA_BYTES);
+  const url=managedImageUrl(href);let bytes=digest===undefined?undefined:await read(backend,"manifests",`${digest}.json`,MAX_ROOTFS_METADATA_BYTES);
   if(bytes===undefined) {
-   const markerBytes=await readRootfsCache(backend,"root","active.json",8192);if(markerBytes===undefined)return undefined;
+   const markerBytes=await read(backend,"root","active.json",8192);if(markerBytes===undefined)return undefined;
    const marker=record(JSON.parse(new TextDecoder("utf-8",{fatal:true}).decode(markerBytes)) as unknown,"cached rootfs marker");
    if(string(marker["manifestUrl"],"cached manifest URL")!==url.href)return undefined;
    const file=string(marker["file"],"cached manifest file");if(file.includes("/")||file.includes("\\")||file.includes("\0"))return undefined;
-   bytes=await readRootfsCache(backend,"manifests",file,MAX_ROOTFS_METADATA_BYTES);
+   bytes=await read(backend,"manifests",file,MAX_ROOTFS_METADATA_BYTES);
   }
   if(bytes===undefined)return undefined;const actual=await sha256(bytes);if(digest!==undefined&&actual!==digest)return undefined;
   const manifest=decodeUserspaceRootfsManifest(JSON.parse(new TextDecoder("utf-8",{fatal:true}).decode(bytes)) as unknown,url);
@@ -50,10 +50,4 @@ export async function cachedRootfsImage(backend:Backend,href:string,trusted:Trus
   await verifyUserspaceRootfsManifest(manifest,trusted);
   return {id:manifest.id,version:manifest.version,mode:"userspace",manifestSHA256:decodeSHA256(actual,"cached signed manifest"),cpuProfile:manifest.cpuProfile,keyId:trusted.keyId,signatureVerified:true};
  } catch {return undefined;}
-}
-export async function readRootfsCache(backend:Backend,scope:Scope,name:string,maximum:number):Promise<Uint8Array<ArrayBuffer>|undefined> {
- if(backend.kind==="opfs") {
-  try {const file=await (await (await opfsDirectory(backend.root,scope,false)).getFileHandle(name)).getFile();return file.size>maximum?undefined:new Uint8Array(await file.arrayBuffer());}catch{return undefined;}
- }
- const bytes=await read(backend,scope,name);return bytes!==undefined&&bytes.byteLength<=maximum?bytes:undefined;
 }

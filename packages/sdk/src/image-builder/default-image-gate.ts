@@ -3,6 +3,7 @@ import { join } from "node:path";
 import type { TrustedImageKey } from "../image.js";
 import { record, string } from "../runtime/decode.js";
 import { VMError } from "../runtime/errors.js";
+import { assertImageNativeUtilities } from "../runtime/native-utilities.js";
 import { readImageBundle } from "./bundle.js";
 import type { ReadImageBundle } from "./bundle.js";
 
@@ -13,7 +14,9 @@ import type { ReadImageBundle } from "./bundle.js";
  */
 export async function requireReadableDefaultImage(directory: string, trust?: TrustedImageKey, signal?: AbortSignal): Promise<ReadImageBundle> {
   try {
-    return await readImageBundle(directory, trust, signal);
+    const bundle = await readImageBundle(directory, trust, signal);
+    if ("entries" in bundle.manifest) assertImageNativeUtilities(bundle.manifest.nativeUtilities);
+    return bundle;
   } catch (error: unknown) {
     if (error instanceof VMError) throw new VMError(error.code, `${directory}: ${error.message}`, { ...error.detail, directory });
     throw error;

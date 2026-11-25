@@ -148,6 +148,8 @@ export interface UserspaceExecutionProfile {
   readonly guestClockKernelTicks: bigint;
   /** Zero identifies archived profiles from before kernel accounting. */
   readonly kernelAccountingModel: 0 | 1;
+  readonly guestClockNativeTicks: bigint;
+  readonly nativeAccountingModel: 0 | 1;
   readonly workerRunTurns: number;
   readonly workerYields: number;
   readonly workerMessages: number;
@@ -607,9 +609,9 @@ export function decodeUserspaceExecutionProfile(value: unknown, format: "current
   exactKeys(
     profile,
     ["pid", ...bigintFields, "lastException", "timing", ...integerFields, "prepareMilliseconds", "coreProfile",
-      ...(format === "current" ? ["guestClockKernelTicks", "kernelAccountingModel"] : [])],
+      ...(format === "current" ? ["guestClockKernelTicks", "kernelAccountingModel", "guestClockNativeTicks", "nativeAccountingModel"] : [])],
     ["backgroundCompile", "jitHealth", "jitCode", "jitTier", "jit", "slices", "storageFailures",
-      ...(format === "archive" ? ["guestClockKernelTicks", "kernelAccountingModel"] : [])],
+      ...(format === "archive" ? ["guestClockKernelTicks", "kernelAccountingModel", "guestClockNativeTicks", "nativeAccountingModel"] : [])],
   );
   const legacy = format === "archive" && (
     profile["kernelAccountingModel"] === undefined && profile["guestClockKernelTicks"] === undefined
@@ -617,6 +619,13 @@ export function decodeUserspaceExecutionProfile(value: unknown, format: "current
   );
   if (!legacy && profile["kernelAccountingModel"] !== 1) {
     throw new VMError("PROTOCOL_ERROR", "Unsupported Userspace kernel accounting model");
+  }
+  const legacyNative = format === "archive" && (
+    profile["nativeAccountingModel"] === undefined && profile["guestClockNativeTicks"] === undefined
+    || profile["nativeAccountingModel"] === 0 && profile["guestClockNativeTicks"] === 0n
+  );
+  if (!legacyNative && profile["nativeAccountingModel"] !== 1) {
+    throw new VMError("PROTOCOL_ERROR", "Unsupported Userspace native accounting model");
   }
   const metric = (field: typeof bigintFields[number]) =>
     nonnegativeBigint(profile[field], `Userspace execution profile ${field}`);
@@ -711,6 +720,8 @@ export function decodeUserspaceExecutionProfile(value: unknown, format: "current
     realtimeOffsetSteps: metric("realtimeOffsetSteps"),
     guestClockKernelTicks: legacy ? 0n : nonnegativeBigint(profile["guestClockKernelTicks"], "Userspace kernel ticks"),
     kernelAccountingModel: legacy ? 0 : 1,
+    guestClockNativeTicks: legacyNative ? 0n : nonnegativeBigint(profile["guestClockNativeTicks"], "Userspace native ticks"),
+    nativeAccountingModel: legacyNative ? 0 : 1,
     workerRunTurns: integer(profile["workerRunTurns"], "Userspace execution profile workerRunTurns", 0),
     workerYields: integer(profile["workerYields"], "Userspace execution profile workerYields", 0),
     workerMessages: integer(profile["workerMessages"], "Userspace execution profile workerMessages", 0),
@@ -836,7 +847,7 @@ export function decodeUserspaceExecutionProfile(value: unknown, format: "current
   ) {
     throw new VMError("PROTOCOL_ERROR", "Userspace execution profile journal counters do not reconcile");
   }
-  if (result.guestClockTicks !== result.guestClockRetiredTicks + result.guestClockIdleTicks + result.guestClockKernelTicks) {
+  if (result.guestClockTicks !== result.guestClockRetiredTicks + result.guestClockIdleTicks + result.guestClockKernelTicks + result.guestClockNativeTicks) {
     throw new VMError("PROTOCOL_ERROR", "Userspace execution profile guest clock does not reconcile");
   }
   return result;

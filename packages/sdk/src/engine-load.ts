@@ -1,5 +1,5 @@
 import type { BootProgress } from "./contracts.js";
-import { fetchPinnedBytes } from "./pinned-assets.js";
+import { fetchPinnedBytes, type PinnedAssetCache } from "./pinned-assets.js";
 
 /** The downloads of one engine load; see `engineLoad`. */
 export type EngineLoad = ReturnType<typeof engineLoad>;
@@ -11,7 +11,7 @@ export type EngineLoad = ReturnType<typeof engineLoad>;
  * starts once every file of the load has been requested, so its total never changes: after `seal`, and after every
  * `naming` has named its files. It stays silent for a load the cache serves entirely, as a cached file alone does.
  */
-export function engineLoad(signal?: AbortSignal, report?: (progress: BootProgress) => void) {
+export function engineLoad(signal?: AbortSignal, report?: (progress: BootProgress) => void, cache: PinnedAssetCache = "ordinary") {
   const cancelled = new AbortController(), downloads = signal === undefined ? cancelled.signal : AbortSignal.any([signal, cancelled.signal]);
   const files: { received: number; readonly bytes: number }[] = [], settled: Promise<unknown>[] = [];
   // File lists not yet requested in full: the caller's own until `seal`, and one per `naming`.
@@ -33,7 +33,7 @@ export function engineLoad(signal?: AbortSignal, report?: (progress: BootProgres
       const verified = fetchPinnedBytes(url, sha256, "engine", downloads, report === undefined ? undefined : progress => {
         if (progress.phase !== "download") return;
         file.received = progress.completedBytes; downloading = true; update();
-      }, bytes).then(value => { file.received = bytes; update(); return value; });
+      }, { expectedBytes: bytes, cache }).then(value => { file.received = bytes; update(); return value; });
       settled.push(verified.catch(() => undefined));
       return verified;
     },

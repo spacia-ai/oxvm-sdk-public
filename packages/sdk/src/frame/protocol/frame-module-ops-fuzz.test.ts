@@ -81,31 +81,29 @@ function assertInBounds(message: FrameMessage): void {
 }
 
 describe("frame protocol 17 module operations under seeded fuzzing (ADR 0028)", () => {
-  it(`decodes in bounds or refuses with a VMError (${String(SEEDS)} seeds x ${String(ITERATIONS)})`, () => {
+  it.each(Array.from({ length: SEEDS }, (_, index) => index + 1))(`decodes seed %i in bounds or refuses with a VMError (${String(ITERATIONS)} inputs)`, seed => {
     const io = new MessageChannel(), outcomes = { accepted: 0, refused: 0 };
     try {
-      for (let seed = 1; seed <= SEEDS; seed++) {
-        const random = new Random(seed);
-        for (let iteration = 0; iteration < ITERATIONS; iteration++) {
-          const input = hostile(random, random.pick(validMessages(random, io.port1)));
-          let first: FrameMessage | undefined;
-          try { first = decodeFrameMessage(input); }
-          catch (error: unknown) {
-            if (!(error instanceof VMError)) throw new Error(`seed ${String(seed)} iteration ${String(iteration)}: ${error instanceof Error ? `${error.name}: ${error.message}` : String(error)}`, { cause: error });
-            expect(["PROTOCOL_ERROR", "INVALID_ARGUMENT"]).toContain(error.code);
-            outcomes.refused++;
-            continue;
-          }
-          outcomes.accepted++;
-          assertInBounds(first);
-          // Pure: the same input decodes to the same message again.
-          expect(decodeFrameMessage(input)).toEqual(first);
+      const random = new Random(seed);
+      for (let iteration = 0; iteration < ITERATIONS; iteration++) {
+        const input = hostile(random, random.pick(validMessages(random, io.port1)));
+        let first: FrameMessage | undefined;
+        try { first = decodeFrameMessage(input); }
+        catch (error: unknown) {
+          if (!(error instanceof VMError)) throw new Error(`seed ${String(seed)} iteration ${String(iteration)}: ${error instanceof Error ? `${error.name}: ${error.message}` : String(error)}`, { cause: error });
+          expect(["PROTOCOL_ERROR", "INVALID_ARGUMENT"]).toContain(error.code);
+          outcomes.refused++;
+          continue;
         }
+        outcomes.accepted++;
+        assertInBounds(first);
+        // Pure: the same input decodes to the same message again.
+        expect(decodeFrameMessage(input)).toEqual(first);
       }
     } finally { io.port1.close(); io.port2.close(); }
-    // Both outcomes occur, so the generator reaches both sides of every check it can.
-    expect(outcomes.accepted).toBeGreaterThan(SEEDS * ITERATIONS / 20);
-    expect(outcomes.refused).toBeGreaterThan(SEEDS * ITERATIONS / 2);
+    // Every seed reaches both acceptance and refusal, retaining all 9,600 corpus inputs.
+    expect(outcomes.accepted).toBeGreaterThan(ITERATIONS / 20);
+    expect(outcomes.refused).toBeGreaterThan(ITERATIONS / 2);
   });
 
   it("is deterministic: one seed produces the same accept/refuse sequence twice", () => {

@@ -1,4 +1,5 @@
 import { RootfsImagePreparation, type ImagePreparationProgress } from "./rootfs-image-preparation.js";
+import type { ImagePreparation } from "../../values.js";
 import { rootfsClosure } from "../userspace-rootfs.js";
 import { RootfsPackCache } from "./rootfs-pack-cache.js";
 import { RootfsInstallations } from "./rootfs-installations.js";
@@ -18,7 +19,7 @@ import { managedImageUrl } from "../managed-image.js";
 import { decodeSnapshotRef } from "../protocol/snapshots.js";
 import type { UserspaceSnapshotManifest } from "./snapshot-manifest.js";
 import type { RootfsNetworkClient } from "./rootfs-network-channel.js";
-import { names, openVerifiedReader, read, remove, sha256, verifiedBytes, write, type Backend, type Scope } from "./rootfs-store-backend.js";
+import { activate, MAX_ROOTFS_MANIFEST_BYTES as MAX_MANIFEST, names, openVerifiedReader, read, remove, sha256, verifiedBytes, write, type Backend, type Scope } from "./rootfs-store-backend.js";
 import { readStorageObjects } from "./storage-read-batch.js";
 
 export interface RootfsCheckpointOwner { readonly workspaceId: string; readonly snapshotId: string }
@@ -31,7 +32,6 @@ type Pin = {
   readonly bytes: number;
   readonly manifestUrl: string;
 } & ({ readonly version: 1 } | { readonly version: 2; readonly closure: "image" | "complete" } | { readonly version:3;readonly closure:"packed" });
-const MAX_MANIFEST = 128 * 1024 * 1024;
 
 /** Rootfs-specific reachability over the existing blob cache. Pins are independent of activation. */
 export class RootfsCheckpoints {
@@ -51,11 +51,12 @@ export class RootfsCheckpoints {
   constructor(backend: Backend, network: RootfsNetworkClient) {
     this.#backend = backend; this.#network = network;
     this.#preparation = new RootfsImagePreparation();
-    this.packs = new RootfsPackCache(backend, network, (scope,name,bytes) => this.#write(scope,name,bytes), this.#preparation);
+    this.packs = new RootfsPackCache(backend, network, (scope, name, bytes, mayBorrowReserve) =>
+      this.#write(scope, name, bytes, mayBorrowReserve), this.#preparation);
   }
   requireLocalImage(): void { this.#localOnly = true; }
-  #write(scope: Scope,name: string,bytes: Uint8Array<ArrayBuffer>):Promise<void> {
-    return this.#serialize(()=>write(this.#backend,scope,name,bytes));
+  #write(scope: Scope, name: string, bytes: Uint8Array<ArrayBuffer>, mayBorrowReserve?: () => boolean): Promise<void> {
+    return this.#serialize(() => write(this.#backend, scope, name, bytes, mayBorrowReserve));
   }
   #serialize<T>(work:()=>Promise<T>):Promise<T> {
     const pending=this.#repairTurn.then(work);
@@ -70,10 +71,10 @@ export class RootfsCheckpoints {
     finally {attempts.delete(attempt);if(attempts.size===0)this.#retaining.delete(key);}
   }
 
-  async retainRead(source:RootfsCheckpointSource, signal?: AbortSignal):Promise<()=>void> {
+  async retainRead(source:RootfsCheckpointSource, signal?: AbortSignal, guard?: RootfsReadLock):Promise<()=>void> {
     let entry = this.#reads.get(source);
     if (entry === undefined) {
-      const release = this.#verification?.lock.borrow() ?? await retainRootfsRead(signal);
+      const release = guard?.borrow() ?? this.#verification?.lock.borrow() ?? await retainRootfsRead(signal);
       entry = this.#reads.get(source);
       if (entry === undefined) { entry = { count: 0, release }; this.#reads.set(source, entry); }
       else await release();
@@ -126,6 +127,16 @@ export class RootfsCheckpoints {
   async pinImage(owner:RootfsCheckpointOwner,source:RootfsCheckpointSource):Promise<{readonly rootfs:UserspaceSnapshotManifest["rootfs"];readonly manifest:Uint8Array<ArrayBuffer>}> {
     await this.#retain(owner,source,{closure:"image"});
     return sourceRecord(source);
+  }
+
+  async activate(source: RootfsCheckpointSource, signal?: AbortSignal, guard?: RootfsReadLock): Promise<void> {
+    const release = await this.retainRead(source, signal, guard);
+    try {
+      await this.#serialize(() => {
+        signal?.throwIfAborted();
+        return activate(this.#backend, source.url, source.digest, source.manifest.rootTreeSha256, source.bytes);
+      });
+    } finally { release(); }
   }
 
   async pinInstalledImage(owner: RootfsCheckpointOwner, source: RootfsCheckpointSource, installed: RootfsCheckpointOwner) {
@@ -253,6 +264,16 @@ export class RootfsCheckpoints {
         const bytes = await read(this.#backend, "manifests", file);
         if (bytes === undefined) return;
         manifests.add(file); await retain(await decodeSource(bytes, url));
+      }
+      for (const file of await names(this.#backend, "workspace-bases")) {
+        if (!/^[a-f0-9]{64}\.json$/u.test(file)) return;
+        const marker = await read(this.#backend, "workspace-bases", file, 65_536);
+        const bytes = await read(this.#backend, "manifests", file, MAX_MANIFEST);
+        if (marker === undefined || bytes === undefined) return;
+        const url = managedImageUrl(new TextDecoder("utf-8", { fatal: true }).decode(marker));
+        const source = await decodeSource(bytes, url);
+        if (file !== `${source.digest}.json`) return;
+        manifests.add(file); await retain(source);
       }
       // Legacy cached images are also workspace-base authorities. Their existing owner has
       // no complete durable reachability index, so checkpoint GC must not evict them.
@@ -459,22 +480,30 @@ export class RootfsCheckpoints {
     return false;
   }
 
-  async ensureBlob(blob:ReturnType<typeof closure>[number],signal?:AbortSignal,source?:RootfsCheckpointSource):Promise<void> {
-    if (source !== undefined && await this.packs.acquireBlob(source.manifest, source.digest, blob, signal)) return;
-    await this.#ensureBlob(blob,undefined,signal);
+  async ensureBlob(blob: ReturnType<typeof closure>[number], signal?: AbortSignal, source?: RootfsCheckpointSource,
+    preparation: ImagePreparation = "before-ready"): Promise<void> {
+    if (source !== undefined && await this.packs.acquireBlob(source.manifest, source.digest, blob, signal, preparation)) return;
+    await this.#ensureBlob(blob, undefined, signal, false, preparation);
   }
-  async #ensureBlob(blob: ReturnType<typeof closure>[number], read: Awaited<ReturnType<typeof openVerifiedReader>>|undefined,signal?:AbortSignal,background=false): Promise<void> {
-    await this.#preparation.prepare(`blob:${blobIdentity(blob)}`,{background,...(signal===undefined?{}:{signal})},async(workSignal,foreground)=>{
+  async #ensureBlob(blob: ReturnType<typeof closure>[number], read: Awaited<ReturnType<typeof openVerifiedReader>> | undefined,
+    signal?: AbortSignal, background = false, preparation: ImagePreparation = "before-ready"): Promise<void> {
+    await this.#preparation.prepare(`blob:${blobIdentity(blob)}`,{background,preparation,...(signal===undefined?{}:{signal})},async(workSignal,foreground,_progress,mayBorrowReserve)=>{
       const verify=read??await openVerifiedReader(this.#backend,"blobs");
       if (await verify(blob.sha256, blob.bytes, blob.sha256) !== undefined) return;
-      const content = await this.#network.fetchBlob(blob.url, blob.bytes, blob.sha256,workSignal,foreground()?"high":"low");
-      if (content.length !== blob.bytes || await sha256(content) !== blob.sha256) invalid("snapshot rootfs blob failed verification");
-      await this.cacheBlob(blob,content);
+      const content = await this.fetchVerifiedBlob(blob, workSignal, foreground() ? "high" : "low");
+      await this.cacheBlob(blob, content, mayBorrowReserve);
     });
   }
-  async cacheBlob(blob:{readonly bytes:number;readonly sha256:string},content:Uint8Array<ArrayBuffer>):Promise<void> {
+  async fetchVerifiedBlob(blob: ReturnType<typeof closure>[number], signal?: AbortSignal,
+    priority: "high" | "low" = "high"): Promise<Uint8Array<ArrayBuffer>> {
+    const content = await this.#network.fetchBlob(blob.url, blob.bytes, blob.sha256, signal, priority);
+    if (content.length !== blob.bytes || await sha256(content) !== blob.sha256) invalid("snapshot rootfs blob failed verification");
+    return content;
+  }
+  async cacheBlob(blob: { readonly bytes: number; readonly sha256: string }, content: Uint8Array<ArrayBuffer>,
+    mayBorrowReserve?: () => boolean): Promise<void> {
     await this.#serialize(async()=>{
-      await write(this.#backend,"blobs",blob.sha256,content);
+      await write(this.#backend, "blobs", blob.sha256, content, mayBorrowReserve);
       if(await verifiedBytes(this.#backend,"blobs",blob.sha256,blob.bytes,blob.sha256)===undefined){await remove(this.#backend,"blobs",blob.sha256);invalid("persisted snapshot rootfs blob failed verification");}
     });
   }

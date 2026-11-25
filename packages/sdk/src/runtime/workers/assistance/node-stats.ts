@@ -34,12 +34,12 @@ export interface StatFields {
 }
 
 /** Node's `StatsBase`: the ten integer fields and the type tests, which read `_checkModeProperty`. */
-class StatsBase {
+class StatsBase<Field extends number | bigint = number> {
   // Defined on the prototype below, as Node defines them.
   declare isDirectory: () => boolean; declare isFile: () => boolean; declare isBlockDevice: () => boolean; declare isCharacterDevice: () => boolean;
   declare isSymbolicLink: () => boolean; declare isFIFO: () => boolean; declare isSocket: () => boolean;
-  dev: number; mode: number; nlink: number; uid: number; gid: number; rdev: number | undefined; blksize: number; ino: number; size: number; blocks: number;
-  constructor(dev: number, mode: number, nlink: number, uid: number, gid: number, rdev: number | undefined, blksize: number, ino: number, size: number, blocks: number) {
+  dev: Field; mode: Field; nlink: Field; uid: Field; gid: Field; rdev: Field | undefined; blksize: Field; ino: Field; size: Field; blocks: Field;
+  constructor(dev: Field, mode: Field, nlink: Field, uid: Field, gid: Field, rdev: Field | undefined, blksize: Field, ino: Field, size: Field, blocks: Field) {
     this.dev = dev; this.mode = mode; this.nlink = nlink; this.uid = uid; this.gid = gid;
     this.rdev = rdev; this.blksize = blksize; this.ino = ino; this.size = size; this.blocks = blocks;
   }
@@ -65,13 +65,26 @@ export class Stats extends StatsBase {
     this.atimeMs = atimeMs; this.mtimeMs = mtimeMs; this.ctimeMs = ctimeMs; this.birthtimeMs = birthtimeMs;
   }
 }
+/** Node's `BigIntStats`, what `{ bigint: true }` selects: every field a bigint, the times also in nanoseconds, and the
+ * millisecond fields those nanoseconds divided as bigints divide. */
+export class BigIntStats extends StatsBase<bigint> {
+  atimeMs: bigint; mtimeMs: bigint; ctimeMs: bigint; birthtimeMs: bigint;
+  atimeNs: bigint; mtimeNs: bigint; ctimeNs: bigint; birthtimeNs: bigint;
+  declare atime: Date; declare mtime: Date; declare ctime: Date; declare birthtime: Date;
+  constructor(dev: bigint, mode: bigint, nlink: bigint, uid: bigint, gid: bigint, rdev: bigint, blksize: bigint, ino: bigint, size: bigint, blocks: bigint,
+    atimeNs: bigint, mtimeNs: bigint, ctimeNs: bigint, birthtimeNs: bigint) {
+    super(dev, mode, nlink, uid, gid, rdev, blksize, ino, size, blocks);
+    this.atimeMs = atimeNs / 1_000_000n; this.mtimeMs = mtimeNs / 1_000_000n; this.ctimeMs = ctimeNs / 1_000_000n; this.birthtimeMs = birthtimeNs / 1_000_000n;
+    this.atimeNs = atimeNs; this.mtimeNs = mtimeNs; this.ctimeNs = ctimeNs; this.birthtimeNs = birthtimeNs;
+  }
+}
 const ownValue = (target: object, name: string, value: unknown): void => {
   Object.defineProperty(target, name, { value, writable: true, enumerable: true, configurable: true });
 };
 // Each date is made from its millisecond field on first read and then kept as the object's own property, as an
 // assignment is; Node's `dateFromMs` rounds to a whole millisecond.
-for (const name of ["atime", "mtime", "ctime", "birthtime"] as const) {
-  Object.defineProperty(Stats.prototype, name, {
+for (const prototype of [Stats.prototype, BigIntStats.prototype]) for (const name of ["atime", "mtime", "ctime", "birthtime"] as const) {
+  Object.defineProperty(prototype, name, {
     get(this: object): Date { const value = new Date(Math.round(Number(Reflect.get(this, `${name}Ms`)))); ownValue(this, name, value); return value; },
     set(this: object, value: unknown): void { ownValue(this, name, value); },
     enumerable: true, configurable: true,
@@ -80,6 +93,12 @@ for (const name of ["atime", "mtime", "ctime", "birthtime"] as const) {
 Object.defineProperty(Stats.prototype, "_checkModeProperty", { value: function _checkModeProperty(this: unknown, property: unknown): boolean {
   const mode: unknown = typeof this === "object" && this !== null ? Reflect.get(this, "mode") : undefined;
   return (Number(mode) & S_IFMT) === property;
+}, enumerable: true, writable: true, configurable: true });
+
+Object.defineProperty(BigIntStats.prototype, "_checkModeProperty", { value: function _checkModeProperty(this: unknown, property: unknown): boolean {
+  const mode: unknown = typeof this === "object" && this !== null ? Reflect.get(this, "mode") : undefined;
+  if (typeof mode !== "bigint") throw new TypeError("Cannot mix BigInt and other types, use explicit conversions");
+  return (mode & BigInt(S_IFMT)) === BigInt(Number(property));
 }, enumerable: true, writable: true, configurable: true });
 
 /** A Linux stat reply as Node's `fs.statSync` returns it. A reply from a host without the extended metadata has no

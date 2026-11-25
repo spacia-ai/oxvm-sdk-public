@@ -9,6 +9,7 @@ import { downloadArtifact, privateDownloadToken } from "./download.js";
 import { copyVerified, hash, hashFile } from "./files.js";
 import { abortIfRequested } from "./tools.js";
 import { pinnedEngineCompliance } from "../engine-compliance.js";
+import { decodeNativeUtilitySuite, type NativeUtilitySuite } from "../runtime/native-utilities.js";
 
 // The SDK contains no engine (ADR 0019). It pins one content-addressed engine release, built by the
 // engine repository, and this module finds a verified copy of it: an explicit directory,
@@ -35,13 +36,16 @@ const MAX_LICENSE_BYTES = 1024 ** 2;
 export type EngineModuleName = (typeof MODULES)[number]["name"];
 export type EngineFileName = "release.json" | "LICENSE" | EngineModuleName;
 
-/** release.json, schema 4 (schema 3 plus the TLS module and its `tlsApi`): what the engine repository's release builder writes. */
-export interface EngineReleaseManifest {
-  readonly schemaVersion: 4;
+/** Schema 5 adds the native utility identity; schema 4 remains a supported engine release. */
+interface EngineReleaseCommon {
   readonly engineSource: { readonly commit: string; readonly dirty: boolean; readonly nativeInputsSHA256: string };
   readonly identities: { readonly coreApi: number; readonly jitAbi: number; readonly userspaceApi: number; readonly netstackApi: number; readonly tlsApi: number };
   readonly artifacts: readonly { readonly name: EngineModuleName; readonly mode: (typeof MODULES)[number]["mode"]; readonly bytes: number; readonly sha256: string }[];
 }
+export type EngineReleaseManifest = EngineReleaseCommon & (
+  | { readonly schemaVersion: 4; readonly nativeUtilities?: never }
+  | { readonly schemaVersion: 5; readonly nativeUtilities: NativeUtilitySuite }
+);
 /**
  * Where a release can be downloaded: Spacia's public CDN (ADR 0021), each file at
  * `<baseUrl><name>`, or the private release channel's exact asset URLs (a token is needed).
@@ -85,31 +89,34 @@ function canonicalBytes(manifest: EngineReleaseManifest): Uint8Array {
 
 function decodeManifest(value: unknown): EngineReleaseManifest {
   const manifest = record(value, "release.json");
-  exactKeys(manifest, ["schemaVersion", "engineSource", "identities", "artifacts"]);
-  if (manifest["schemaVersion"] !== 4) throw new TypeError(`schema version ${String(manifest["schemaVersion"])} is not 4`);
+  const schemaVersion = manifest["schemaVersion"];
+  if (schemaVersion !== 4 && schemaVersion !== 5) throw new TypeError(`schema version ${String(schemaVersion)} is not 4 or 5`);
+  exactKeys(manifest, ["schemaVersion", "engineSource", "identities", "artifacts", ...(schemaVersion === 5 ? ["nativeUtilities"] : [])]);
   const source = record(manifest["engineSource"], "engineSource");
   exactKeys(source, ["commit", "dirty", "nativeInputsSHA256"]);
   const identities = record(manifest["identities"], "identities");
   exactKeys(identities, ["coreApi", "jitAbi", "userspaceApi", "netstackApi", "tlsApi"]);
-  const artifacts: unknown = manifest["artifacts"];
-  if (!Array.isArray(artifacts) || artifacts.length !== MODULES.length) throw new TypeError(`artifacts must list the ${String(MODULES.length)} engine modules`);
-  const listed: readonly unknown[] = artifacts;
+  const rawArtifacts: unknown = manifest["artifacts"];
+  if (!Array.isArray(rawArtifacts) || rawArtifacts.length !== MODULES.length) throw new TypeError(`artifacts must list the ${String(MODULES.length)} engine modules`);
+  const listed: readonly unknown[] = rawArtifacts;
   const identity = (key: string) => integer(identities[key], `identities.${key}`, 0, 0xffff_ffff);
-  return {
-    schemaVersion: 4,
+  const common = {
     engineSource: {
       commit: matching(source["commit"], "engineSource.commit", GIT_COMMIT),
       dirty: boolean(source["dirty"], "engineSource.dirty"),
       nativeInputsSHA256: matching(source["nativeInputsSHA256"], "engineSource.nativeInputsSHA256", SHA256),
     },
     identities: { coreApi: identity("coreApi"), jitAbi: identity("jitAbi"), userspaceApi: identity("userspaceApi"), netstackApi: identity("netstackApi"), tlsApi: identity("tlsApi") },
-    artifacts: MODULES.map(({ name, mode }, index) => {
+  };
+  const artifacts = MODULES.map(({ name, mode }, index) => {
       const artifact = record(listed[index], `artifacts[${String(index)}]`);
       exactKeys(artifact, ["name", "mode", "bytes", "sha256"]);
       if (artifact["name"] !== name || artifact["mode"] !== mode) throw new TypeError(`artifacts[${String(index)}] must be ${name} for ${mode}`);
       return { name, mode, bytes: integer(artifact["bytes"], `${name} bytes`, 1, MAX_MODULE_BYTES), sha256: matching(artifact["sha256"], `${name} sha256`, SHA256) };
-    }),
-  };
+    });
+  return schemaVersion === 5
+    ? { schemaVersion, ...common, nativeUtilities: decodeNativeUtilitySuite(manifest["nativeUtilities"]), artifacts }
+    : { schemaVersion, ...common, artifacts };
 }
 
 /** Decodes an untrusted release.json, which must be byte for byte the canonical form its ID hashes. */
@@ -117,7 +124,7 @@ export function decodeEngineRelease(bytes: Uint8Array): EngineReleaseManifest {
   if (bytes.byteLength > MAX_RELEASE_JSON_BYTES) throw failure(`release.json exceeds ${String(MAX_RELEASE_JSON_BYTES)} bytes`);
   let manifest: EngineReleaseManifest;
   try { manifest = decodeManifest(JSON.parse(new TextDecoder("utf-8", { fatal: true }).decode(bytes))); }
-  catch (error: unknown) { throw failure(`release.json is not a schema-4 engine release: ${reason(error)}`); }
+  catch (error: unknown) { throw failure(`release.json is not a schema-4 or schema-5 engine release: ${reason(error)}`); }
   if (!Buffer.from(canonicalBytes(manifest)).equals(Buffer.from(bytes.buffer, bytes.byteOffset, bytes.byteLength))) {
     throw failure("release.json is not in the engine's canonical form (two-space JSON in schema order, then one newline)");
   }

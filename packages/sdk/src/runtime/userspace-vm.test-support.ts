@@ -1,6 +1,7 @@
 import { WorkerClient } from "./worker-client.js";
 import { controlResponseDecoders, type ControlOperations, type PreparedUserspaceRootfs } from "./protocol.js";
 import { ScriptedWorker } from "./system-vm.test-support.js";
+import type { UserspaceProcessBackend } from "./userspace-process.js";
 
 export const NATIVE_MANIFEST = "https://example.test/rootfs.json";
 export const NATIVE_TRUST = { trustedKeyId: "test", trustedPublicKey: new Uint8Array(32) };
@@ -26,8 +27,19 @@ export async function bootedNativeVm(workspaceId = "userspace") {
 }
 
 /** Exercise the common control boundary while individual tests replace native execution. */
-export function nativeBackend() {
+export function startNativeBackend(
+  options: Parameters<typeof UserspaceProcessBackend.start>[0],
+  snapshot: MessagePort | undefined,
+  after: Promise<unknown>,
+) {
   const control = new WorkerClient<ControlOperations>(new Worker("", { name: "oxidevm-control" }), controlResponseDecoders);
-  return { control, revokeNetwork: () => Promise.resolve(), dispose: () => { control.terminate(); return Promise.resolve(); },
-    attachProcess: () => Promise.reject(new Error("Process attachment not configured by this fixture")) };
+  const terminate = () => {
+    control.terminate();
+    for (const port of [snapshot, options.storagePort, options.networkPort, options.nativeExecutionPort]) port?.close();
+  };
+  return {
+    backend: { control, terminate, revokeNetwork: () => Promise.resolve(), dispose: () => { terminate(); return Promise.resolve(); },
+      attachProcess: () => Promise.reject(new Error("Process attachment not configured by this fixture")) },
+    initialized: after.then(() => undefined),
+  };
 }

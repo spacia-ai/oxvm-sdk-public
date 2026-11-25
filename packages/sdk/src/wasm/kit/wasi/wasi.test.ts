@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import { WASI } from "./errno.js";
 import { GuestMemory } from "./memory.js";
 import { encodeDirent } from "./directories.js";
@@ -7,14 +7,14 @@ import { openFlags } from "./paths.js";
 import { encodeLaunch, preview1, type Preopen } from "./preview1.js";
 import { RIGHT } from "./rights.js";
 import { FakeFiles } from "./files.test-support.js";
-import { descriptor, streams } from "./streams.test-support.js";
+import { descriptor, FakeLinuxError, streams } from "./streams.test-support.js";
 import { WasiError } from "./context.js";
 
 const ROOT = 3, PATHS = 1024, OUT = 2048, BUFFER = 4096;
 const ALL = (1n << 29n) - 1n;
 
-function setup(preopens?: readonly Preopen[], files = new FakeFiles({ "/workspace/a.txt": "hello" }, ["/workspace", "/srv", "/srv/data"])) {
-  const memory = new GuestMemory(new WebAssembly.Memory({ initial: 1 }));
+function setup(preopens?: readonly Preopen[], files = new FakeFiles({ "/workspace/a.txt": "hello" }, ["/workspace", "/srv", "/srv/data"]), pages = 1) {
+  const memory = new GuestMemory(new WebAssembly.Memory({ initial: pages }));
   const fake = streams({ files });
   const { imports, table } = preview1(fake.host, () => memory, { stdin: descriptor(0), stdout: descriptor(1), stderr: descriptor(2) }, encodeLaunch(["t"], {}), { stdin: false, stdout: false, stderr: false }, preopens);
   const call = (name: string, ...args: readonly (number | bigint)[]): number => {
@@ -128,6 +128,55 @@ describe("directories (OBL-DIRECTORIES)", () => {
 });
 
 describe("positional IO and times (OBL-FD-POSITIONAL, OBL-FILE-TIMES)", () => {
+  const largeWrite = 256 * 1024;
+
+  it("uses bounded large requests for opened regular files and leaves their offset alone", () => {
+    const { call, open, memory, files } = setup(undefined, undefined, 5);
+    const fd = open(ROOT, "workspace/a.txt", 0, RIGHT.fdWrite | RIGHT.fdSeek | RIGHT.fdTell, 0n);
+    const payload = new Uint8Array(largeWrite + 17).fill(37);
+    memory.write(BUFFER, payload);
+    memory.setU32(OUT, BUFFER); memory.setU32(OUT + 4, payload.byteLength);
+    expect(call("fd_pwrite", fd, OUT, 1, 5n, OUT + 64)).toBe(WASI.success);
+    expect(memory.u32(OUT + 64)).toBe(payload.byteLength);
+    expect(files.calls.filter(entry => entry.op === "pwrite").map(entry => entry.args.slice(1))).toEqual([
+      [largeWrite, 5n], [17, BigInt(largeWrite + 5)],
+    ]);
+    expect(files.tree.get("/workspace/a.txt")?.data.subarray(5)).toEqual(payload);
+    expect(call("fd_tell", fd, OUT + 72)).toBe(WASI.success);
+    expect(memory.u64(OUT + 72)).toBe(0n);
+  });
+
+  it("keeps small requests for a nonregular descriptor", () => {
+    const files = new FakeFiles({}, ["/workspace"]);
+    files.tree.set("/workspace/device", { mode: 0o020666, data: new Uint8Array(), atime: 0n, mtime: 0n });
+    const { call, open, memory } = setup(undefined, files, 2);
+    const fd = open(ROOT, "workspace/device", 0, RIGHT.fdWrite | RIGHT.fdSeek, 0n);
+    const chunk = 64 * 1024;
+    memory.setU32(OUT, BUFFER); memory.setU32(OUT + 4, chunk + 1);
+    expect(call("fd_pwrite", fd, OUT, 1, 0n, OUT + 64)).toBe(WASI.success);
+    expect(files.calls.filter(entry => entry.op === "pwrite").map(entry => entry.args.slice(1))).toEqual([
+      [chunk, 0n], [1, BigInt(chunk)],
+    ]);
+  });
+
+  it("stops on a short write and returns committed progress after a later error", () => {
+    const { call, open, memory, files } = setup(undefined, undefined, 5);
+    const fd = open(ROOT, "workspace/a.txt", 0, RIGHT.fdWrite | RIGHT.fdSeek, 0n);
+    memory.setU32(OUT, BUFFER); memory.setU32(OUT + 4, largeWrite + 17);
+    const pwrite = files.at.pwrite.bind(files.at);
+    const requests = vi.spyOn(files.at, "pwrite");
+    requests.mockImplementationOnce((host, bytes, offset) => pwrite(host, bytes.subarray(0, 13), offset));
+    expect(call("fd_pwrite", fd, OUT, 1, 0n, OUT + 64)).toBe(WASI.success);
+    expect(memory.u32(OUT + 64)).toBe(13);
+    expect(requests).toHaveBeenCalledTimes(1);
+    requests.mockImplementationOnce(pwrite).mockImplementationOnce(() => { throw new FakeLinuxError(28); });
+    expect(call("fd_pwrite", fd, OUT, 1, 0n, OUT + 64)).toBe(WASI.success);
+    expect(memory.u32(OUT + 64)).toBe(largeWrite);
+    requests.mockImplementationOnce(() => { throw new FakeLinuxError(28); });
+    expect(call("fd_pwrite", fd, OUT, 1, 0n, OUT + 64)).toBe(WASI.nospc);
+    expect(memory.u32(OUT + 64)).toBe(largeWrite);
+  });
+
   it("uses pread/pwrite and never moves the shared offset", () => {
     const { call, open, memory, files } = setup();
     const fd = open(ROOT, "workspace/a.txt", 0, RIGHT.fdRead | RIGHT.fdWrite | RIGHT.fdSeek | RIGHT.fdTell, 0n);

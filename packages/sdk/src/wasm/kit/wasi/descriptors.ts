@@ -12,7 +12,7 @@ import { MUTATING_RIGHTS } from "./rights.js";
 export type Entry =
   | { readonly kind: "stream"; readonly host: FileDescriptor; readonly terminal: boolean; base: bigint; inheriting: bigint; readonly owned: false; readonly confined: false }
   | { readonly kind: "preopen"; readonly host: FileDescriptor; readonly name: Uint8Array; base: bigint; inheriting: bigint; readonly owned: true; readonly confined: boolean; readonly readOnly: boolean }
-  | { readonly kind: "file" | "directory"; readonly host: FileDescriptor; base: bigint; inheriting: bigint; readonly owned: true; readonly confined: boolean; readonly readOnly: boolean };
+  | { readonly kind: "regularFile" | "file" | "directory"; readonly host: FileDescriptor; base: bigint; inheriting: bigint; readonly owned: true; readonly confined: boolean; readonly readOnly: boolean };
 
 /**
  * The guest descriptor table of one run: at most `limit` entries (standard streams and preopens included). A guest

@@ -1,6 +1,7 @@
 import { sha256 } from "@noble/hashes/sha2.js";
 import { VMError } from "../errors.js";
 import type { ManagedImageChunk } from "../managed-image.js";
+import { readInto } from "./managed-disk-files.js";
 
 type Chunk = Pick<ManagedImageChunk, "bytes" | "sha256">;
 const FRAME_BYTES = 65536;
@@ -48,7 +49,7 @@ export class ManagedBaseIntegrity {
       const digest = sha256.create();
       for (let position = chunk.offset; position < chunk.end; position += FRAME_BYTES) {
         const buffer = this.#scratch.subarray(0, Math.min(FRAME_BYTES, chunk.end - position));
-        if (handle.read(buffer, { at: position }) !== buffer.length) throw damaged();
+        if (readInto(handle, position, buffer) !== buffer.length) throw damaged();
         digest.update(buffer);
       }
       if ([...digest.digest()].map(byte => byte.toString(16).padStart(2, "0")).join("") !== chunk.sha256) throw damaged();

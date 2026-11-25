@@ -56,7 +56,8 @@ export function createNodePorts(context: AsyncContext, deliver: (callback: () =>
       if (value instanceof PlatformPort) return receiving ? wrap(value) : value;
       if (value instanceof ArrayBuffer || value instanceof SharedArrayBuffer || ArrayBuffer.isView(value)) {
         const backing = ArrayBuffer.isView(value) ? value.buffer : value;
-        if (!buffers.has(backing)) { buffers.add(backing); charge(backing.byteLength); }
+        // A shared buffer crosses by reference: nothing of its size is copied or held for the message.
+        if (!buffers.has(backing)) { buffers.add(backing); if (!(backing instanceof SharedArrayBuffer)) charge(backing.byteLength); }
         return value;
       }
       if (value instanceof Error) {
@@ -65,7 +66,8 @@ export function createNodePorts(context: AsyncContext, deliver: (callback: () =>
         return value;
       }
       if (value instanceof RegExp) { charge(value.source.length * 2 + value.flags.length * 2); return value; }
-      if (value instanceof Date || value instanceof WebAssembly.Module) return value;
+      // The platform clones a compiled module and shares a shared memory; it refuses an unshared one, as Node does.
+      if (value instanceof Date || value instanceof WebAssembly.Module || value instanceof WebAssembly.Memory) return value;
       if (value instanceof Map) { const result = new Map<unknown, unknown>(); seen.set(value, result); for (const [key, entry] of value) result.set(visit(key), visit(entry)); return result; }
       if (value instanceof Set) { const result = new Set<unknown>(); seen.set(value, result); for (const entry of value) result.add(visit(entry)); return result; }
       const result: Record<string, unknown> | unknown[] = Array.isArray(value) ? [] : {};

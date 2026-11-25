@@ -40,9 +40,17 @@ export function randomOperation(count: number): LinuxOperation<Uint8Array> {
 }
 
 export function clockHost(client: Pick<LinuxClient, "sync">): ClockHost {
+  // The engine's realtime and monotonic resolutions are fixed for this process.
+  const resolutions = new Map<LinuxClock, bigint>();
   return Object.freeze({
     now: (clock: LinuxClock) => client.sync(clockOperations.now(clock)),
-    resolution: (clock: LinuxClock) => client.sync(clockOperations.resolution(clock)),
+    resolution: (clock: LinuxClock) => {
+      const known = resolutions.get(clock);
+      if (known !== undefined) return known;
+      const resolution = client.sync(clockOperations.resolution(clock));
+      resolutions.set(clock, resolution);
+      return resolution;
+    },
   });
 }
 

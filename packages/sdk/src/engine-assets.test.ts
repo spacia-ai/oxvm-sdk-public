@@ -33,15 +33,33 @@ function cached(initial?: Uint8Array) {
   return { cache, bodies, seed: (url: URL) => { if (initial !== undefined) bodies.set(url.href, new Response(initial.slice())); } };
 }
 
+it.each([
+  ["reserve-workspace", 100, 0],
+  ["reserve-workspace", 512, 1],
+  ["ordinary", 100, 1],
+] as const)("retains verified pinned assets with %s policy at a %s MiB quota", async (cache, quotaMiB, stored) => {
+  const storage = cached();
+  const bytes = Uint8Array.of(1, 2, 3);
+  const url = new URL("https://assets.test/pinned.wasm");
+  const digest = await sha256Hex(bytes);
+  const quota = quotaMiB * 1024 * 1024;
+  vi.stubGlobal("navigator", { storage: { estimate: () => Promise.resolve({ quota, usage: 0 }) } });
+  vi.stubGlobal("fetch", vi.fn<typeof fetch>().mockResolvedValue(new Response(bytes)));
+  expect(await fetchPinnedBytes(url, digest, "engine", undefined, undefined, {
+    expectedBytes: bytes.length, cache,
+  })).toEqual(bytes);
+  expect(storage.bodies.size).toBe(stored);
+});
+
 it("loads a verified cached asset without any network download or download progress", async () => {
   cached();
   const bytes = Uint8Array.of(1, 2, 3), url = new URL("https://assets.test/pinned.wasm"), digest = await sha256Hex(bytes);
   const network = vi.fn<typeof fetch>().mockResolvedValue(new Response(bytes));
   vi.stubGlobal("fetch", network);
-  await fetchPinnedBytes(url, digest, "engine", undefined, undefined, bytes.length);
+  await fetchPinnedBytes(url, digest, "engine", undefined, undefined, { expectedBytes: bytes.length });
   network.mockRejectedValue(new TypeError("offline"));
   const progress = vi.fn();
-  expect(await fetchPinnedBytes(url, digest, "engine", undefined, progress, bytes.length)).toEqual(bytes);
+  expect(await fetchPinnedBytes(url, digest, "engine", undefined, progress, { expectedBytes: bytes.length })).toEqual(bytes);
   expect(network).toHaveBeenCalledTimes(1);
   expect(progress).not.toHaveBeenCalled();
 });
@@ -51,11 +69,11 @@ it("caches pinned compiler bytes without reporting them as initial shell downloa
   const bytes = Uint8Array.of(1, 2, 3), url = new URL("https://assets.test/esbuild.wasm"), digest = await sha256Hex(bytes);
   const network = vi.fn<typeof fetch>().mockResolvedValue(new Response(bytes)), progress = vi.fn();
   vi.stubGlobal("fetch", network);
-  expect(await fetchPinnedBytes(url, digest, "compiler", undefined, progress, bytes.length)).toEqual(bytes);
-  expect(await fetchPinnedBytes(url, digest, "compiler", undefined, progress, bytes.length)).toEqual(bytes);
+  expect(await fetchPinnedBytes(url, digest, "compiler", undefined, progress, { expectedBytes: bytes.length })).toEqual(bytes);
+  expect(await fetchPinnedBytes(url, digest, "compiler", undefined, progress, { expectedBytes: bytes.length })).toEqual(bytes);
   expect(network).toHaveBeenCalledOnce(); expect(progress).not.toHaveBeenCalled();
   network.mockResolvedValue(new Response(Uint8Array.of(9)));
-  await expect(fetchPinnedBytes(url, "f".repeat(64), "compiler", undefined, undefined, bytes.length)).rejects.toMatchObject({ code: "CORE_LOAD_FAILED" });
+  await expect(fetchPinnedBytes(url, "f".repeat(64), "compiler", undefined, undefined, { expectedBytes: bytes.length })).rejects.toMatchObject({ code: "CORE_LOAD_FAILED" });
 });
 
 it.each([Uint8Array.of(9, 9, 9), Uint8Array.of(1)])("repairs an invalid cached asset before executing its replacement", async broken => {
@@ -63,7 +81,7 @@ it.each([Uint8Array.of(9, 9, 9), Uint8Array.of(1)])("repairs an invalid cached a
   const storage = cached(broken), key = new URL(url); key.searchParams.set("oxidevm-sha256", digest); storage.seed(key);
   const deletion = vi.spyOn(storage.cache, "delete");
   vi.stubGlobal("fetch", vi.fn<typeof fetch>().mockResolvedValue(new Response(bytes)));
-  expect(await fetchPinnedBytes(url, digest, "engine", undefined, undefined, bytes.length)).toEqual(bytes);
+  expect(await fetchPinnedBytes(url, digest, "engine", undefined, undefined, { expectedBytes: bytes.length })).toEqual(bytes);
   expect(deletion).toHaveBeenCalledOnce();
   expect(new Uint8Array(await (await storage.cache.match(key))?.arrayBuffer() ?? new ArrayBuffer(0))).toEqual(bytes);
 });

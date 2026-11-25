@@ -1,5 +1,5 @@
 import { VMError } from "../errors.js";
-import type { NativeColdFiles, NativeColdRequest, NativeColdSelection } from "./native-cold-files.js";
+import type { NativeColdFiles, NativeColdRequest, NativeColdSelection, NativeRootRead } from "./native-cold-files.js";
 import type { SnapshotStorageRequest } from "./snapshot-channel.js";
 import type { SnapshotStore } from "./snapshot-store.js";
 
@@ -8,6 +8,7 @@ export interface NativeColdStarts {
   select(request: NativeColdSelection, signal: AbortSignal): Promise<{ readonly sourceId: string; readonly replaced?: string }>;
   abort(sourceId: string): Promise<void>;
   handle(request: NativeColdRequest, signal: AbortSignal): Promise<unknown>;
+  rootRead(selection: NativeRootRead, base: string, signal: AbortSignal): ReturnType<NativeColdFiles["rootRead"]>;
 }
 
 /** Restore points live in the snapshot store, which only OPFS provides. */
@@ -27,6 +28,7 @@ export function nativeColdStarts(store: SnapshotStore | undefined, cold: NativeC
       select: (request, signal) => store.selectNativeFiles(request, signal),
       abort: sourceId => store.abortNativeFiles(sourceId),
       handle: (request, signal) => store.handleNative(request, signal),
+      rootRead: (selection, base, signal) => store.readColdRoot(selection, base, signal),
     };
   }
   if (cold !== undefined) {
@@ -34,6 +36,7 @@ export function nativeColdStarts(store: SnapshotStore | undefined, cold: NativeC
       select: (request, signal) => cold.select(request, signal),
       abort: sourceId => cold.abort(sourceId),
       handle: (request, signal) => cold.handle(request, signal),
+      rootRead: (selection, base, signal) => cold.rootRead(selection, base, signal),
     };
   }
   throw new VMError("FEATURE_NOT_AVAILABLE", "Userspace file storage is unavailable");
@@ -48,5 +51,5 @@ export function retainedReadId(store: SnapshotStore | undefined, id: string): st
 }
 
 export function isNativeColdRequest(request: SnapshotStorageRequest): request is NativeColdRequest {
-  return request.type === "stage-native-cold-workspace" || request.type === "publish-native-cold" || request.type === "complete-native-cold";
+  return request.type === "inspect-native-cold-root" || request.type === "stage-native-cold-root" || request.type === "stage-native-cold-workspace" || request.type === "publish-native-cold" || request.type === "complete-native-cold";
 }

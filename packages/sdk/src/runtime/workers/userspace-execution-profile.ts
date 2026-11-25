@@ -1,5 +1,5 @@
 import { VMError } from "../errors.js";
-import { decodeUserspaceKernelAccountingModel } from "../userspace-abi.js";
+import { decodeUserspaceKernelAccountingModel, decodeUserspaceNativeAccountingModel } from "../userspace-abi.js";
 import type { UserspaceExecutionProfile } from "../userspace-protocol.js";
 import { readCoreRuntimeProfile } from "./control/core.js";
 import { jitHealthProfile } from "./control/jit-health.js";
@@ -110,6 +110,8 @@ export function captureExecutionProfile(active: ProcessState): { readonly runtim
       realtimeOffsetSteps: memoryMetric(15),
       guestClockKernelTicks: memoryMetric(16),
       kernelAccountingModel: decodeUserspaceKernelAccountingModel(memoryMetric(17)),
+      guestClockNativeTicks: memoryMetric(18),
+      nativeAccountingModel: decodeUserspaceNativeAccountingModel(memoryMetric(19)),
       workerRunTurns: active.runtime.workerRunTurns,
       workerYields: active.runtime.workerYields,
       workerMessages: active.runtime.workerMessages,

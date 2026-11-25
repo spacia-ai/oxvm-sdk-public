@@ -1,6 +1,7 @@
 import { expect, it } from "vitest";
 import { integer, record } from "../decode.js";
-import { JS_MAILBOX_BYTES, LinuxError, operation, Writer } from "./codec.js";
+import { atFileOperations, atFiles } from "./at-operations.js";
+import { descriptor, JS_MAILBOX_BYTES, LinuxError, operation, Reader, Writer } from "./codec.js";
 import { LinuxClient } from "./transport.js";
 
 for (const key of ["getUint32", "getBigUint64", "Number", "BigInt", "DataView", "Uint8Array", "set", "subarray", "slice"] as const) for (const throwing of [false, true]) it("synchronous Linux replies ignore " + key + " getters throwing=" + String(throwing), () => {
@@ -49,4 +50,39 @@ it("synchronous Linux replies preserve errno, bounds, sequence checks and a late
     expect(() => client.sync(request)).toThrow(/sequence mismatch/u);
     wrongSequence = false; expect(client.sync(request)).toBe(7n);
   } finally { client.dispose(); channel.port2.close(); }
+});
+
+it("transfers a fresh positional write record while preserving caller bytes and borrowed records", () => {
+  const channel = new MessageChannel(), memory = new SharedArrayBuffer(JS_MAILBOX_BYTES);
+  const header = new Int32Array(memory, 0, 4), body = new Uint8Array(memory, 16);
+  const client = new LinuxClient(channel.port1, memory);
+  const files = atFiles(client), fd = descriptor(7);
+  const input = new Uint8Array(64 * 1024).fill(137), offset = 39n;
+  const borrowed = atFileOperations.pwrite(fd, input, offset);
+  const detached: boolean[] = [];
+  channel.port1.postMessage = (message: unknown, options?: Transferable[] | StructuredSerializeOptions) => {
+    const original = record(message, "request")["payload"];
+    const copy = record(structuredClone(message, Array.isArray(options) ? { transfer: options } : options), "request");
+    const payload = copy["payload"];
+    if (!(payload instanceof Uint8Array) || !(original instanceof Uint8Array)) throw new TypeError("Missing request bytes");
+    detached.push(original.byteLength === 0);
+    const reader = new Reader(payload);
+    expect(reader.u64()).toBe(BigInt(fd));
+    expect(reader.blob()).toEqual(input);
+    expect(reader.u64()).toBe(offset);
+    reader.end();
+    const sequence = integer(copy["sequence"], "sequence", 1);
+    body.set(new Writer().u32(sequence === 1 ? 28 : 0).u64(input.byteLength).finish());
+    Atomics.store(header, 1, 12); Atomics.store(header, 2, sequence); Atomics.store(header, 0, 1);
+  };
+  try {
+    expect(() => files.pwrite(fd, input, offset)).toThrow(LinuxError);
+    expect(input.byteLength).toBe(64 * 1024);
+    expect(files.pwrite(fd, input, offset)).toBe(input.byteLength);
+    expect(client.sync(borrowed)).toBe(input.byteLength);
+    expect(client.sync(borrowed)).toBe(input.byteLength);
+    expect(detached).toEqual([true, true, false, false]);
+  } finally {
+    client.dispose(); channel.port2.close();
+  }
 });

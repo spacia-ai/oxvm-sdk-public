@@ -88,6 +88,9 @@ it("keeps unpublished transport packs reachable through another worker's collect
   const layout = root.directory("userspace-rootfs", true).directory("pack-layouts", true).file(`${digest}.json`, true);
   vi.spyOn(layout, "createWritable").mockRejectedValueOnce(new DOMException("quota", "QuotaExceededError"));
   await expect(source.prepareImage(OWNER, new AbortController().signal, () => {})).rejects.toThrow();
+  const intent = root.find(`userspace-rootfs/installations/${digest}.json`);
+  if (!(intent instanceof MemoryFile)) throw new Error("missing installation intent");
+  expect(intent.commits).toBe(1);
   const chunk = index.chunks[0]; if (chunk === undefined) throw new Error("missing fixture chunk");
   const stored = root.find(`userspace-rootfs/packs/${chunk.sha256}`);
   await store(root).collect();
@@ -95,6 +98,7 @@ it("keeps unpublished transport packs reachable through another worker's collect
   get.mockClear();
   await source.prepareImage(OWNER, new AbortController().signal, () => {});
   expect(get).not.toHaveBeenCalled();
+  expect(intent.commits).toBe(3);
 });
 
 it("serializes shared image installation across workspace storage workers", async () => {
@@ -208,8 +212,8 @@ it("keeps unpublished legacy packs out of another workspace's garbage collection
   let digest="";
   await packRootfsContents(rootfsClosure(manifest),async function*(blob){yield await Promise.resolve(blob.sha256===data.blobHash?Uint8Array.of(1,2,3):Uint8Array.of(4));},async(chunk,bytes)=>{digest=chunk.sha256;await write({kind:"opfs",root},"packs",digest,bytes);});
   const file=root.find(`userspace-rootfs/packs/${digest}`);if(!(file instanceof MemoryFile))throw new Error("missing pack");
-  const entered=Promise.withResolvers<undefined>(),unblock=Promise.withResolvers<undefined>(),create=file.createWritable.bind(file);
-  vi.spyOn(file,"createWritable").mockImplementationOnce(async options=>{entered.resolve(undefined);await unblock.promise;return create(options);});
+  const entered=Promise.withResolvers<undefined>(),unblock=Promise.withResolvers<undefined>(),open=file.createSyncAccessHandle.bind(file);
+  vi.spyOn(file,"createSyncAccessHandle").mockImplementationOnce(async()=>{entered.resolve(undefined);await unblock.promise;return open();});
   let shared=0;
   vi.stubGlobal("navigator",{
     storage:{estimate:()=>Promise.resolve({usage:0,quota:8*1024**3})},
@@ -485,14 +489,61 @@ it("admits exact cached foreign workspace base metadata and file bodies without 
  await source.workspaceBaseMetadata(base);
  const signal=new AbortController().signal;await expect(source.openWorkspaceBaseFile(base,"/workspace/app",now.blobHash,3,signal)).rejects.toMatchObject({code:"PROTOCOL_ERROR"});
  const lease=await source.openWorkspaceBaseFile(base,"/workspace/app",old.blobHash,3,signal);
- // Remove the older legacy cache marker so this read lease is its sole closure owner.
- const manifests=await (await root.getDirectoryHandle("userspace-rootfs")).getDirectoryHandle("manifests");
- await manifests.removeEntry(`${earlier.rootTreeSha256}.${earlier.id}.${earlier.version}.json`);
+ // Retire the older activation so the read lease can become its sole closure owner.
+ const bases=await (await root.getDirectoryHandle("userspace-rootfs")).getDirectoryHandle("workspace-bases");
+ await bases.removeEntry(`${saved.rootfs.manifest.sha256}.json`);
  await source.releaseCheckpoint(OWNER);await source.collect();expect(await source.cachedBlob(old.blobHash,3)).toBeDefined();
  if(lease.snapshot===undefined)throw new Error("missing body");const reader=lease.snapshot.source(signal),frames:Uint8Array[]=[];
  for await(const bytes of reader.frames)frames.push(bytes);await reader.retire();await lease.retire();
  expect(frames).toEqual([new Uint8Array([1,2,3])]);expect(source.currentIdentity()).toEqual(active);
  await source.collect();expect(await source.cachedBlob(old.blobHash,3)).toBeUndefined();
+});
+
+it.each([6, 8] as const)("fetches a missing prior workspace file only for an explicit update (schema %i)", async schema => {
+  const old = await fixture("old-workspace", schema, Uint8Array.of(1, 2, 3), "workspace");
+  const root = new MemoryDirectory(), source = store(root), signal = new AbortController().signal;
+  const earlier = await source.prepare(URL, old.trusted);
+  await source.pinImage(OWNER);
+  const now = await fixture("new-workspace", schema, Uint8Array.of(4, 5, 6), "workspace", old.keys);
+  await source.prepare(URL, now.trusted);
+  const base = earlier.workspaceBaseSha256;
+  if (base === undefined) throw new Error("missing prior workspace base");
+  const current = source.currentIdentity();
+  const fetch = vi.fn((url: string) => schema === 8 && url.endsWith("/unread")
+    ? Promise.resolve(new Response(null, { status: 404 })) : old.fetcher(url));
+  vi.stubGlobal("fetch", fetch);
+
+  await source.workspaceBaseMetadata(base);
+  await expect(source.openWorkspaceBaseFile(base, "/workspace/app", old.blobHash, 3, signal))
+    .rejects.toMatchObject({ code: "STORAGE_ERROR", detail: { reason: "image-not-cached" } });
+  expect(fetch).not.toHaveBeenCalled();
+
+  await source.prepare(URL, now.trusted, current.manifestSHA256, true);
+  await source.workspaceBaseMetadata(base, OWNER);
+  await expect(source.openWorkspaceBaseFile(base, "/workspace/app", old.blobHash, 3, signal))
+    .rejects.toMatchObject({ code: "STORAGE_ERROR", detail: { reason: "image-not-cached" } });
+  expect(fetch).not.toHaveBeenCalled();
+
+  await source.prepare(URL, now.trusted, current.manifestSHA256);
+  expect(await source.workspaceBaseMetadata(base, OWNER)).toEqual({ metadata: earlier.metadata });
+  await expect(source.openWorkspaceBaseFile(base, "/workspace/app", now.blobHash, 3, signal))
+    .rejects.toMatchObject({ code: "PROTOCOL_ERROR" });
+  expect(fetch).not.toHaveBeenCalled();
+  const lease = await source.openWorkspaceBaseFile(base, "/workspace/app", old.blobHash, 3, signal);
+  try {
+    if (lease.snapshot === undefined) throw new Error("missing workspace file");
+    const reader = lease.snapshot.source(signal);
+    const frames: Uint8Array[] = [];
+    try { for await (const bytes of reader.frames) frames.push(bytes); }
+    finally { await reader.retire(); }
+    expect(frames).toEqual([Uint8Array.of(1, 2, 3)]);
+  } finally { await lease.retire(); }
+  expect(fetch).toHaveBeenCalledTimes(1);
+  expect(fetch.mock.calls[0]?.[0]).toMatch(schema === 8 ? /\/packs\//u : /\/unread$/u);
+  expect(source.currentIdentity()).toEqual(current);
+  source.retireWorkspaceBase();
+  await expect(source.openWorkspaceBaseFile(base, "/workspace/app", old.blobHash, 3, signal))
+    .rejects.toMatchObject({ code: "PROTOCOL_ERROR" });
 });
 
 it("pins a cold image identity without downloading unread files while full checkpoints require closure",async()=>{
@@ -512,8 +563,8 @@ it("admits a cached foreign base for cold startup and retires that source withou
  const base=earlier.workspaceBaseSha256;if(base===undefined)throw new Error("missing old base");
  const fetcher=vi.fn(()=>Promise.reject(new Error("offline")));vi.stubGlobal("fetch",fetcher);
  expect(await source.workspaceBaseMetadata(base)).toEqual({metadata:earlier.metadata});
- const manifests=await (await root.getDirectoryHandle("userspace-rootfs")).getDirectoryHandle("manifests");
- await manifests.removeEntry(`${earlier.rootTreeSha256}.${earlier.id}.${earlier.version}.json`);
+ const bases=await (await root.getDirectoryHandle("userspace-rootfs")).getDirectoryHandle("workspace-bases");
+ await bases.removeEntry(`${earlier.identity?.manifestSHA256}.json`);
  await source.collect();expect(await source.cachedBlob(old.blobHash,3)).toBeDefined();
  source.retireWorkspaceBase();await source.collect();expect(await source.cachedBlob(old.blobHash,3)).toBeUndefined();
  expect(source.currentIdentity().version).toBe("next-cold");expect(fetcher).not.toHaveBeenCalled();

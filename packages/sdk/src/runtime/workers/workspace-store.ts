@@ -16,7 +16,8 @@ export interface WorkspaceStoreBackend {
   list(prefix: string): AsyncIterable<string>;
   /** Resolve/reject only after the read producer has retired. */
   read(path: string, maximumBytes?: number, signal?: AbortSignal): Promise<Uint8Array<ArrayBuffer> | undefined>;
-  write(path: string, bytes: Uint8Array<ArrayBuffer>): Promise<void>;
+  /** Only the stream owner marks content-addressed objects that readers verify. */
+  write(path: string, bytes: Uint8Array<ArrayBuffer>, operation?: "immutable-chunk"): Promise<void>;
   remove(path: string): Promise<void>;
 }
 

@@ -7,7 +7,7 @@ import type {SnapshotStorageClient} from "./snapshot-channel.js";
 type Candidate = Pick<UserspaceCold,"beginReconcile"|"exportWorkspace"|"complete"|"abort">;
 export interface NativeColdRuntime {
  readonly workspaceBaseSha256:string;
- beginCold(signal:AbortSignal):Promise<Candidate>;
+ beginCold(sourceId: string, storage: Pick<SnapshotStorageClient, "request">, signal: AbortSignal): Promise<Candidate>;
  reconcileCold(candidate:Candidate,sourceId:string,signal:AbortSignal):Promise<NativeWorkspaceReconciled>;
  coldPublished():void;
  coldFailed():Promise<void>;
@@ -19,7 +19,7 @@ export async function startNativeCold(runtime:NativeColdRuntime,storage:Pick<Sna
  sourceId:string,signal:AbortSignal):Promise<UserspaceWorkspaceStart> {
  let candidate:Candidate|undefined,exported:CandidateWorkspaceExport|undefined,acknowledged=false;
  try {
-  candidate=await runtime.beginCold(signal);
+  candidate=await runtime.beginCold(sourceId, storage, signal);
   const result=await runtime.reconcileCold(candidate,sourceId,signal);
   exported=candidate.exportWorkspace();
   await stageCandidateWorkspace(storage,exported,runtime.workspaceBaseSha256,result.workspaceDetails.preserved?.id,signal,sourceId);

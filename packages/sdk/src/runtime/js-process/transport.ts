@@ -1,7 +1,7 @@
 import { exactKeys, integer, record } from "../decode.js";
 import { VMError } from "../errors.js";
 import { postCounted, type AttentionCounter } from "../host-attention.js";
-import { JS_MAILBOX_BYTES, JS_PROCESS_PROTOCOL_VERSION, jsMailboxAttention, LinuxError, Reader, Writer, copyBytes, viewBytes, type LinuxOperation, type LinuxResult, protocol } from "./codec.js";
+import { JS_MAILBOX_BYTES, JS_PROCESS_PROTOCOL_VERSION, jsMailboxAttention, LinuxError, Reader, Writer, copyBytes, postOwnedPayload, viewBytes, type LinuxOperation, type LinuxResult, protocol } from "./codec.js";
 import { interruptView, isTrappableSignal, signalBuffer, takeArrivals, type SignalArrival, type SignalBuffer, type TrappableSignalNumber } from "./signals.js";
 
 const Uint8Array = globalThis.Uint8Array;
@@ -35,9 +35,14 @@ export class LinuxClient {
     port.start();
   }
   #next(): number { if (this.#closed) throw new VMError("ABORTED", "JS process transport is closed"); const sequence = integer(this.#sequence + 1, "Linux request sequence", 1, 0x7fff_ffff); this.#sequence = sequence; return sequence; }
-  sync<T>(operation: LinuxOperation<T>): T {
+  /** An owned request has a fresh wire buffer the transport may consume. */
+  sync<T>(operation: LinuxOperation<T>, ownership: "borrowed" | "owned" = "borrowed"): T {
     const sequence = this.#next(); Atomics.store(this.#header, 0, 0);
-    postCounted(this.#attention, () => { this.port.postMessage({ version: JS_PROCESS_PROTOCOL_VERSION, type: "request", sequence, sync: true, operation: operation.number, payload: operation.payload }); });
+    const message = { version: JS_PROCESS_PROTOCOL_VERSION, type: "request", sequence, sync: true, operation: operation.number, payload: operation.payload };
+    postCounted(this.#attention, () => {
+      if (ownership === "owned") postOwnedPayload(this.port, message, message.payload);
+      else this.port.postMessage(message);
+    });
     // A stopped Linux process can wait indefinitely. Rust termination kills this worker.
     while (Atomics.load(this.#header, 0) === 0) Atomics.wait(this.#header, 0, 0);
     if (Atomics.load(this.#header, 2) !== sequence) protocol("Linux mailbox sequence mismatch");

@@ -121,7 +121,8 @@ async function buildImageOnce(input: ImageRecipe, options: BuildImageOptions, re
           blobs: tree.blobs.map(blob => ({ bytes: blob.bytes, sha256: blob.sha256, url: `./blobs/${blob.sha256}` })), entries: tree.entries,
           runtimes: { ...(muslLoader === undefined ? {} : { muslLoader }), ...(glibcLoader === undefined ? {} : { glibcLoader }), supportingFiles: [] }, provenance };
         const packs = await buildRootfsPacks(bundle, manifest, url, options.signal, { kind: "locality", first: recipe.packFirst ?? [] });
-        manifest = { ...record(manifest, "rootfs authoring manifest"), schemaVersion: 8, packs };
+        manifest = { ...record(manifest, "rootfs authoring manifest"), schemaVersion: 9, packs,
+          ...(recipe.nativeUtilities === undefined ? {} : { nativeUtilities: recipe.nativeUtilities }) };
         canonical = canonicalUserspaceRootfsBytes(decodeUserspaceRootfsManifest(manifest, url));
       } else {
         let kernel: Uint8Array<ArrayBuffer>; let initrd: Uint8Array<ArrayBuffer> | undefined; let diskPath: string; let commandLine: string;
@@ -171,7 +172,7 @@ async function buildImageOnce(input: ImageRecipe, options: BuildImageOptions, re
       options.onProgress?.({ phase: "sign" });
       const signed = { ...provenance, signature: sign(null, canonical, signing.key).toString("base64url") };
       if (typeof manifest !== "object" || manifest === null) throw new VMError("PROTOCOL_ERROR", "manifest is absent");
-      const manifestBytes = `${JSON.stringify({ ...manifest, provenance: signed }, null, 2)}\n`;
+      const manifestBytes = `${JSON.stringify({ ...manifest, provenance: signed }, null, recipe.mode === "userspace" ? 0 : 2)}\n`;
       const digest = decodeSHA256(hash(manifestBytes), "built manifest");
       const finalManifestURL = imageManifestURL(recipe.id, digest, options.publicBaseUrl);
       const image = defineImage({ mode: recipe.mode, manifestUrl: finalManifestURL, manifestSHA256: digest, trust: signing.trust });

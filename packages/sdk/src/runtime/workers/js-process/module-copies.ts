@@ -71,8 +71,13 @@ export class ModuleCopies {
       // A file another start supplied meanwhile is already being checked; its second copy is ignored.
       if (!isCopyKey(key) || !requested.has(key)) throw new VMError("PROTOCOL_ERROR", "A supplied module file was not asked for", { reason: COPY_MISSING_REASON });
     }
-    const lacking = absent.find(([key]) => !supplied.has(key));
-    if (lacking !== undefined) throw new VMError("PROTOCOL_ERROR", `${lacking[1].file} is neither held by the VM nor supplied`, { reason: COPY_MISSING_REASON, file: lacking[1].file });
+    const lacking = absent.filter(([key]) => !supplied.has(key));
+    const first = lacking[0];
+    if (first !== undefined) {
+      throw new VMError("PROTOCOL_ERROR", `${first[1].file} is neither held by the VM nor supplied`, {
+        reason: COPY_MISSING_REASON, file: first[1].file, missing: lacking.map(([key]) => key),
+      });
+    }
     this.assertFits(absent.map(([, request]) => request));
     for (const [key, request] of absent) this.#check(key, request, supplied.get(key) ?? never());
     // Each check is taken now: a failed one removes its entry while this hold still waits for an earlier file.

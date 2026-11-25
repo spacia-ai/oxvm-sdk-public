@@ -2,6 +2,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import type { LinuxSignal, PipeJSProcessSpec, ProcessExit, ProcessHandle } from "../contracts.js";
 import { decodeProcessId } from "../values.js";
 import { VMError } from "../runtime/errors.js";
+import { COPY_MISSING_REASON } from "../runtime/protocol/userspace-module-files.js";
 import type { ModuleStart } from "../runtime/vm-types.js";
 import { ModuleCopies } from "../runtime/workers/js-process/module-copies.js";
 import { prepareModuleStart } from "../runtime/workers/js-process/module-artifacts.js";
@@ -65,10 +66,11 @@ function serve(release: Release) {
 function fakeVM(process: ProcessHandle, copies = new ModuleCopies()) {
   const specs: ModuleSpawnSpec[] = [], launches: ModuleStart[] = [];
   const vm: ModuleVM = { spawnJS: () => Promise.reject(new Error("spawnModule must not start through the public spawnJS")) };
+  const missing = vi.fn<OwnedModules["missing"]>(pins => Promise.resolve(copies.missing(pins)));
   owner.modules.mockImplementation(target => {
     if (target !== vm) throw new Error("started through another VM");
     return {
-      missing: pins => Promise.resolve(copies.missing(pins)),
+      missing,
       spawn: async (spec, start) => {
         // A start the test never ends keeps no lease, so every test may start the same exclusive service again.
         (await prepareModuleStart(start.descriptor, start.files, { copies, locks: fakeLocks().locks }, new AbortController().signal)).lease?.release();
@@ -76,7 +78,7 @@ function fakeVM(process: ProcessHandle, copies = new ModuleCopies()) {
       },
     };
   });
-  return { vm, specs, launches, copies };
+  return { vm, specs, launches, copies, missing };
 }
 
 const handleFor = (release: Release) => moduleHandle(release.manifest, { release: release.descriptor.release, adapter: release.descriptor.adapter, artifacts: release.descriptor.artifacts });
@@ -270,13 +272,14 @@ describe("a VM that cannot start the runner", () => {
 });
 
 describe("verify-once starts (ADR 0028)", () => {
-  it("a second start fetches nothing", async () => {
-    const release = await commandRelease(), { vm, launches } = fakeVM(fakeProcess().handle), server = serve(release);
+  it("uses the initial refusal's missing files and fetches nothing on a second start", async () => {
+    const release = await commandRelease(), { vm, launches, missing } = fakeVM(fakeProcess().handle), server = serve(release);
     await spawnModule(vm, handleFor(release));
     expect([...server.fetched].sort()).toEqual([...release.served.keys()].sort());
     await spawnModule(vm, handleFor(release), { options: { mode: "b" } });
     expect(server.fetched).toHaveLength(release.served.size);
     expect(launches.map(start => Object.keys(start.files).length)).toEqual([release.served.size, 0]);
+    expect(missing).not.toHaveBeenCalled();
   });
 
   it("an altered file rejects before a process exists", async () => {
@@ -294,14 +297,22 @@ describe("verify-once starts (ADR 0028)", () => {
     expect(specs).toEqual([]);
   });
 
-  it("sends a file again when the VM dropped it between the question and the start", async () => {
+  it("retries the missing-file lookup when a legacy VM drops a copy before the start", async () => {
     const release = await commandRelease(), process = fakeProcess(), copies = new ModuleCopies(), server = serve(release);
     const { vm } = fakeVM(process.handle, copies);
     // The store answers that it holds everything, then refuses the start that supplies nothing; the retry supplies all.
     const owned = owner.modules.getMockImplementation()?.(vm);
     if (owned === undefined) throw new Error("no owner");
     let asked = 0;
-    owner.modules.mockImplementation(() => ({ ...owned, missing: pins => Promise.resolve(++asked === 1 ? [] : copies.missing(pins)) }));
+    owner.modules.mockImplementation(() => ({
+      ...owned, missing: pins => Promise.resolve(++asked === 1 ? [] : copies.missing(pins)),
+      spawn: (spec, start) => owned.spawn(spec, start).catch((error: unknown) => {
+        if (error instanceof VMError && error.detail?.["reason"] === COPY_MISSING_REASON) {
+          throw new VMError(error.code, error.message, { reason: COPY_MISSING_REASON, file: error.detail["file"] });
+        }
+        throw error;
+      }),
+    }));
     await expect(spawnModule(vm, handleFor(release))).resolves.toBe(process.handle);
     expect(asked).toBe(2);
     expect(server.fetched).toHaveLength(release.served.size);

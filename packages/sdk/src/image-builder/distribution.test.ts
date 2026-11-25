@@ -8,6 +8,7 @@ import { hash } from "./files.js";
 import { generateImageKey } from "./keys.js";
 import { validateDistributionBundle, validateImageDistribution } from "./distribution-validation.js";
 import { assertReproduction } from "./distribution.js";
+import { record } from "../runtime/decode.js";
 
 it("identifies the mismatched reproduction authority without accepting identical payload bytes alone", () => {
   const first = { inventory: [{ path: "bin/app", bytes: 1, sha256: "a".repeat(64) }], payloadSHA256: "b".repeat(64), sourceIdentity: `sha256:${"c".repeat(64)}`, buildInputs: { kind: "directory" as const, sourceSHA256: "d".repeat(64) } };
@@ -34,7 +35,8 @@ it("publishes independently reproduced candidates with their complete reviewed e
     await writeFile(join(root, "BUILD.md"), "Create workspace/hello with the exact UTF-8 bytes owned fixture followed by a newline.\n");
     await writeFile(join(root, "sources.json"), JSON.stringify({ schemaVersion: 1, packages: [{ packageId, kind: "source", archive: { path: "source.txt", sha256: hash("Owned fixture corresponding source: owned fixture\n") }, buildInstructionsFile: "BUILD.md" }] }));
     await writeFile(join(root, "review.json"), JSON.stringify({ schemaVersion: 1, approved: true, reviewer: "owned-fixture-author", packages: [{ packageId, license: "MIT", noticeSHA256: hash(notice), obligations: "source" }] }));
-    const recipe = { id: "owned", version: "1", mode: "userspace" as const, sourceDateEpoch: 1,
+    const nativeUtilities = { identity: "oxidevm-rust-toybox" as const, abi: 1, catalogSha256: "a".repeat(64) };
+    const recipe = { id: "owned", version: "1", mode: "userspace" as const, sourceDateEpoch: 1, nativeUtilities,
       source: { kind: "directory" as const, path: "root" }, smokeTest: { command: "/bin/true", expectedExitCode: 0 as const },
       evidence: { sbom: { kind: "file" as const, path: "sbom.json" }, noticesFile: "notices.json", correspondingSourcesFile: "sources.json", licensePolicyFile: "review.json" } };
     const progress: number[] = [];
@@ -58,6 +60,7 @@ it("publishes independently reproduced candidates with their complete reviewed e
     const source = verified.files.find(file => file.sha256 === hash("Owned fixture corresponding source: owned fixture\n"));
     expect(source).toBeDefined();
     const serialized = await readFile(built.manifestPath, "utf8");
+    expect(record(JSON.parse(serialized) as unknown, "manifest")["nativeUtilities"]).toEqual(nativeUtilities);
     expect(serialized).not.toContain(root);
     const rebuilt = await buildImage(recipe, { recipeDir: root, signingKeyFile: key.privateKeyPath, purpose: "distribution" });
     expect(rebuilt.image.manifestSHA256).toBe(built.image.manifestSHA256);

@@ -4,6 +4,7 @@ export type VMErrorCode =
   | "FEATURE_NOT_AVAILABLE"
   | "GUEST_CRASH"
   | "INVALID_ARGUMENT"
+  | "NATIVE_UTILITY_MISMATCH"
   | "PERMISSION_DENIED"
   | "PROTOCOL_ERROR"
   | "QUOTA_EXCEEDED"
@@ -21,6 +22,7 @@ const ERROR_CODES: ReadonlySet<string> = new Set<VMErrorCode>([
   "FEATURE_NOT_AVAILABLE",
   "GUEST_CRASH",
   "INVALID_ARGUMENT",
+  "NATIVE_UTILITY_MISMATCH",
   "PERMISSION_DENIED",
   "PROTOCOL_ERROR",
   "QUOTA_EXCEEDED",
@@ -174,6 +176,7 @@ export function decodeErrorCode(value: string): VMErrorCode {
     case "FEATURE_NOT_AVAILABLE":
     case "GUEST_CRASH":
     case "INVALID_ARGUMENT":
+    case "NATIVE_UTILITY_MISMATCH":
     case "PERMISSION_DENIED":
     case "PROTOCOL_ERROR":
     case "QUOTA_EXCEEDED":

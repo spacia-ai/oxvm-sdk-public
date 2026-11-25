@@ -90,7 +90,9 @@ function timedRead(sockets: NetSyncSockets, fd: number, max: number, host: strin
     if (bytes !== null) return bytes;
     if (waited >= timeoutMs) throw readTimedOut(host, timeoutMs);
     const step = Math.min(pause, timeoutMs - waited);
-    sockets.sleep(step); waited += step;
+    if (sockets.waitReadable === undefined) sockets.sleep(step);
+    else sockets.waitReadable(fd, step);
+    waited += step;
   }
 }
 

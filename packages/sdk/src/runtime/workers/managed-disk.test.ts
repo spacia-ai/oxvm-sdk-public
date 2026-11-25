@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 
 import { ManagedBases } from "./managed-base.js";
 import type { ManagedDisk } from "./managed-disk.js";
@@ -155,6 +155,32 @@ describe("managed disk space reserve", () => {
     expect(await disk.holdReserve()).toBe(true);
     expect(reserve()).toBe(2 * MIB);
     disk.close();
+  });
+
+  it("keeps space available for an active shipped install", async () => {
+    const { disk, reserve } = await fullOrigin();
+    try {
+      disk.deferReserveForShippedInstall();
+      expect(reserve()).toBe(0);
+      expect(await disk.holdReserve()).toBe(false);
+      expect(reserve()).toBe(0);
+    } finally {
+      disk.close();
+    }
+  });
+
+  it("does not request a reservation above the browser's reported free space", async () => {
+    const { disk, quota, reserve } = await fullOrigin();
+    disk.write(0, new Uint8Array(MIB).fill(7));
+    quota.limit = Number.MAX_SAFE_INTEGER;
+    vi.stubGlobal("navigator", { storage: { estimate: () => Promise.resolve({ quota: 2 * MIB, usage: MIB }) } });
+    try {
+      expect(await disk.holdReserve()).toBe(false);
+      expect(reserve()).toBe(0);
+    } finally {
+      vi.unstubAllGlobals();
+      disk.close();
+    }
   });
 
   it("gives the reserve back when the disk closes", async () => {

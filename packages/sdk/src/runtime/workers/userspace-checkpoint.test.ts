@@ -102,7 +102,7 @@ it("rejects a truncated native begin diagnostic instead of trusting partial scal
 function input(chunks: readonly Uint8Array[]) {
   return { bytes: chunks.reduce((sum, chunk) => sum + chunk.length, 0), frames: (async function* () { for (const chunk of chunks) yield await Promise.resolve(chunk); })(), retire: () => Promise.resolve() };
 }
-it.each([1, 2, 3, 4, 5, 6, 7, 8])("streams native metadata version %s and sorted payloads through bounded CAS chunks, acknowledging only explicit commit", async version => {
+it.each([1, 2, 3, 4, 5, 6, 7, 8, 1012, 1033, 1099, 1102, 1103, 1104, 1105, 1106, 1107, 1108, 1109, 1110, 1111, 1112, 1113, 1114, 1115, 1117, 1119, 1124, 1125, 1126, 1127, 1129, 1130, 1132, 1134, 1135, 1137, 1138, 1140, 1141, 1142, 1147, 1148, 1154, 1155, 1156, 1158, 1159, 1161, 1168, 1172, 1176, 1182, 1184, 1190, 1192, 1194, 1196, 1198, 1202, 1206, 1208, 1210, 1222, 1224, 1228, 1232, 1234, 1236, 1242, 1244, 1252, 1254, 1256, 1258, 1262, 1264, 1268, 1272, 1274, 1278, 1282, 1286, 1290, 1292, 1294, 1298, 1300, 1302, 1304, 1306, 1310, 1312, 1314, 1316, 1318, 1324, 1326, 1328, 1332, 1334, 1336, 1338, 1342, 1344])("streams native metadata version %s and sorted payloads through bounded CAS chunks, acknowledging only explicit commit", async version => {
   const { bridge, events, imported, payload } = fixture(0, 0, 0, version);
   const capture = bridge.beginCapture(new Uint8Array(32));
   const chunks: { graph: Uint8Array[]; payloads: Uint8Array[] } = { graph: [], payloads: [] };

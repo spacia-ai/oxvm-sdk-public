@@ -1,6 +1,16 @@
 import { describe, expect, it } from "vitest";
 import { decodeStorageIncoming, PROTOCOL_VERSION, storageResponseDecoders } from "../protocol.js";
 import { ORIGIN_STORAGE } from "../storage-scope.js";
+
+it("accepts a versioned reserve release without arguments", () => {
+  const request = { id: 1, version: PROTOCOL_VERSION, type: "release-workspace-reserve" };
+  expect(decodeStorageIncoming(request)).toEqual(request);
+  storageResponseDecoders["release-workspace-reserve"](undefined);
+  expect(() => storageResponseDecoders["release-workspace-reserve"]({})).toThrow();
+  expect(() => decodeStorageIncoming({ ...request, version: PROTOCOL_VERSION - 1 })).toThrow();
+  expect(() => decodeStorageIncoming({ ...request, workspaceId: "other" })).toThrow();
+});
+
 it("retirement accepts no arguments and rejects the preceding worker protocol",()=>{
   const request={id:1,version:PROTOCOL_VERSION,type:"initial-start-retire"};
   expect(decodeStorageIncoming(request)).toEqual(request);storageResponseDecoders["initial-start-retire"](undefined);
@@ -13,7 +23,7 @@ describe("local data erasure protocol", () => {
     expect(decodeStorageIncoming(request)).toEqual({ ...request, storage: ORIGIN_STORAGE });
     const embedder = "0123456789abcdef0123456789abcdef";
     expect(decodeStorageIncoming({ ...request, storage: embedder })).toEqual({ ...request, storage: { kind: "embedder", id: embedder } });
-    expect(PROTOCOL_VERSION).toBe(184);
+    expect(PROTOCOL_VERSION).toBe(187);
     storageResponseDecoders["erase-local-data"](undefined);
     for (const invalid of [
       { ...request, version: PROTOCOL_VERSION - 1 }, { ...request, version: PROTOCOL_VERSION + 1 },

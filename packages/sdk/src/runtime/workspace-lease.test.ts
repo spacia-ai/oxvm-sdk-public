@@ -6,8 +6,8 @@ import { ScriptedWorker } from "./system-vm.test-support.js";
 import { isEphemeralWorkspaceId, newEphemeralWorkspaceId, workspaceInUseError, workspaceLockName } from "./workspace-path.js";
 
 vi.mock("./userspace-process.js", async () => {
-  const { nativeBackend } = await import("./userspace-vm.test-support.js");
-  return { UserspaceProcessBackend: { create: () => Promise.resolve(nativeBackend()) } };
+  const { startNativeBackend } = await import("./userspace-vm.test-support.js");
+  return { UserspaceProcessBackend: { start: startNativeBackend } };
 });
 
 let sequence = 0;

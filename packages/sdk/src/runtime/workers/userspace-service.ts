@@ -32,7 +32,7 @@ export function shouldServicePendingWork(
   result: UserspaceRunResult["kind"],
   sliceComplete: boolean,
 ): boolean {
-  return result !== "step-limit" || sliceComplete;
+  return result !== "step-limit" && result !== "native-yield" || sliceComplete;
 }
 
 export function shouldAcknowledgeOutputGeneration(

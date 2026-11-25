@@ -3,7 +3,7 @@ import { decodeCpuSnapshot, type CoreRunExit } from "../core-abi.js";
 import { decodeUserspacePendingWork, decodeUserspaceRunResult, type UserspaceRunResult } from "../userspace-abi.js";
 import type { HostAttention } from "../host-attention.js";
 import { coreFailureError } from "./core-failure.js";
-import { assertUserspaceStatus as assertStatus, callUserspaceU32 as call } from "./userspace-exports.js";
+import { assertUserspaceStatus as assertStatus, callUserspaceU32 as call, callUserspaceU64 } from "./userspace-exports.js";
 import { throwIfUserspaceKernelFailed } from "./userspace-io-failure.js";
 import type { UserspaceAttentionChannel, UserspaceSliceEnd } from "../protocol/userspace-slices.js";
 import { ACTION_STEPS_MIN, INLINE_SERVICE_MILLISECONDS, newOutputEndsSlice, nextActionSteps, runSliceMilliseconds } from "./userspace-run-slices.js";
@@ -13,6 +13,8 @@ import type { RuntimeState } from "./userspace-worker-state.js";
 /** Guest instructions the shortest action may retire before it returns to the run loop. A run
  * slice sizes each later action by the speed of the one before it (`actionSteps`). */
 export const RUN_STEPS = ACTION_STEPS_MIN;
+/** Bound the work before starting compilation in a newly booted VM. */
+export const COLD_INTERPRETER_WORK = 4_000_000;
 /** Actions one run slice may take. */
 export const RUN_ACTIONS_PER_SLICE = 4_096;
 
@@ -68,7 +70,7 @@ function runSliceActions(active: RuntimeState, ports: UserspaceSlicePorts, slice
   for (let action = 1; ; action += 1) {
     const actionStarted = slice.now;
     active.pendingResult = runJitTurn(active, active.actionSteps);
-    const trueBoundary = active.pendingResult.kind !== "step-limit";
+    const trueBoundary = active.pendingResult.kind !== "step-limit" && active.pendingResult.kind !== "native-yield";
     slice.now = ports.now();
     // Only an action that used up its budget says how fast the guest runs.
     active.actionSteps = nextActionSteps(active.actionSteps, active.actionRetired > 0
@@ -78,7 +80,9 @@ function runSliceActions(active: RuntimeState, ports: UserspaceSlicePorts, slice
     // The order and side effects of the first four checks are those of the slice before host attention.
     const end: UserspaceSliceEnd | undefined = action === RUN_ACTIONS_PER_SLICE ? "action-budget"
       : elapsed >= sliceMilliseconds ? "deadline"
-      : active.jitRuntime.yieldForCompiledModule(active.core, elapsed) ? "compiled-module"
+      // Native turns bypass the JIT. A ready module can wait for the next x86 action.
+      : active.pendingResult.kind !== "native-yield"
+        && active.jitRuntime.yieldForCompiledModule(active.core, elapsed) ? "compiled-module"
       : newOutputEndsSlice(active, interactive) ? "interactive-output"
       : !trueBoundary && attentionEndsSlice(active, ports.attention, elapsed, quantum) ? "host-attention"
       : undefined;
@@ -122,15 +126,26 @@ function serviceInlineHostRequests(active: RuntimeState, ports: UserspaceSlicePo
   ports.serviceHostRequests(active);
 }
 
-/** One guest action of at most `steps` instructions: prepare the next runnable task, run it through
- * the JIT runtime, and complete the syscall or exception that ended it. Records in
- * `active.actionRetired` what the action retired when it used up its budget. */
+/** One guest action. The cold interpreter handles runnable tasks and syscalls within its work
+ * allowance. Once that allowance ends, the JIT handles the next runnable task. */
 export function runJitTurn(active: RuntimeState, steps: number = RUN_STEPS): UserspaceRunResult {
   const loaded = active.instance;
   active.actionRetired = 0;
+  if (active.coldInterpreterWork > 0) {
+    const work = Math.min(active.coldInterpreterWork, RUN_STEPS, steps);
+    active.coldInterpreterWork -= work;
+    active.jitRuntime.runLinuxInterpreterBatch(
+      active.core,
+      () => assertStatus(call(loaded, "oxidevm_userspace_run", work, 0), "oxidevm_userspace_run"),
+      () => callUserspaceU64(loaded, "oxidevm_userspace_memory_metric", 13),
+    );
+    return readResult(active);
+  }
   const prepared = call(loaded, "oxidevm_userspace_prepare");
+  // Rust's blocked status already checked for kernel failure.
+  if (prepared === 4 || prepared === 5) return readResult(active, prepared);
   if (prepared !== 0) throwIfUserspaceKernelFailed(active);
-  if (prepared === 3 || prepared === 4 || prepared === 5) return readResult(active, prepared);
+  if (prepared === 3 || prepared === 6) return readResult(active, prepared);
   assertStatus(prepared, "oxidevm_userspace_prepare");
   const exit = active.jitRuntime.runLinuxBlock(active.core, 0, steps, () => undefined)
     ?? active.jitRuntime.runLinuxGuardFallback(active.core, steps);
@@ -144,7 +159,7 @@ function completeJitExit(active: RuntimeState, exit: CoreRunExit): UserspaceRunR
     case "adapter-exit": {
       const status = call(loaded, "oxidevm_userspace_complete_syscall");
       if (status !== 0) throwIfUserspaceKernelFailed(active);
-      if (status === 3 || status === 4 || status === 5) return readResult(active, status);
+      if (status === 3 || status === 4 || status === 5 || status === 6) return readResult(active, status);
       assertStatus(status, "oxidevm_userspace_complete_syscall");
       return { kind: "step-limit" };
     }

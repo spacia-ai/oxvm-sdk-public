@@ -1,5 +1,5 @@
 import { VMError } from "../../errors.js";
-import { equalBytes } from "../../jit-cache.js";
+import { equalBytes } from "../../equal-bytes.js";
 import {
   type CoreRunExit,
   JIT_DISPATCH_SLOT_GENERATIONS_OFFSET,

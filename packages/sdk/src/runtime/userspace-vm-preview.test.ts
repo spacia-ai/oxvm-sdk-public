@@ -23,18 +23,21 @@ const listening = vi.hoisted(() => {
 });
 
 vi.mock("./userspace-process.js", async () => {
-  const { nativeBackend } = await import("./userspace-vm.test-support.js");
-  return ({
-  UserspaceProcessBackend: {
-    create: () => Promise.resolve({
-      ...nativeBackend(),
-      listeningPorts: (known: bigint | null) => {
-        listening.known.push(known);
-        return Promise.resolve(listening.reads.shift() ?? { generation: 9n, ports: null });
+  const { startNativeBackend } = await import("./userspace-vm.test-support.js");
+  return {
+    UserspaceProcessBackend: {
+      start: (...args: Parameters<typeof startNativeBackend>) => {
+        const opening = startNativeBackend(...args);
+        return { ...opening, backend: { ...opening.backend,
+          listeningPorts: (known: bigint | null) => {
+            listening.known.push(known);
+            return Promise.resolve(listening.reads.shift() ?? { generation: 9n, ports: null });
+          },
+        } };
       },
-    }),
-  },
-}); });
+    },
+  };
+});
 
 vi.mock("./preview-session.js", async (importOriginal) => {
   const actual = await importOriginal<typeof PreviewSession>();

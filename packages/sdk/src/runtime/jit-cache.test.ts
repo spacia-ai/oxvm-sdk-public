@@ -1,9 +1,9 @@
 import { describe, expect, it } from "vitest";
+import { equalBytes } from "./equal-bytes.js";
 
 import {
   decodeJitCacheIndex,
   encodeJitCacheIndex,
-  equalBytes,
   findContiguousJitSlots,
   JIT_CACHE_BYTES,
   JIT_DISPATCH_TABLE_ENTRIES,

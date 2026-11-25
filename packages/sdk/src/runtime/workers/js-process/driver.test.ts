@@ -464,6 +464,26 @@ it("starts every module process through the module frame's broker, never as a lo
   } finally { native.retire(); driver.reconcile(); await running; }
 });
 
+it("wakes the output attachment after a host module writes to standard output", async () => {
+  vi.stubGlobal("self", { crossOriginIsolated: true });
+  const completions: Uint8Array[] = [], native = runtime({ completions }), frame = moduleFrame();
+  const { launch } = await moduleLaunch(), wake = vi.fn<(pid?: number) => void>();
+  const driver = new JsProcessWorkers({ runtime: native, moduleFrame: () => frame.port, active: () => true, wake });
+  const token = driver.registerModule({ kind: "host", descriptor: launch.descriptor, adapter: launch.adapter, artifacts: launch.artifacts, tls: null });
+  const running = driver.run({ ...request, program: { kind: "worker", token: BigInt(token) } }, new AbortController().signal);
+  try {
+    await vi.waitFor(() => { expect(frame.spawns).toHaveLength(1); });
+    const service = (await frame.spawns[0]?.start)?.["port"];
+    if (!(service instanceof MessagePort)) throw new Error("no service port");
+    for (const [sequence, fd] of [[1, 1], [2, 7]] as const) {
+      completions.push(completion(sequence, 0));
+      service.postMessage({ version: JS_PROCESS_PROTOCOL_VERSION, type: "request", sequence, sync: false, operation: 1, payload: new Writer().u64(fd).blob(Uint8Array.of(42)).finish() });
+      await vi.waitFor(() => { expect(wake).toHaveBeenCalledTimes(sequence); });
+    }
+    expect(wake.mock.calls).toEqual([[request.pid], []]);
+  } finally { native.retire(); driver.reconcile(); await running; }
+});
+
 it("ends a module process with status 125 when no module frame is attached, and never starts it in the page's origin", async () => {
   vi.stubGlobal("Worker", TestWorker);
   const native = runtime(), { launch } = await moduleLaunch();

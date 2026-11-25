@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { VMError } from "../errors.js";
-import { atFileOperations as at, atFiles, CWD } from "./at-operations.js";
+import { atFileOperations as at, atFiles, CWD, moduleFileOperations } from "./at-operations.js";
 import { descriptor, type LinuxOperation, type LinuxResult } from "./codec.js";
 
 const u32 = (value: number): number[] => Array.from(new Uint8Array(new Uint32Array([value]).buffer));
@@ -11,6 +11,29 @@ const empty = (value = 0n): LinuxResult => ({ value, bytes: new Uint8Array() });
 const fd = descriptor(3);
 const AT_FDCWD = u64(0xffff_ffff_ffff_ff9cn);
 function thrown(action: () => unknown): unknown { try { action(); } catch (error: unknown) { return error; } return undefined; }
+
+it("uses the optional compound operations only after negotiation", () => {
+  const requests: ReturnType<typeof wire>[] = [];
+  const client = { sync<T>(op: LinuxOperation<T>): T {
+    requests.push(wire(op));
+    const reply = op.number === 65553 ? { value: 7n, bytes: Uint8Array.of(0xed, 0x41, 0, 0) }
+      : op.number === 65555 ? { value: 3n, bytes: Uint8Array.of(3, 4, 5) }
+      : empty(op.number === 65556 ? 2n ** 64n - 1n : 0n);
+    return op.decode(reply);
+  } };
+  expect(moduleFileOperations(atFiles(client))).toBeUndefined();
+  const files = moduleFileOperations(atFiles(client, 1));
+  expect(files?.openatMode(fd, "sub", 0o200000, 0, 8)).toEqual({ fd: 7, mode: 0o40755 });
+  expect(files?.getdentsAt(fd, 1024, 24n)).toEqual([]);
+  expect(files?.readVectors(fd, [2, 3], 19n)).toEqual(Uint8Array.of(3, 4, 5));
+  expect(files?.readVectors(fd, [2, 3])).toBeUndefined();
+  expect(requests).toEqual([
+    { number: 65553, payload: [...u64(3n), ...blob("sub"), ...u64(0o200000n), ...u64(0n), ...u64(8n)] },
+    { number: 65554, payload: [...u64(3n), ...u64(1024n), ...u64(24n)] },
+    { number: 65555, payload: [...u64(3n), ...u32(2), ...u32(2), ...u32(3), ...u64(19n)] },
+    { number: 65556, payload: [...u64(3n), ...u32(2), ...u32(2), ...u32(3)] },
+  ]);
+});
 
 describe("descriptor-relative operations (Userspace API 147)", () => {
   it("sends AT_FDCWD as -100 in an unsigned word and a held directory as its number", () => {
@@ -160,10 +183,10 @@ it("sends every host.at call synchronously on the process's own channel", () => 
 });
 
 describe("the relay's operation ceiling", () => {
-  it("admits the highest operations these codecs send (65551 utimensat_at, 65552 poll_timed) and nothing above", async () => {
+  it("keeps the optional file operations inside the relay limit", async () => {
     const { JS_MAX_OPERATION } = await import("./codec.js");
     const numbers = [at.utimensAt(fd, "", "now", "omit").number, at.poll([{ fd, events: 1 }], 0).number];
     expect(numbers).toEqual([65551, 65552]);
-    expect(Math.max(...numbers)).toBe(JS_MAX_OPERATION);
+    expect(JS_MAX_OPERATION).toBe(65556);
   });
 });

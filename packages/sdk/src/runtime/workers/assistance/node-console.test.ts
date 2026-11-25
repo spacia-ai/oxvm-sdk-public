@@ -1,5 +1,5 @@
 import { expect, it } from "vitest";
-import { createNodeConsole } from "./node-console.js";
+import { context, createNodeConsole, createTask } from "./node-console.js";
 
 const format = (...values: unknown[]): string => values.map(value => typeof value === "string" ? value : JSON.stringify(value)).join(" ");
 
@@ -58,4 +58,30 @@ it("indents grouped output and stops at groupEnd", () => {
   const { console, lines } = sink();
   console.group("outer"); console.log("one"); console.groupCollapsed("inner"); console.log("two"); console.groupEnd(); console.log("three"); console.groupEnd(); console.log("four");
   expect(lines.map(line => line.text)).toEqual(["outer", "  one", "  inner", "    two", "  three", "four"]);
+});
+
+it("offers the inspector console's context, whose methods write nothing", () => {
+  const first = context("named"), second = context();
+  expect(first).not.toBe(second);
+  expect([context.name, context.length]).toEqual(["context", 1]);
+  expect(Object.keys(first)).toEqual(["dir", "dirXml", "table", "groupEnd", "clear", "count", "countReset", "profile", "profileEnd", "debug", "error", "info", "log", "warn",
+    "trace", "group", "groupCollapsed", "assert", "time", "timeLog", "timeEnd", "timeStamp"]);
+  expect(Object.getPrototypeOf(Object.getPrototypeOf(first))).toBe(Object.prototype);
+  for (const name of Object.keys(first)) {
+    const method: unknown = Reflect.get(first, name);
+    if (typeof method !== "function") throw new TypeError(name);
+    expect([Reflect.get(method, "name"), Reflect.get(method, "length")], name).toEqual([name, 1]);
+    expect(Reflect.apply(method, first, [false, "text"]), name).toBeUndefined();
+  }
+});
+
+it("creates inspector tasks that just run their function", () => {
+  const task = createTask("render");
+  expect([createTask.name, createTask.length, Object.keys(task), task.run.length]).toEqual(["createTask", 0, ["run"], 0]);
+  expect(task.run(() => 42)).toBe(42);
+  expect(task.run(function (this: unknown) { return this; })).toBeUndefined();
+  const failure = new Error("inside");
+  expect(() => task.run(() => { throw failure; })).toThrow(failure);
+  for (const name of [undefined, "", 1, null]) expect(() => createTask(name)).toThrow("First argument must be a non-empty string.");
+  for (const work of [undefined, 1, "f", {}]) expect(() => task.run(work)).toThrow("First argument must be a function.");
 });

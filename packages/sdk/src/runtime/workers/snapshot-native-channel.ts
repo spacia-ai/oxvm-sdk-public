@@ -1,4 +1,4 @@
-import {decodeWorkspacePublication,type WorkspacePublication} from "../protocol/workspace-publication.js";
+import {decodeWorkspacePublication,decodeWorkspaceTransfer,type WorkspacePublication,type WorkspaceTransferDescriptor} from "../protocol/workspace-publication.js";
 import { decodeImageAcquisitionReason, type ImageAcquisitionReason } from "../protocol/image-preparation.js";
 import { boolean, exactKeys, integer, record, string } from "../decode.js";
 import { VMError } from "../errors.js";
@@ -26,7 +26,8 @@ export type NativeSnapshotStorageRequest =
   | { readonly type: "read-native-restore"; readonly area: NativeSnapshotArea; readonly index: number }
   | {readonly type:"stage-native-workspace";readonly publication:WorkspacePublication;readonly preservedId?:string}
   | { readonly type: "stage-native-cold-workspace"; readonly sourceId: string; readonly publication: WorkspacePublication; readonly preserve: boolean }
-  | { readonly type: "publish-native-cold" | "complete-native-cold"; readonly sourceId: string }
+  | { readonly type: "inspect-native-cold-root" | "publish-native-cold" | "complete-native-cold"; readonly sourceId: string }
+  | { readonly type: "stage-native-cold-root"; readonly sourceId: string; readonly input: WorkspaceTransferDescriptor }
   | { readonly type: "publish-native-restore" }
   | { readonly type: "complete-native-restore" }
   | { readonly type: "native-session" }
@@ -94,7 +95,10 @@ export function decodeNativeSnapshotRequest(value: unknown): NativeSnapshotStora
     case "stage-native-cold-workspace":
       exactKeys(input,["type","sourceId","publication","preserve"]);
       return {type,sourceId:uuid(input["sourceId"]),publication:decodeWorkspacePublication(input["publication"]),preserve:boolean(input["preserve"],"preserve cold source")};
-    case "publish-native-cold": case "complete-native-cold":
+    case "stage-native-cold-root":
+      exactKeys(input, ["type", "sourceId", "input"]);
+      return { type, sourceId: uuid(input["sourceId"]), input: decodeWorkspaceTransfer(input["input"]) };
+    case "inspect-native-cold-root": case "publish-native-cold": case "complete-native-cold":
       exactKeys(input,["type","sourceId"]); return {type,sourceId:uuid(input["sourceId"])};
     case "stage-native-workspace":
       exactKeys(input,["type","publication"],["preservedId"]);return {type,publication:decodeWorkspacePublication(input["publication"]),...(input["preservedId"]===undefined?{}:{preservedId:uuid(input["preservedId"])})};

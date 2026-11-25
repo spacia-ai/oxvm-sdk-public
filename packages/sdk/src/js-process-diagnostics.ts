@@ -19,6 +19,8 @@ const serviceOperations = [
   [65542, "stop-thread"], [65543, "wait-thread"], [65544, "reap-thread"], [65545, "path-info"], [65546, "prepare-thread-eval"],
   [65547, "umask"], [65548, "path-search"], [65549, "poll-pipes"], [65550, "signal-disposition"], [65551, "utimensat-at"],
   [65552, "poll-timed"],
+  [65553, "openat-mode"], [65554, "getdents-at"],
+  [65555, "pread-vectors"], [65556, "read-vectors"],
 ] as const;
 type ServiceOperation = typeof serviceOperations[number][1];
 const serviceOperationKinds: ReadonlyMap<number, ServiceOperation> = new Map(serviceOperations);
@@ -135,7 +137,7 @@ export function decodeJSProcessTrace(bytes: Uint8Array): JSProcessTrace {
   const r = new Reader(bytes);
   if (new TextDecoder().decode(r.raw(4)) !== "OXJT") protocol("JS trace magic mismatch");
   const version = r.u32();
-  if (version < 15 || version > 20) protocol("JS trace version mismatch");
+  if (version < 15 || version > 21) protocol("JS trace version mismatch");
   const dropped = r.u64(), droppedDecisions = version < 20 ? null : r.u64(), count = r.u32(), placementCount = r.u32(), failureCount = r.u32(), refusalCount = version < 18 ? 0 : r.u32(), events: JSProcessTraceEvent[] = [], placements: JSProcessPlacementEvent[] = [];
   // Trace 20 bounds the service events and the decisions apart; earlier traces bound them together.
   const decisionCount = placementCount + failureCount + refusalCount;
@@ -162,7 +164,8 @@ export function decodeJSProcessTrace(bytes: Uint8Array): JSProcessTrace {
 
 function serviceOperation(number: number, version: number): JSProcessTraceEvent["operation"] {
   if (number < 65536) return { kind: "syscall", number };
-  const kind = version < 17 && number === 65550 ? undefined : serviceOperationKinds.get(number);
+  const supported = (version >= 17 || number !== 65550) && (version >= 21 || number < 65553);
+  const kind = supported ? serviceOperationKinds.get(number) : undefined;
   return kind === undefined ? protocol("Invalid JS service operation") : { kind };
 }
 

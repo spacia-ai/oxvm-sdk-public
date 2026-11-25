@@ -18,6 +18,8 @@ import {
   type JitEnginePolicy,
   jitEnginePolicy,
   SPIDERMONKEY_JIT_POLICY,
+  userspaceJitEnginePolicy,
+  warmUserspaceJitEntries,
 } from "./jit-engine-policy.js";
 
 const KIB = 1024;
@@ -74,6 +76,20 @@ describe("JIT engine family", () => {
       sealMembers: MAX_LINKED_JIT_MEMBERS,
       sealWaitMilliseconds: 0,
     });
+  });
+
+  it("groups Userspace translations for a bounded wait on other engines", () => {
+    expect(userspaceJitEnginePolicy("other")).toEqual({
+      ...DEFAULT_JIT_POLICY,
+      batch: { sealMembers: 32, sealWaitMilliseconds: 6 },
+    });
+    expect(userspaceJitEnginePolicy("spidermonkey")).toBe(SPIDERMONKEY_JIT_POLICY);
+  });
+
+  it("requests warmup only in a realm with a Chromium user agent", () => {
+    expect(warmUserspaceJitEntries({})).toBe(false);
+    expect(warmUserspaceJitEntries({ navigator: { userAgent: "Firefox/151.0" } })).toBe(false);
+    expect(warmUserspaceJitEntries({ navigator: { userAgent: "Chrome/151.0" } })).toBe(true);
   });
 
   it("gives SpiderMonkey a code budget well inside its executable-memory reserve", () => {

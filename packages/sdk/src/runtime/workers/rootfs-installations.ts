@@ -16,28 +16,22 @@ interface Journal {
 export class RootfsInstallations {
   constructor(readonly backend: Backend, readonly write: Writer) {}
 
-  async begin(digest: string, index: RootfsPackIndex): Promise<(chunk?: string) => Promise<void>> {
+  async begin(digest: string, index: RootfsPackIndex): Promise<() => Promise<void>> {
     const indexSHA256 = await sha256(encode(index));
-    const completed = new Set<string>();
-    const previous = await read(this.backend, "installations", `${digest}.json`);
+    const name = `${digest}.json`;
+    const chunks = index.chunks.map(chunk => chunk.sha256).sort();
+    const previous = await read(this.backend, "installations", name);
     if (previous !== undefined) {
       const journal = decode(previous);
       if (journal.manifestSHA256 !== digest || journal.indexSHA256 !== indexSHA256) throw protocolError("installation journal names another image layout");
-      const valid = new Set(index.chunks.map(chunk => chunk.sha256));
-      for (const chunk of journal.completedChunks) {
-        if (!valid.has(chunk)) throw protocolError("installation journal names an unknown chunk");
-        completed.add(chunk);
-      }
+      const valid = new Set(chunks);
+      if (journal.completedChunks.some(chunk => !valid.has(chunk))) throw protocolError("installation journal names an unknown chunk");
     }
-    const publish = async (chunk?: string) => {
-      if (chunk !== undefined) completed.add(chunk);
-      const journal: Journal = { version: 1, manifestSHA256: digest, indexSHA256,
-        state: chunk === undefined && completed.size === index.chunks.length ? "installed" : "installing", completedChunks: [...completed].sort() };
-      await this.write("installations", `${digest}.json`, encode(journal));
-    };
-    // Re-verify every listed chunk on recovery; the journal retains references only.
-    await this.write("installations", `${digest}.json`, encode({ version: 1, manifestSHA256: digest, indexSHA256, state: "installing", completedChunks: [...completed].sort() }));
-    return publish;
+    // The intent retains the entire index. Recovery checks the persisted packs themselves.
+    const intent: Journal = { version: 1, manifestSHA256: digest, indexSHA256, state: "installing", completedChunks: [] };
+    await this.write("installations", name, encode(intent));
+    const installed: Journal = { ...intent, state: "installed", completedChunks: chunks };
+    return () => this.write("installations", name, encode(installed));
   }
 
   async retained(): Promise<ReadonlyMap<string, RootfsPackIndex>> {

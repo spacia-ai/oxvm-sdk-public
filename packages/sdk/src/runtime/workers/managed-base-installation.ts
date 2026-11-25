@@ -1,6 +1,7 @@
 import { exactKeys, record, string, protocolError } from "../decode.js";
 import type { ManagedImageManifest } from "../managed-image.js";
 import { VMError } from "../errors.js";
+import { readInto, writeAll } from "./managed-disk-files.js";
 import { sha256Hex } from "./snapshot-content.js";
 
 type Chunk = ManagedImageManifest["disk"]["chunks"][number];
@@ -25,15 +26,16 @@ export async function installManagedBase(file: FileSystemFileHandle, images: Fil
       const recorded = completed.has(index);
       if (recorded || options.verifyExisting === true) {
         const cached = new Uint8Array(chunk.bytes);
-        verified = handle.read(cached, { at: position }) === chunk.bytes && await sha256Hex(cached) === chunk.sha256;
+        verified = readInto(handle, position, cached) === chunk.bytes && await sha256Hex(cached) === chunk.sha256;
       }
       if (!verified) {
         const data = await acquire(chunk);
         signal?.throwIfAborted();
-        if (handle.write(data, { at: position }) !== chunk.bytes) throw new VMError("STORAGE_ERROR", "managed base write was incomplete");
+        if (data.byteLength !== chunk.bytes) throw new VMError("STORAGE_ERROR", "managed base chunk has an invalid length");
+        writeAll(handle, position, data);
         handle.flush();
         const persisted = new Uint8Array(chunk.bytes);
-        if (handle.read(persisted, { at: position }) !== chunk.bytes || await sha256Hex(persisted) !== chunk.sha256) {
+        if (readInto(handle, position, persisted) !== chunk.bytes || await sha256Hex(persisted) !== chunk.sha256) {
           throw new VMError("STORAGE_ERROR", "managed base readback failed verification");
         }
       }

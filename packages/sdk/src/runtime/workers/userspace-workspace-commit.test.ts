@@ -50,6 +50,47 @@ it("coalesces writes for 250 ms and acknowledges only their durable commit", asy
     release(); await write; expect(acknowledged).toBe(true); expect(failed).not.toHaveBeenCalled();
   } finally { vi.useRealTimers(); }
 });
+it("requires an uninterrupted idle period for automatic guest publication", async () => {
+  vi.useFakeTimers();
+  try {
+    const persist = vi.fn(() => Promise.resolve());
+    const owner = createUserspaceWorkspaceCommit(persist, () => {});
+    const pending = owner.schedule("idle");
+    await vi.advanceTimersByTimeAsync(249);
+    owner.pauseIdle();
+    await vi.advanceTimersByTimeAsync(1_000);
+    expect(persist).not.toHaveBeenCalled();
+
+    expect(owner.schedule("idle")).toBe(pending);
+    await vi.advanceTimersByTimeAsync(249);
+    expect(persist).not.toHaveBeenCalled();
+    await vi.advanceTimersByTimeAsync(1);
+    await pending;
+    expect(persist).toHaveBeenCalledTimes(1);
+  } finally { vi.useRealTimers(); }
+});
+
+it("honors editor writes and explicit flushes when guest execution resumes", async () => {
+  vi.useFakeTimers();
+  try {
+    const persist = vi.fn(() => Promise.resolve());
+    const owner = createUserspaceWorkspaceCommit(persist, () => {});
+    const pending = owner.schedule("idle");
+    owner.pauseIdle();
+    expect(owner.schedule()).toBe(pending);
+    owner.pauseIdle();
+    await vi.advanceTimersByTimeAsync(250);
+    await pending;
+    expect(persist).toHaveBeenCalledTimes(1);
+
+    const deferred = owner.schedule("idle");
+    owner.pauseIdle();
+    await owner.flush();
+    await deferred;
+    expect(persist).toHaveBeenCalledTimes(2);
+  } finally { vi.useRealTimers(); }
+});
+
 it("flushes pending writes during disposal and propagates persistence failures", async () => {
   vi.useFakeTimers();
   try {
@@ -93,4 +134,44 @@ it("keeps one coalesced pending publication while a commit is blocked", async ()
     expect(persist).toHaveBeenCalledTimes(2);
     expect(vi.getTimerCount()).toBe(0);
   } finally { release.resolve(undefined); vi.useRealTimers(); }
+});
+
+it("backs off automatic publication after a quota refusal", async () => {
+  vi.useFakeTimers();
+  const refused = new DOMException("Storage quota exceeded", "QuotaExceededError");
+  const first = Promise.withResolvers<undefined>();
+  try {
+    const persist = vi.fn<() => Promise<void>>().mockImplementationOnce(() => first.promise).mockResolvedValue(undefined);
+    const owner = createUserspaceWorkspaceCommit(persist, () => {});
+    const attempt = expect(owner.schedule()).rejects.toBe(refused);
+    await vi.advanceTimersByTimeAsync(250);
+    const next = owner.schedule();
+    await vi.advanceTimersByTimeAsync(250);
+    first.reject(refused);
+    await attempt;
+    expect(persist).toHaveBeenCalledTimes(1);
+    await vi.advanceTimersByTimeAsync(4999);
+    expect(persist).toHaveBeenCalledTimes(1);
+    await vi.advanceTimersByTimeAsync(1);
+    await next;
+    expect(persist).toHaveBeenCalledTimes(2);
+    expect(vi.getTimerCount()).toBe(0);
+  } finally { first.reject(refused); vi.useRealTimers(); }
+});
+
+it("explicit durability can retry immediately after a quota refusal", async () => {
+  vi.useFakeTimers();
+  try {
+    const refused = new DOMException("Storage quota exceeded", "QuotaExceededError");
+    const persist = vi.fn<() => Promise<void>>().mockRejectedValueOnce(refused).mockResolvedValue(undefined);
+    const owner = createUserspaceWorkspaceCommit(persist, () => {});
+    await expect(owner.flush()).rejects.toBe(refused);
+    const pending = owner.schedule();
+    await vi.advanceTimersByTimeAsync(250);
+    expect(persist).toHaveBeenCalledTimes(1);
+    await owner.flush();
+    await pending;
+    expect(persist).toHaveBeenCalledTimes(2);
+    expect(vi.getTimerCount()).toBe(0);
+  } finally { vi.useRealTimers(); }
 });

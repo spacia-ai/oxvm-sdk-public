@@ -205,6 +205,17 @@ it("reads the signal-disposition service operation (65550) from trace 17 only", 
   expect(() => decodeJSProcessTrace(beyond)).toThrow("Invalid JS service operation");
 });
 
+it("reads compound file service operations from trace 21", () => {
+  for (const [number, kind] of [[65553, "openat-mode"], [65554, "getdents-at"], [65555, "pread-vectors"], [65556, "read-vectors"]] as const) {
+    const bytes = new Writer().raw(new TextEncoder().encode("OXJT")).u32(21).u64(0n).u64(0n)
+      .u32(1).u32(0).u32(0).u32(0).u64(1n).u64(2n).u64(3n).u64(4n).u32(10).u32(10)
+      .u32(number).u32(1).u32(0).finish();
+    expect(decodeJSProcessTrace(bytes).events[0]).toMatchObject({ operation: { kind } });
+    new DataView(bytes.buffer).setUint32(4, 20, true);
+    expect(() => decodeJSProcessTrace(bytes)).toThrow("Invalid JS service operation");
+  }
+});
+
 it("refuses module command placements Rust cannot record and module reasons before trace 17", () => {
   const sixteen = (subject: number, reason: number) => new Writer().raw(new TextEncoder().encode("OXJT")).u32(16).u64(0n).u32(0).u32(1).u32(0)
     .u64(1n).u32(10).u32(10).u64(9n).u8(subject).u8(0).u32(reason).u32(1).path("/usr/local/bin/typst").path("").u8(0).u32(0).finish();
@@ -272,7 +283,7 @@ it("refuses trace 18 refusals Rust cannot record", () => {
   expect(() => decodeJSProcessTrace(trace18([refusal({ ordinal: 1n })], 1))).toThrow();
   expect(() => decodeJSProcessTrace(trace18([refusal(), refusal()]))).toThrow();
   expect(() => decodeJSProcessTrace(trace18([refusal()]).subarray(0, -1))).toThrow();
-  expect(() => decodeJSProcessTrace(new Writer().raw(new TextEncoder().encode("OXJT")).u32(21).u64(0n).u32(0).u32(0).u32(0).u32(0).finish())).toThrow("version mismatch");
+  expect(() => decodeJSProcessTrace(new Writer().raw(new TextEncoder().encode("OXJT")).u32(22).u64(0n).u32(0).u32(0).u32(0).u32(0).finish())).toThrow("version mismatch");
 });
 
 /** A trace 19 placement of a node launch: no roots, then the deciding add-on and what it lacks. */

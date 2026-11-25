@@ -9,8 +9,10 @@ export const LIMITS = Object.freeze({
   iovecs: 128,
   /** Bytes one fd_read/fd_write call may move in total. */
   ioBytes: 1024 * 1024,
-  /** Bytes one host read or write moves; larger requests are chunked and may return a partial count. */
+  /** Default bytes per host read or write. Larger requests are chunked and may return a partial count. */
   ioChunk: 64 * 1024,
+  /** Bytes per positional write on an opened regular file. */
+  regularFileWriteChunk: 256 * 1024,
   /** Declared maximum of the one defined memory, in 64 KiB pages (256 MiB). */
   memoryPages: 4096,
   /** Entries of the one funcref table. */

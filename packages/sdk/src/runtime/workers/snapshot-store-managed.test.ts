@@ -148,7 +148,9 @@ describe("managed disk snapshots", () => {
     for (const fill of [1, 2]) expect(objects.names()).not.toContain(await sha256Hex(chunk(fill)));
     const generation = disks.find(restored.generation);
     if (!(generation instanceof MemoryDirectory)) throw new Error("restored generation is missing");
-    // The guest's space reserve (ADR 0014 R13) is storage kept free, not a copy of anything.
+    const reserve = generation.find("space.reserve");
+    if (!(reserve instanceof MemoryFile)) throw new Error("restored generation has no reserve file");
+    expect(reserve.size).toBe(0);
     const stored = generation.names().filter((name) => name !== "space.reserve").reduce((total, name) => {
       const file = generation.find(name);
       return total + (file instanceof MemoryFile ? file.size : 0);

@@ -1,5 +1,6 @@
 import type { ImageLocation, ImageRef } from "../image.js";
 import type { RuntimeMode, SHA256 } from "../values.js";
+import type { NativeUtilityRequirement } from "../runtime/native-utilities.js";
 
 
 export interface FileArtifactInput {
@@ -59,6 +60,7 @@ export interface CommonImageRecipe {
 
 export interface UserspaceImageRecipe extends CommonImageRecipe {
   readonly mode: "userspace";
+  readonly nativeUtilities?: NativeUtilityRequirement;
   readonly source: RootfsSource;
   readonly resources?: { readonly memoryMiB?: number; readonly maxProcesses?: number };
   /** Owner recorded for `/workspace` and every entry below it, whatever the source recorded.
@@ -75,6 +77,7 @@ export interface UserspaceImageRecipe extends CommonImageRecipe {
 
 export type SystemImageRecipe = CommonImageRecipe & {
   readonly mode: "system";
+  readonly nativeUtilities?: never;
   readonly resources?: { readonly memoryMiB?: number; readonly vcpus?: 1 | 2 | 3 | 4 };
   /** A System disk keeps the owners its source recorded. */
   readonly workspace?: never;

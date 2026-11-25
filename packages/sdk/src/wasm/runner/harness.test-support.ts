@@ -1,3 +1,4 @@
+import { decodeProcessId } from "../../values.js";
 import type { RunnerCommandLaunch, RunnerCopies, RunnerHostLaunch } from "../../runtime/js-process/launch.js";
 import type { SignalTransport } from "./signals.js";
 import { fakeSignals } from "../testing/memory-signals.js";
@@ -17,6 +18,7 @@ export interface Launch {
   readonly args?: readonly string[];
   readonly environment?: readonly string[];
   readonly cwd?: string;
+  readonly admittedPid?: number;
   readonly paths?: Readonly<Record<string, number>>;
   readonly staleSockets?: readonly string[];
   readonly occupied?: readonly string[];
@@ -74,7 +76,8 @@ export function launch(spec: Launch): Running {
     network: { ports: { sockets: network.sockets(), sync: network.syncSockets(), tls: null }, scope, tls: PASS_THROUGH_TLS },
   };
   const done = (async () => {
-    const start = spec.command ?? (argument === null ? undefined : await hostLaunch(spec.release, argument));
+    const host = spec.command === undefined && argument !== null ? await hostLaunch(spec.release, argument) : undefined;
+    const start = spec.command ?? (host === undefined || spec.admittedPid === undefined ? host : { ...host, pid: decodeProcessId(spec.admittedPid) });
     const original = globalThis.fetch;
     // A blob: URL of a copy is the module's own; any other URL is a fetch the runner must never make.
     globalThis.fetch = (input, init) => {

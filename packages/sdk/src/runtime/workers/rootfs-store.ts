@@ -1,14 +1,15 @@
-import { readBrowserQuota } from "./browser-quota.js";
-import { DISK_RESERVE_BYTES } from "./browser-quota.js";
+import { availableStorageBytes, readBrowserQuota, DISK_RESERVE_BYTES, refusedWrite } from "./browser-quota.js";
 import type { ImagePreparationProgress } from "./rootfs-image-preparation.js";
 import type { UserspaceSnapshotManifest } from "./snapshot-manifest.js";
 import {cachedWorkspaceSource} from "./rootfs-workspace-source.js";
-import {cachedRootfsImage,requestedRootfsImage,readRootfsCache} from "./rootfs-cached-image.js";
+import {cachedRootfsImage,requestedRootfsImage} from "./rootfs-cached-image.js";
 import {openCachedRootfsFile} from "./rootfs-file-read.js";
+import { retainRootfsRead, type RootfsReadLock } from "./rootfs-read-lock.js";
 import type {WorkspaceReadLease} from "./workspace-read.js";
 import {decodeSHA256} from "../../values.js";
 import { record, string } from "../decode.js";
 import { VMError } from "../errors.js";
+import { assertImageNativeUtilities } from "../native-utilities.js";
 import type { ImagePreparation } from "../../values.js";
 import type { ImageAcquisitionReason } from "../protocol/image-preparation.js";
 import {
@@ -27,16 +28,23 @@ import type { UserspaceRootfsRead } from "./userspace-storage-channel.js";
 import { buildWorkspaceDelta } from "./workspace-delta.js";
 import type { WorkspaceImage } from "./workspace-rebase.js";
 
-import { activate, remove, verifiedFile, verifiedBytes, openDatabase, sha256, type Backend, type RootfsSpaceReserve } from "./rootfs-store-backend.js";
+import { read as readRootfsCache, remove, verifiedFile, verifiedBytes, openDatabase, sha256, type Backend, type RootfsSpaceReserve } from "./rootfs-store-backend.js";
 import type { RootfsPackMiss } from "./rootfs-pack-failures.js";
 import { RootfsCheckpoints, type RootfsCheckpointOwner, type RootfsCheckpointSource, type RootfsCheckpointDestination, type RootfsCheckpointBaseline } from "./rootfs-checkpoints.js";
 export type { RootfsCheckpointOwner, RootfsCheckpointDestination, RootfsCheckpointBaseline } from "./rootfs-checkpoints.js";
 
+export interface PreviousRootfs {
+  readonly rootTreeSha256: string;
+  readonly metadata: Uint8Array;
+  openFile(path: string, sha256: string, bytes: number, signal: AbortSignal): Promise<WorkspaceReadLease>;
+}
+
 export class RootfsStore {
   #imagePreparation: ImagePreparation = "on-demand";
   #localOnly = false;
+  #cachedOnly = false;
   #requestedImage:{readonly id:string;readonly version:string}|undefined;
-  #foreignWorkspace:{readonly source:RootfsCheckpointSource;readonly retire:()=>void}|undefined;
+  #foreignWorkspace: { readonly source: RootfsCheckpointSource; readonly allowNetwork: boolean; readonly retire: () => void } | undefined;
   #identity:PreparedImageIdentity|undefined;
   #prepared:PreparedUserspaceRootfs|undefined;
   #preparedCheckpoint:{readonly owner:RootfsCheckpointOwner;readonly source:RootfsCheckpointSource;readonly files:ReadonlyMap<string,UserspaceRootfsBlob>}|undefined;
@@ -44,6 +52,7 @@ export class RootfsStore {
   readonly #network: RootfsNetworkClient;
   #active: UserspaceRootfsManifest | undefined;
   #activeSource: RootfsCheckpointSource | undefined;
+  #activeTrust: TrustedRootfsKey | undefined;
   readonly #checkpoints: RootfsCheckpoints;
   #activeFiles = new Map<string, UserspaceRootfsBlob>();
 
@@ -116,36 +125,55 @@ export class RootfsStore {
       }
       const manifest = decodeUserspaceRootfsManifest(decoded, manifestUrl);
       await verifyUserspaceRootfsManifest(manifest, trusted);
-      const evidence = manifest.provenance;
-      // The image activates only with its evidence retained. The four files are retained at once; once all have
-      // settled, the first failure in this order is the one reported.
-      const retained = await Promise.allSettled([
-        evidence.sbom,
-        evidence.notices,
-        evidence.correspondingSources,
-        evidence.reproducibility,
-      ].map(async blob => {
-        try {
-          const packed=await this.#checkpoints.packs.openFile(manifest,manifestDigest,blob,signal??new AbortController().signal,()=>{});
-          if(packed!==undefined){await packed.retire();return;}
-        } catch { signal?.throwIfAborted(); /* An unavailable packed cache may still have a valid loose representation. */ }
-        if (!await verifiedFile(this.#backend, "blobs", blob.sha256, blob.bytes, blob.sha256)) {
-          if(cachedOnly && imagePreparation !== "before-ready") throw new VMError("STORAGE_ERROR","retained rootfs evidence is not cached",{reason:"image-not-cached"});
-          await this.#checkpoints.ensureBlob(blob,signal);
-          if (!await verifiedFile(this.#backend, "blobs", blob.sha256, blob.bytes, blob.sha256)) {
-            await remove(this.#backend, "blobs", blob.sha256);
-            throw new VMError("STORAGE_ERROR", "persisted rootfs blob failed verification");
-          }
-        }
-      }));
-      const failed = retained.find((outcome): outcome is PromiseRejectedResult => outcome.status === "rejected");
-      if (failed !== undefined) { const failure: unknown = failed.reason; throw failure; }
-      signal?.throwIfAborted();
-      await activate(this.#backend, manifestUrl, manifest, bytes);
-      this.#activeSource = { manifest, bytes, url: manifestUrl, digest:manifestDigest };
+      assertImageNativeUtilities(manifest.nativeUtilities);
+      const source = { manifest, bytes, url: manifestUrl, digest: manifestDigest };
+      await this.#activateVerifiedSource(source, cachedOnly, imagePreparation, signal ?? new AbortController().signal);
+      this.retireWorkspaceBase();
+      this.#activeSource = source;
+      this.#cachedOnly = cachedOnly;
+      this.#activeTrust = { ...trusted, publicKey: trusted.publicKey.slice() };
       if(!cachedOnly)this.#requestedImage={id:manifest.id,version:manifest.version};
       return this.#setActive(manifest,manifestDigest,trusted.keyId);
     } finally { this.#checkpoints.endPreparation(); }
+  }
+
+  async #activateVerifiedSource(source: RootfsCheckpointSource, cachedOnly: boolean, preparation: ImagePreparation, signal: AbortSignal): Promise<void> {
+    const { manifest, digest } = source, packs = this.#checkpoints.packs, provenance = manifest.provenance;
+    const evidence = [provenance.sbom, provenance.notices, provenance.correspondingSources, provenance.reproducibility] as const;
+    // A before-ready install will use this signed pack anyway. Fetch it once when it carries all four evidence files.
+    const mayAcquirePack = !cachedOnly && preparation === "before-ready" && sharedEvidencePack(manifest, evidence);
+    let acquiring: Promise<boolean> | undefined, retaining: RootfsReadLock | undefined;
+    const acquirePack = async (): Promise<boolean> => {
+      try {
+        retaining = await retainRootfsRead(signal);
+        return await packs.acquireBlob(manifest, digest, evidence[0], signal, preparation, retaining);
+      } catch { signal.throwIfAborted(); return false; }
+    };
+    const packed = async (blob: UserspaceRootfsBlob): Promise<boolean> => {
+      try {
+        const file = await packs.openFile(manifest, digest, blob, signal, () => {}, retaining !== undefined);
+        if (file === undefined) return false;
+        await file.retire();
+        return true;
+      } catch { signal.throwIfAborted(); return false; }
+    };
+    const loose = (blob: UserspaceRootfsBlob) => verifiedFile(this.#backend, "blobs", blob.sha256, blob.bytes, blob.sha256);
+    try {
+      // Activation requires every evidence file, and reports the first failed file in manifest order.
+      const retained = await Promise.allSettled(evidence.map(async blob => {
+        if (await packed(blob) || await loose(blob)) return;
+        if (mayAcquirePack && await (acquiring ??= acquirePack()) && await packed(blob)) return;
+        if (cachedOnly && preparation !== "before-ready") throw new VMError("STORAGE_ERROR", "retained rootfs evidence is not cached", { reason: "image-not-cached" });
+        await this.#checkpoints.ensureBlob(blob, signal);
+        if (await loose(blob)) return;
+        await remove(this.#backend, "blobs", blob.sha256);
+        throw new VMError("STORAGE_ERROR", "persisted rootfs blob failed verification");
+      }));
+      const failed = retained.find(outcome => outcome.status === "rejected");
+      if (failed !== undefined) { const failure: unknown = failed.reason; throw failure; }
+      signal.throwIfAborted();
+      await this.#checkpoints.activate(source, signal, retaining);
+    } finally { await retaining?.(); }
   }
 
   #setActive(manifest: UserspaceRootfsManifest,digest:string,keyId:string): PreparedUserspaceRootfs {
@@ -172,6 +200,24 @@ export class RootfsStore {
     return {...this.#identity};
   }
 
+  /** Reopen exactly the previous signed image without selecting it for execution. */
+  async previousRootfs(owner: RootfsCheckpointOwner): Promise<PreviousRootfs> {
+    const trusted = this.#activeTrust;
+    if (trusted === undefined) throw new VMError("FEATURE_NOT_AVAILABLE", "No image trust is active");
+    const source = await RootfsCheckpoints.inspectCachedImage(this.#backend, owner, trusted);
+    if (source === undefined) throw new VMError("STORAGE_ERROR", "The prior managed root could not be verified", { reason: "prior-root-unavailable" });
+    const files = filesOf(source.manifest);
+    return { rootTreeSha256: source.manifest.rootTreeSha256, metadata: encodeUserspaceRootfsMetadata(source.manifest),
+      openFile: async (path, sha256, bytes, signal) => {
+        const blob = files.get(path.slice(1));
+        if (blob === undefined || blob.sha256 !== sha256 || blob.bytes !== bytes) {
+          throw new VMError("PROTOCOL_ERROR", "System file differs from the signed prior image");
+        }
+        return this.#openVerifiedFile(source, blob, signal, !this.#localOnly);
+      },
+    };
+  }
+
   async openCachedFile(path:string,sha256:string,bytes:number,signal:AbortSignal,snapshotId?:string):Promise<WorkspaceReadLease> {
     const selected=snapshotId===undefined?undefined:this.#preparedCheckpoint;
     if(snapshotId!==undefined&&selected?.owner.snapshotId!==snapshotId)throw new VMError("PROTOCOL_ERROR","Rootfs read has no verified selected checkpoint source");
@@ -179,19 +225,34 @@ export class RootfsStore {
     const files=source===this.#activeSource?this.#activeFiles:selected?.files;
     const blob=files?.get(path.startsWith("/")?path.slice(1):path);
     if(source===undefined||blob===undefined||blob.sha256!==sha256||blob.bytes!==bytes)throw new VMError("PROTOCOL_ERROR","Rootfs read differs from the verified active image");
-    const release=await this.#checkpoints.retainRead(source, signal);
-    try {const packed=await this.#checkpoints.packs.openFile(source.manifest,source.digest,blob,signal,release,true);if(packed!==undefined)return packed;}
-    catch(error){if(signal.aborted){release();throw error;} /* Original cached files remain a valid fallback. */ }
-    return openCachedRootfsFile(this.#backend,blob,signal,release);
+    return this.#openVerifiedFile(source, blob, signal, false);
   }
 
-  async read(path: string): Promise<UserspaceRootfsRead> {
+  async #openVerifiedFile(source: RootfsCheckpointSource, blob: UserspaceRootfsBlob, signal: AbortSignal, allowNetwork: boolean): Promise<WorkspaceReadLease> {
+    const release = await this.#checkpoints.retainRead(source, signal);
+    const openPacked = async () => {
+      try { return await this.#checkpoints.packs.openFile(source.manifest, source.digest, blob, signal, release, true); }
+      catch { signal.throwIfAborted(); return undefined; }
+    };
+    try {
+      const cached = await openPacked();
+      if (cached !== undefined) return cached;
+      if (allowNetwork && !await verifiedFile(this.#backend, "blobs", blob.sha256, blob.bytes, blob.sha256)) {
+        await this.#checkpoints.ensureBlob(blob, signal, source);
+        const acquired = await openPacked();
+        if (acquired !== undefined) return acquired;
+      }
+      return await openCachedRootfsFile(this.#backend, blob, signal, release);
+    } catch (error) { release(); throw error; }
+  }
+
+  async read(path: string, signal?: AbortSignal): Promise<UserspaceRootfsRead> {
     const manifest = this.#active;
     if (manifest === undefined) throw new VMError("FEATURE_NOT_AVAILABLE", "no Userspace rootfs is active");
     const normalized = path.startsWith("/") ? path.slice(1) : path;
     const blob = this.#activeFiles.get(normalized);
     if (blob === undefined) throw new VMError("STORAGE_NOT_FOUND", `rootfs file does not exist: ${path}`);
-    const bytes = await this.#readBlob(blob);
+    const bytes = await this.#readBlob(blob, signal);
     return { sha256: blob.sha256, bytes };
   }
 
@@ -222,29 +283,36 @@ export class RootfsStore {
     return source===undefined?undefined:{entries:source.manifest.entries,blobs:source.manifest.blobs};
   }
 
-  async workspaceBaseMetadata(base:string):Promise<{readonly metadata:Uint8Array}|undefined> {
-    if(this.#preparedCheckpoint===undefined&&this.#activeSource===undefined)throw new VMError("PROTOCOL_ERROR","Workspace base inspection requires a verified image");
-    const source=await cachedWorkspaceSource(this.#backend,base,this.#activeSource);
-    this.#foreignWorkspace?.retire();this.#foreignWorkspace=undefined;
-    if(source===undefined)return undefined;
-    this.#foreignWorkspace={source,retire:await this.#checkpoints.retainRead(source)};
-    return {metadata:encodeUserspaceRootfsMetadata(source.manifest)};
+  async workspaceBaseMetadata(base: string, updateFrom?: RootfsCheckpointOwner, signal?: AbortSignal): Promise<{ readonly metadata: Uint8Array } | undefined> {
+    if (this.#preparedCheckpoint === undefined && this.#activeSource === undefined) {
+      throw new VMError("PROTOCOL_ERROR", "Workspace base inspection requires a verified image");
+    }
+    this.retireWorkspaceBase();
+    const trusted = this.#activeTrust;
+    // Cached tree hashes prove the contents. Only the signed prior pin also authorizes its delivery URLs.
+    const prior = updateFrom !== undefined && trusted !== undefined && !this.#localOnly && !this.#cachedOnly && this.#preparedCheckpoint === undefined
+      ? await RootfsCheckpoints.inspectCachedImage(this.#backend, updateFrom, trusted) : undefined;
+    const updateSource = prior?.manifest.workspaceBaseSha256 === base ? prior : undefined;
+    const source = updateSource ?? await cachedWorkspaceSource(this.#backend, base, this.#activeSource);
+    signal?.throwIfAborted();
+    if (source === undefined) return undefined;
+    this.#foreignWorkspace = { source, allowNetwork: updateSource !== undefined, retire: await this.#checkpoints.retainRead(source, signal) };
+    return { metadata: encodeUserspaceRootfsMetadata(source.manifest) };
   }
 
   retireWorkspaceBase():void {this.#foreignWorkspace?.retire();this.#foreignWorkspace=undefined;}
 
-  async openWorkspaceBaseFile(base:string,path:string,sha256:string,bytes:number,signal:AbortSignal):Promise<WorkspaceReadLease> {
-    const source=this.#foreignWorkspace?.source;
-    const normalized=path.startsWith("/")?path.slice(1):path;
-    if(source?.manifest.workspaceBaseSha256!==base||!normalized.startsWith("workspace/"))throw new VMError("PROTOCOL_ERROR","Workspace file has no admitted foreign base");
-    const blob=filesOf(source.manifest).get(normalized);
-    if(blob===undefined||blob.sha256!==sha256||blob.bytes!==bytes)throw new VMError("PROTOCOL_ERROR","Workspace file differs from its proven base");
-    const release = await this.#checkpoints.retainRead(source, signal);
-    try {
-      const packed = await this.#checkpoints.packs.openFile(source.manifest, source.digest, blob, signal, release, true);
-      if (packed !== undefined) return packed;
-    } catch(error) { if(signal.aborted) { release(); throw error; } }
-    return await openCachedRootfsFile(this.#backend,blob,signal,release);
+  async openWorkspaceBaseFile(base: string, path: string, sha256: string, bytes: number, signal: AbortSignal): Promise<WorkspaceReadLease> {
+    const foreign = this.#foreignWorkspace;
+    const normalized = path.startsWith("/") ? path.slice(1) : path;
+    if (foreign?.source.manifest.workspaceBaseSha256 !== base || !normalized.startsWith("workspace/")) {
+      throw new VMError("PROTOCOL_ERROR", "Workspace file has no admitted foreign base");
+    }
+    const blob = filesOf(foreign.source.manifest).get(normalized);
+    if (blob === undefined || blob.sha256 !== sha256 || blob.bytes !== bytes) {
+      throw new VMError("PROTOCOL_ERROR", "Workspace file differs from its proven base");
+    }
+    return this.#openVerifiedFile(foreign.source, blob, signal, foreign.allowNetwork);
   }
 
   /** A file of any image this browser cached, verified by its digest; undefined when absent. */
@@ -276,6 +344,7 @@ export class RootfsStore {
 
   async prepareCheckpoint(owner: RootfsCheckpointOwner, rootfs: UserspaceSnapshotManifest["rootfs"], bytes: Uint8Array<ArrayBuffer>, destination: RootfsCheckpointDestination): Promise<PreparedUserspaceRootfs> {
     const source=await this.#checkpoints.acquire(owner, rootfs, bytes, destination);
+    assertImageNativeUtilities(source.manifest.nativeUtilities);
     this.#foreignWorkspace?.retire();this.#foreignWorkspace=undefined;
     this.#preparedCheckpoint={owner:{...owner},source,files:source.manifest.rootTreeSha256===this.#active?.rootTreeSha256?this.#activeFiles:filesOf(source.manifest)};
     return this.#describe(source.manifest,source.digest,destination.trusted.keyId);
@@ -283,12 +352,14 @@ export class RootfsStore {
 
   async activateCheckpoint(owner: RootfsCheckpointOwner, trusted: TrustedRootfsKey): Promise<PreparedUserspaceRootfs> {
     const source = await this.#checkpoints.restore(owner, trusted);
+    assertImageNativeUtilities(source.manifest.nativeUtilities);
     if(this.#activeSource?.digest===source.digest && this.#activeSource.url.href===source.url.href && this.#prepared!==undefined){
       this.#foreignWorkspace?.retire();this.#foreignWorkspace=undefined;
       return this.#prepared;
     }
-    await activate(this.#backend, source.url, source.manifest, source.bytes);
+    await this.#checkpoints.activate(source);
     this.#activeSource = source;
+    this.#activeTrust = { ...trusted, publicKey: trusted.publicKey.slice() };
     this.#foreignWorkspace?.retire();this.#foreignWorkspace=undefined;
     return this.#setActive(source.manifest,source.digest,trusted.keyId);
   }
@@ -348,6 +419,7 @@ export class RootfsStore {
     this.#foreignWorkspace?.retire();this.#foreignWorkspace=undefined;
     this.#active = undefined;this.#identity=undefined;this.#prepared=undefined;this.#preparedCheckpoint=undefined;this.#requestedImage=undefined;
     this.#activeSource = undefined;
+    this.#activeTrust = undefined;
     this.#activeFiles.clear();
     if (this.#backend.kind === "indexeddb") void this.#backend.database.then((database) => database.close());
   }
@@ -383,17 +455,33 @@ export class RootfsStore {
 
   async #readBlob(
     blob: UserspaceRootfsManifest["blobs"][number],
+    signal?: AbortSignal,
   ): Promise<Uint8Array<ArrayBuffer>> {
+    if (signal?.aborted === true) throw new VMError("ABORTED", "Rootfs file read cancelled");
     const source=this.#activeSource;
     let miss: RootfsPackMiss | undefined;
     const missed = (value: RootfsPackMiss) => { miss = value; };
-    if(source!==undefined){const packed=await this.#checkpoints.packs.readBlob(source.manifest,source.digest,blob,undefined,missed);if(packed!==undefined)return packed;}
+    const options = { missed, ...(signal === undefined ? {} : { signal }) };
+    if(source!==undefined){const packed=await this.#checkpoints.packs.readBlob(source.manifest,source.digest,blob,options);if(packed!==undefined)return packed;}
     const cached = await verifiedBytes(this.#backend, "blobs", blob.sha256, blob.bytes, blob.sha256);
     if (cached !== undefined) return cached;
     if (this.#localOnly) throw new VMError("STORAGE_ERROR", "Installed image data is missing; repair the image cache", { reason: "image-not-cached", ...(miss === undefined ? {} : { pack: miss.reason, chunk: miss.chunk }) });
-    await this.#checkpoints.ensureBlob(blob, undefined, source);
+    const transient = async () => {
+      const packed = source === undefined ? undefined : await this.#checkpoints.packs.readBlob(source.manifest, source.digest, blob, { ...options, transient: true });
+      return packed ?? await this.#checkpoints.fetchVerifiedBlob(blob, signal);
+    };
+    if (this.#imagePreparation === "on-demand" && source !== undefined) {
+      if ((await availableStorageBytes() ?? Infinity) < DISK_RESERVE_BYTES + blob.bytes) return transient();
+    }
+    try {
+      await this.#checkpoints.ensureBlob(blob, signal, source, this.#imagePreparation);
+    } catch (error) {
+      if (this.#imagePreparation === "on-demand" && (refusedWrite(error)
+        || error instanceof VMError && error.detail?.["reason"] === "image-pack-write-refused")) return transient();
+      throw error;
+    }
     if (source !== undefined) {
-      const packed = await this.#checkpoints.packs.readBlob(source.manifest, source.digest, blob, undefined, missed);
+      const packed = await this.#checkpoints.packs.readBlob(source.manifest, source.digest, blob, options);
       if (packed !== undefined) return packed;
     }
     const content=await verifiedBytes(this.#backend,"blobs",blob.sha256,blob.bytes,blob.sha256);
@@ -403,6 +491,14 @@ export class RootfsStore {
     }
     return content;
   }
+}
+
+function sharedEvidencePack(manifest: UserspaceRootfsManifest, evidence: readonly UserspaceRootfsBlob[]): boolean {
+  const files = manifest.packs?.index.blobs;
+  if (files === undefined) return false;
+  const extents = evidence.map(blob => files.find(file => file.sha256 === blob.sha256)?.extents);
+  const chunk = extents[0]?.[0]?.chunk;
+  return chunk !== undefined && extents.every(file => file?.length === 1 && file[0]?.chunk === chunk);
 }
 
 function installedOwner(digest: string): RootfsCheckpointOwner {
@@ -422,6 +518,7 @@ function prepared(manifest: UserspaceRootfsManifest,digest:string,keyId:string):
     totalBytes: manifest.totalBytes,
     metadata: encodeUserspaceRootfsMetadata(manifest),
     runtimes: manifest.runtimes,
+    ...(manifest.nativeUtilities === undefined ? {} : { nativeUtilities: manifest.nativeUtilities }),
   };
 }
 

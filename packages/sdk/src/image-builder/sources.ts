@@ -28,7 +28,9 @@ export async function materializeSource(source: RootfsSource, staging: string, o
   if (source.kind === "archive") {
     const input = resolve(options.recipeDir, source.artifact.path);
     const staged = await stageFileArtifact(staging, "verified-inputs", input, { bytes: (await lstat(input)).size, sha256: source.artifact.sha256 }, options.signal);
-    const metadata = await unpackSourceArchive(join(staging, staged.url.slice(2)), root, options.signal);
+    const archive = join(staging, staged.url.slice(2));
+    const metadata = await unpackSourceArchive(archive, root, options.signal);
+    await rm(archive);
     return { root, identity: source.artifact.sha256, metadata };
   }
   const tag = `oxidevm-build-${randomUUID()}`; const container = `oxidevm-export-${randomUUID()}`;

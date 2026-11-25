@@ -1,5 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
+import { VMError } from "./errors.js";
 import { createRuntimeVM } from "./index.js";
 import { PROTOCOL_VERSION, type SnapshotInfo } from "./protocol.js";
 import type { StartProgress } from "./snapshot-types.js";
@@ -8,8 +9,8 @@ import { ScriptedWorker } from "./system-vm.test-support.js";
 
 vi.mock("./assistance-build.js", () => ({ ASSISTANCE_BUILD: "development", ASSISTANCE_ARTIFACTS: undefined }));
 vi.mock("./userspace-process.js", async () => {
-  const { nativeBackend } = await import("./userspace-vm.test-support.js");
-  return { UserspaceProcessBackend: { create: () => Promise.resolve(nativeBackend()) } };
+  const { startNativeBackend } = await import("./userspace-vm.test-support.js");
+  return { UserspaceProcessBackend: { start: startNativeBackend } };
 });
 
 const MANIFEST = "https://images.example.test/boundary/manifest.json";
@@ -80,6 +81,20 @@ describe("system VM shipped restore points", () => {
     expect(image.start).toEqual({ kind: "booted", reason: "first-start", shipped: { reason: "untrusted" } });
     expect(storage().operations).not.toContain("snapshot-install-shipped");
     await vm.dispose();
+  });
+
+  it("reopens the live disk after a shipped install releases its reserve and fails", async () => {
+    ScriptedWorker.answers.set("snapshot-install-shipped", () => {
+      throw new VMError("QUOTA_EXCEEDED", "no space for the shipped restore point");
+    });
+    const vm = await createSystemRuntimeVM({ mode: "system", workspaceId: "example", memoryMiB: 256, vcpus: 1, network: "local" });
+    try {
+      const image = await vm.bootManagedImage(MANIFEST, { resume: "latest", shipped: "container-ready", ...TRUST });
+      expect(image.start).toEqual({ kind: "booted", reason: "first-start", shipped: { reason: "no-space" } });
+      expect(storage().operations.filter(type => type === "prepare-managed-image")).toHaveLength(2);
+    } finally {
+      await vm.dispose();
+    }
   });
 
   it("refuses a shipped name that is not a catalog id", async () => {

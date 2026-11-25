@@ -1,4 +1,4 @@
-import { deserializeError, serializeUnknownError, VMError } from "../../errors.js";
+import { deserializeError, serializeUnknownError, VMError, withCleanupFailure } from "../../errors.js";
 import type { AssistanceBinding } from "../../protocol/assistance.js";
 import type { SnapshotStorageClient } from "../snapshot-channel.js";
 import type { AssistanceTraffic } from "./assistance-traffic.js";
@@ -83,8 +83,11 @@ export async function synchronizeWorkspace(agent: Pick<GuestAgent, "supportsStre
     if (error instanceof VMError && error.detail?.["cleanupFailed"] === true) throw error;
   }), "capture-retire", stepMs, { frames: 0 })));
   options.signal.removeEventListener("abort", abort);
-  if (retired.some(result => result.status === "rejected")) {
-    throw new VMError("STORAGE_ERROR", "Workspace capture retirement requires recovery", { cleanupFailed: true });
+  const rejected = retired.find(result => result.status === "rejected");
+  if (rejected !== undefined) {
+    const cleanup: unknown = rejected.reason;
+    const original = failure === undefined ? new VMError("STORAGE_ERROR", "Workspace capture retirement requires recovery") : failure.error;
+    throw withCleanupFailure(original, cleanup);
   }
   if (failure !== undefined) throw failure.error;
   // Capturing workspace bytes alone leaves unrelated dirty ext4 inodes and its

@@ -26,6 +26,7 @@ export interface JitCompilerHost {
   readonly now: () => number;
   readonly timer: JitCompilerTimer;
   readonly sharedCounter: () => AttentionCounter | null;
+  readonly warmEntries?: boolean;
 }
 
 export interface JitCompilerLimits {
@@ -183,6 +184,7 @@ export class JitCompilerClient {
       version: JIT_COMPILER_PROTOCOL_VERSION,
       type: "attach",
       ready: this.#ready,
+      warmEntries: this.#host.warmEntries ?? false,
     };
     try {
       transport.postMessage(attach, []);
@@ -279,7 +281,7 @@ export class JitCompilerClient {
 
 /** The browser host: a module worker, `performance.now`, `setTimeout` and, when cross-origin
  * isolated, a shared ready counter. */
-export function browserJitCompilerHost(): JitCompilerHost {
+export function browserJitCompilerHost(warmEntries = false): JitCompilerHost {
   let handle: ReturnType<typeof setTimeout> | undefined;
   return {
     createTransport: () => new Worker(
@@ -298,5 +300,6 @@ export function browserJitCompilerHost(): JitCompilerHost {
       },
     },
     sharedCounter: createAttentionCounter,
+    warmEntries,
   };
 }

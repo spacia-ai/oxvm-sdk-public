@@ -157,6 +157,7 @@ export class ScriptedWorker extends EventTarget {
       case "configure-system-aot":
       case "assistance-dispose":
       case "dispose":
+      case "release-workspace-reserve":
         return undefined;
       default:
         throw new Error(`unexpected operation ${type}`);

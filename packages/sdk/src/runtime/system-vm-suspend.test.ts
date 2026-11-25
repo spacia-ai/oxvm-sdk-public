@@ -7,8 +7,8 @@ import { bootedManagedVm, ScriptedWorker } from "./system-vm.test-support.js";
 
 vi.mock("./assistance-build.js", () => ({ ASSISTANCE_BUILD: "development", ASSISTANCE_ARTIFACTS: undefined }));
 vi.mock("./userspace-process.js", async () => {
-  const { nativeBackend } = await import("./userspace-vm.test-support.js");
-  return { UserspaceProcessBackend: { create: () => Promise.resolve(nativeBackend()) } };
+  const { startNativeBackend } = await import("./userspace-vm.test-support.js");
+  return { UserspaceProcessBackend: { start: startNativeBackend } };
 });
 
 const SAVED: SnapshotInfo = {

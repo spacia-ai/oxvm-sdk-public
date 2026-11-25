@@ -83,6 +83,25 @@ it("follows V8 for the default format, the frame limit and the constructor argum
   expect(() => { realm.capture(undefined); }).toThrow(TypeError);
 });
 
+it("counts the frame limit from the caller when the engine applies the limit to its own stack text", () => {
+  // SpiderMonkey cuts the text of `new Error().stack` at `Error.stackTraceLimit`. An old `depd` (inside Next.js)
+  // sets the limit to 2 and reads the first frame.
+  const lines = SPIDERMONKEY.split("\n").filter(line => line !== "");
+  class LimitedError {
+    static stackTraceLimit: unknown = undefined;
+    readonly stack = `${lines.slice(0, typeof LimitedError.stackTraceLimit === "number" ? LimitedError.stackTraceLimit : lines.length).join("\n")}\n`;
+    static captureStackTrace(target: object): void { Reflect.set(target, "stack", SPIDERMONKEY); }
+  }
+  const realm = { Error: LimitedError, capture: (target: unknown, above?: unknown): void => { Reflect.apply(method(LimitedError, "captureStackTrace"), LimitedError, [target, above]); } };
+  const restore = installCallSites(realm);
+  LimitedError.stackTraceLimit = 2;
+  expect(captured(realm, ["getFunctionName"])).toEqual([["getStack"], ["depd"]]);
+  expect(LimitedError.stackTraceLimit).toBe(2);
+  LimitedError.stackTraceLimit = 1;
+  expect(captured(realm, ["getFunctionName"])).toEqual([["getStack"]]);
+  restore();
+});
+
 it("reads JavaScriptCore and evaluated-code frame forms", () => {
   const realm = foreignRealm(["captureStackTrace@http://h/a.js:1:1", "global code@http://h/b.js:3:4", "eval code@", "http://h/c.js:5:6", "f@http://h/d.js line 370 > eval:13:24"].join("\n"));
   installCallSites(realm);

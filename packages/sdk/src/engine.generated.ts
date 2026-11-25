@@ -3,33 +3,38 @@
 // verifies: engineReleaseId is the SHA-256 of release.json's exact bytes, which are
 // JSON.stringify(engineRelease, null, 2) followed by one newline. engineLicense identifies the
 // release's LICENSE, which release.json does not cover.
-export const engineReleaseId = "ddfce46b861a01d4ace375866a6278f34d979e72b002ee931c26fa6b23013372";
+export const engineReleaseId = "c93ce8b562e00762d507cb5f97c22cf568402cba37420e9a6aa121231eda85ec";
 export const engineRelease = {
-  "schemaVersion": 4,
+  "schemaVersion": 5,
   "engineSource": {
-    "commit": "2ee24097cfec89b14ac31b94ba0285bfc4b862a7",
+    "commit": "2ff397a9228890ffea07b34fbe005a8a1ab92c01",
     "dirty": false,
-    "nativeInputsSHA256": "7df0a02c63360524873ea9327bcca17b6417669d4b265483c88f465993e5e580"
+    "nativeInputsSHA256": "bbdcd6115ad633bb4f76e5d3a31badc14339e1f07b42f903785e3d3881245354"
   },
   "identities": {
     "coreApi": 19,
     "jitAbi": 96,
-    "userspaceApi": 151,
+    "userspaceApi": 153,
     "netstackApi": 2,
     "tlsApi": 2
+  },
+  "nativeUtilities": {
+    "identity": "oxidevm-rust-toybox",
+    "abi": 1,
+    "catalogSha256": "7696700017176b901ea37dc892670c660ca80fa050420dd5254608c7e1db066d"
   },
   "artifacts": [
     {
       "name": "oxidevm_core.wasm",
       "mode": "system",
-      "bytes": 4080346,
-      "sha256": "53844ffc54f98c2f966c7fb30af82692ec0a7ebaacd400cb333c440c94d03f08"
+      "bytes": 4083363,
+      "sha256": "329e2a5bb2b05166d1faa3111d38bba51984f5ec337e7ac03ff57ff7af6cbce4"
     },
     {
       "name": "oxidevm_core_shared.wasm",
       "mode": "system",
-      "bytes": 4101452,
-      "sha256": "6c070fef6a31a75cf522f3019e762a550592c06a3594858201656b77757421c5"
+      "bytes": 4104419,
+      "sha256": "5341449c4b86af1706edd2a30e6ece656e31857374c908a17997abc8d6b6f532"
     },
     {
       "name": "oxidevm_netstack.wasm",
@@ -40,8 +45,8 @@ export const engineRelease = {
     {
       "name": "oxidevm_userspace.wasm",
       "mode": "userspace",
-      "bytes": 14591961,
-      "sha256": "343d29196f3706224c704c11e7c69337ff7f59d9217ca46759d219b215aea4c9"
+      "bytes": 31742512,
+      "sha256": "e2f67f3417f713fbf00932bb923c9b4618c7e0e25e3614eadc9746ccd8caf82f"
     },
     {
       "name": "oxidevm_tls.wasm",
@@ -56,12 +61,20 @@ export const engineLicense = {
   "sha256": "a1285f18dda39e23495b2c61247b47245e075f29112ff412a4c7300615528c9a"
 } as const;
 export const engineDownload = {
-  "kind": "cdn",
-  "release": "engine-ddfce46b861a01d4ace375866a6278f34d979e72b002ee931c26fa6b23013372",
-  "baseUrl": "https://cdn.oxvm.dev/engine/ddfce46b861a01d4ace375866a6278f34d979e72b002ee931c26fa6b23013372/"
+  "kind": "github-release-assets",
+  "release": "engine-c93ce8b562e00762d507cb5f97c22cf568402cba37420e9a6aa121231eda85ec",
+  "assets": {
+    "release.json": "https://api.github.com/repos/spacia-ai/oxvm-sdk/releases/assets/792265433",
+    "LICENSE": "https://api.github.com/repos/spacia-ai/oxvm-sdk/releases/assets/792265534",
+    "oxidevm_core.wasm": "https://api.github.com/repos/spacia-ai/oxvm-sdk/releases/assets/792265624",
+    "oxidevm_core_shared.wasm": "https://api.github.com/repos/spacia-ai/oxvm-sdk/releases/assets/792265759",
+    "oxidevm_netstack.wasm": "https://api.github.com/repos/spacia-ai/oxvm-sdk/releases/assets/792265868",
+    "oxidevm_userspace.wasm": "https://api.github.com/repos/spacia-ai/oxvm-sdk/releases/assets/792265950",
+    "oxidevm_tls.wasm": "https://api.github.com/repos/spacia-ai/oxvm-sdk/releases/assets/792266160"
+  }
 } as const;
 export const engineCompliance: unknown = {
-  "url": "https://cdn.oxvm.dev/engine/ddfce46b861a01d4ace375866a6278f34d979e72b002ee931c26fa6b23013372/compliance/fec92c8b182a44c48b19427fa4f8cd2526cfe549fb52236b7ad482c8b74d8417/compliance.json",
+  "url": "https://cdn.oxvm.dev/engine/c93ce8b562e00762d507cb5f97c22cf568402cba37420e9a6aa121231eda85ec/compliance/4a356e42942d8d0a7abc1690d670de9e63d826e1b3a94c2fc7531a8774f26261/compliance.json",
   "bytes": 746,
-  "sha256": "fec92c8b182a44c48b19427fa4f8cd2526cfe549fb52236b7ad482c8b74d8417"
+  "sha256": "4a356e42942d8d0a7abc1690d670de9e63d826e1b3a94c2fc7531a8774f26261"
 };

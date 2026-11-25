@@ -2,7 +2,7 @@ import { exactKeys, integer, record } from "../../decode.js";
 import { decodeSerializedError, deserializeError, VMError } from "../../errors.js";
 import { decodeCommandNotice, encodeCommandExit, encodeCommandIo, encodeCommandNoticeRequest, encodeCommandSignalExit, type ModuleCommandProgram, type UserspaceCommandHostRequest } from "../../userspace-command-abi.js";
 import { decodeJSCompletion, encodeJSRequest, type JSCompletion } from "../../js-process/native-abi.js";
-import { JS_MAILBOX_BYTES, JS_MAX_OPERATION, JS_PROCESS_PROTOCOL_VERSION, jsMailboxAttention, protocol, Writer } from "../../js-process/codec.js";
+import { JS_CHILD_SERVICES_VERSION, JS_FILE_SERVICES_VERSION, JS_LEGACY_MAX_OPERATION, JS_MAILBOX_BYTES, JS_MAX_OPERATION, JS_PROCESS_PROTOCOL_VERSION, jsMailboxAttention, postOwnedPayload, protocol, Writer } from "../../js-process/codec.js";
 import { createAttentionCounter, type AttentionCounter, type AttentionWatch } from "../../host-attention.js";
 import { AttentionNotices, browserAttentionNoticesWorker, type AttentionNoticesWorker } from "../attention-notices.js";
 import { callUserspaceU32 as call } from "../userspace-exports.js";
@@ -38,7 +38,7 @@ interface Ports {
   readonly knowledge?: { remember(notice: LateFailureNotice, failure: LateFailure): void };
   /** ADR 0027: the VM's registration owner, which resolves a module command to the copies its registration verified. */
   readonly commands?: { launch(program: ModuleCommandProgram): RunnerCommandLaunch | undefined };
-  active(): boolean; wake(): void;
+  active(): boolean; wake(outputPid?: number): void;
 }
 /** How the execution worker learns that one process posted Linux requests it has not received yet. */
 interface TaskAttention { delivered(): void; close(): void; readonly noticePort: MessagePort | null }
@@ -48,6 +48,7 @@ type Isolation = "local" | "native" | "module";
 interface Running {
   readonly request: UserspaceCommandHostRequest; readonly worker: WorkerProcess; readonly port: MessagePort; readonly isolation: Isolation;
   readonly header: Int32Array; readonly body: Uint8Array;
+  readonly maxOperation: number;
   /** JS process protocol 5: the signal buffer of a local process (engine ADR 0027); a broker owns an isolated one's. */
   readonly signals: TaskSignals | undefined;
   readonly pending: Map<number, boolean>; sequence: number; closing: boolean; stop(): void;
@@ -56,6 +57,7 @@ interface Running {
 }
 /** Notices one reconcile takes at most; the rest stay pending work for the next. */
 const NOTICES_PER_RECONCILE = 64;
+const NEXT_SIGNAL_NOTICE = encodeCommandNoticeRequest();
 
 /** A module launch as it crosses into the frame: the copies without compiled modules, which never cross the frame
  * boundary, and each artifact's copy key, so the broker compiles each core module once per VM (ADR 0028). */
@@ -143,9 +145,9 @@ export class JsProcessWorkers {
   /** Command operation 6 (ADR 0027): each signal Rust caught for a worker sets its words, and the worker gets one nudge. */
   #signalNotices(): void {
     for (const task of this.#running.values()) task.signals?.offerInterrupts();
-    const nudged = new Set<Running>();
+    let nudged: Set<Running> | undefined;
     for (let count = 0; count < NOTICES_PER_RECONCILE && this.ports.active(); count++) {
-      const notice = decodeCommandNotice(this.#native("oxidevm_userspace_command", encodeCommandNoticeRequest()));
+      const notice = decodeCommandNotice(this.#native("oxidevm_userspace_command", NEXT_SIGNAL_NOTICE));
       if (notice === null) break;
       const task = this.#running.get(notice.id);
       if (task === undefined || task.request.generation !== notice.generation || task.closing) continue;
@@ -154,9 +156,12 @@ export class JsProcessWorkers {
       const details = { code: notice.code, sender: notice.sender, uid: notice.uid, value: notice.value };
       if (task.isolation === "module") { task.port.postMessage({ version: JS_PROCESS_PROTOCOL_VERSION, type: "signal-notice", signal: notice.signal, interrupt: notice.interrupt, ...details }); continue; }
       if (task.signals === undefined) protocol("A native JS process has no host signal dispositions");
-      task.signals.deliver({ signal: notice.signal, interrupt: notice.interrupt, details }); nudged.add(task);
+      task.signals.deliver({ signal: notice.signal, interrupt: notice.interrupt, details });
+      (nudged ??= new Set()).add(task);
     }
-    for (const task of nudged) task.port.postMessage({ version: JS_PROCESS_PROTOCOL_VERSION, type: "signal" });
+    if (nudged !== undefined) {
+      for (const task of nudged) task.port.postMessage({ version: JS_PROCESS_PROTOCOL_VERSION, type: "signal" });
+    }
   }
   /** The worker ends its process killed by a signal (command operation 7); Rust reports the exit, so none follows. */
   #signaled(task: Running, value: Readonly<Record<string, unknown>>): void {
@@ -225,7 +230,12 @@ export class JsProcessWorkers {
     const sync = task.pending.get(reply.sequence); if (sync === undefined) protocol("Unexpected JS completion sequence"); task.pending.delete(reply.sequence);
     if (sync) {
       writeWorkerMailbox(task.header, task.body, reply.sequence, reply.errno, reply.value, reply.payload);
-    } else task.port.postMessage({ version: JS_PROCESS_PROTOCOL_VERSION, type: "reply", sequence: reply.sequence, errno: reply.errno, value: reply.value, payload: reply.payload });
+    } else {
+      // The completion decoder reads a private copy of the engine's staging record.
+      const message = { version: JS_PROCESS_PROTOCOL_VERSION, type: "reply", sequence: reply.sequence,
+        errno: reply.errno, value: reply.value, payload: reply.payload };
+      postOwnedPayload(task.port, message, reply.payload);
+    }
   }
   #message(task: Running, input: unknown): void {
     const value = record(input, "JS Linux request");
@@ -235,14 +245,20 @@ export class JsProcessWorkers {
     exactKeys(value, ["version", "type", "sequence", "sync", "operation", "payload"]);
     if (value["version"] !== JS_PROCESS_PROTOCOL_VERSION || value["type"] !== "request" || typeof value["sync"] !== "boolean" || !(value["payload"] instanceof Uint8Array) || value["payload"].byteLength > 16 * 1024 ** 2 + 128) protocol("Malformed JS Linux request");
     if (task.isolation !== "local" && value["sync"]) protocol(task.isolation === "native" ? "Native shared memory must remain on its execution origin" : "Module shared memory must remain in the module frame");
-    const sequence = integer(value["sequence"], "JS request sequence", 1, 0x7fff_ffff), operation = integer(value["operation"], "JS operation", 0, JS_MAX_OPERATION);
+    const sequence = integer(value["sequence"], "JS request sequence", 1, 0x7fff_ffff), operation = integer(value["operation"], "JS operation", 0, task.maxOperation);
     if (sequence !== task.sequence + 1 || task.closing || task.pending.size >= 38) protocol("Invalid JS operation sequence or lifecycle");
     task.sequence = sequence; task.pending.set(sequence, value["sync"]);
     const response = callUserspaceRecord(this.ports.runtime, "oxidevm_userspace_js_submit", encodeJSRequest(task.request, sequence, operation, value["payload"]));
     if (response.byteLength !== 4) protocol("Invalid JS admission result");
     const errno = new DataView(response.buffer).getUint32(0, true);
     if (errno !== 0) this.#reply(task, { ...task.request, sequence, errno, value: 0n, payload: new Uint8Array() });
-    this.reconcile(); this.ports.wake();
+    this.reconcile();
+    const payload = value["payload"];
+    if (errno === 0 && operation === 1 && task.isolation === "module" && task.request.program.kind === "worker" && payload.byteLength >= 12) {
+      const fd = new DataView(payload.buffer, payload.byteOffset, 8).getBigUint64(0, true);
+      if (fd === 1n || fd === 2n) { this.ports.wake(task.request.pid); return; }
+    }
+    this.ports.wake();
   }
   /** ADR 0027: the copies of the command's registration. One turned off since Rust admitted the exec has nothing left to run. */
   #commandLaunch(program: ModuleCommandProgram): RunnerCommandLaunch {
@@ -256,6 +272,8 @@ export class JsProcessWorkers {
     // An exclusive service's workspace lease (ADR 0028) ends with its process, however it ends.
     const lease = registered?.lease;
     let worker: WorkerProcess, mailbox: SharedArrayBuffer, attention: TaskAttention = NO_ATTENTION, launch: RunnerLaunch | undefined, signals: TaskSignals | undefined, isolation: Isolation;
+    let fileServicesVersion: typeof JS_FILE_SERVICES_VERSION | undefined;
+    let childServicesVersion: typeof JS_CHILD_SERVICES_VERSION | undefined;
     try {
       if (program.kind === "worker") this.#launches.delete(Number(program.token));
       launch = program.kind === "module-command" ? this.#commandLaunch(program) : registered?.launch;
@@ -270,6 +288,15 @@ export class JsProcessWorkers {
         // ADR 0028: a module runs only in the VM's module frame; there is no page-origin fallback.
         const frame = this.ports.moduleFrame?.();
         if (frame === undefined) throw isolationUnavailable("module-frame-lost", "The module frame is gone");
+        const { instance } = this.ports.runtime;
+        const getter = "oxidevm_userspace_js_file_services_version";
+        if (typeof instance.exports[getter] === "function" && call(instance, getter) === JS_FILE_SERVICES_VERSION) {
+          fileServicesVersion = JS_FILE_SERVICES_VERSION;
+        }
+        const childGetter = "oxidevm_userspace_js_child_services_version";
+        if (typeof instance.exports[childGetter] === "function" && call(instance, childGetter) === JS_CHILD_SERVICES_VERSION) {
+          childServicesVersion = JS_CHILD_SERVICES_VERSION;
+        }
         attention = this.#attention(isolation, mailbox);
         worker = isolatedWorkerProcess(frame, request.pid, attention.noticePort, MODULE_BROKER_VERSION);
       } else {
@@ -294,7 +321,9 @@ export class JsProcessWorkers {
         task.closing = true; this.#diagnostic(request, ++task.sequence, error); worker.stop();
         try { this.#exit(request, 125); this.reconcile(); } catch (failure) { fatal(failure); }
       };
-      const task: Running = { request, worker, port: channel.port1, isolation, header: new Int32Array(mailbox, 0, 4), body: new Uint8Array(mailbox, 16), signals, pending: new Map(), sequence: 0, closing: false, stop, fail: error => { fail(error); } };
+      const task: Running = { request, worker, port: channel.port1, isolation, header: new Int32Array(mailbox, 0, 4), body: new Uint8Array(mailbox, 16),
+        maxOperation: fileServicesVersion === undefined ? JS_LEGACY_MAX_OPERATION : JS_MAX_OPERATION,
+        signals, pending: new Map(), sequence: 0, closing: false, stop, fail: error => { fail(error); } };
       channel.port1.onmessage = event => {
         attention.delivered();
         // A signal exit closes the task first, so its failure is the VM's, like a failed exit.
@@ -317,7 +346,14 @@ export class JsProcessWorkers {
       }, fail);
       signal.addEventListener("abort", stop, { once: true }); this.#running.set(request.id, task);
       try {
-        if (isolation === "module" && launch !== undefined) worker.send({ version: JS_PROCESS_PROTOCOL_VERSION, type: "start", ...crossing(launch) }, [channel.port2]);
+        if (isolation === "module" && launch !== undefined) {
+          const prepared = {
+            ...launch,
+            ...(fileServicesVersion === undefined ? {} : { fileServicesVersion }),
+            ...(childServicesVersion === undefined ? {} : { childServicesVersion }),
+          };
+          worker.send({ version: JS_PROCESS_PROTOCOL_VERSION, type: "start", ...crossing(prepared) }, [channel.port2]);
+        }
         else worker.send({ version: JS_PROCESS_PROTOCOL_VERSION, type: "start", port: channel.port2,
           ...(signals === undefined ? {} : { mailbox, signals: signals.buffer }),
           ...(request.program.kind === "native-node" ? { program: request.program, generation: request.generation, id: request.id } : {}) }, [channel.port2]);

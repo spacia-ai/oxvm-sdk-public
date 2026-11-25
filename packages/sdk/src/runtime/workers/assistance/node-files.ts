@@ -1,9 +1,11 @@
+import type { Buffer } from "buffer";
 import type { AssistanceOperation } from "../../protocol/assistance.js";
 import type { AssistanceResult } from "../../protocol/assistance-reply.js";
 import { Dirent, fileAccessConstants, createFileOperations, type FileOperation } from "./node-file-operations.js";
 import { mkdtemp } from "./node-file-mkdtemp.js";
 import type { Inspect } from "./node-arg-type.js";
 import { unavailableNodeApi } from "./node-capability.js";
+import type { BigIntStats, Stats } from "./node-stats.js";
 
 export { createAsyncFiles } from "./node-files-async.js";
 
@@ -21,6 +23,20 @@ export function createSyncFiles(call: (operation: AssistanceOperation) => Assist
     }
     return step.value;
   }
+  // Without options these answer Node's default forms; the options select the bigint and byte forms.
+  type Status = (target: unknown, options?: unknown) => FileOperation<Stats | BigIntStats | undefined>;
+  function status(operation: Status) {
+    function sync(target: unknown): Stats | undefined;
+    function sync(target: unknown, options: unknown): Stats | BigIntStats | undefined;
+    function sync(...args: [target: unknown, options?: unknown]): Stats | BigIntStats | undefined { return run(operation(...args)); }
+    return sync;
+  }
+  function located(operation: (target: unknown, options?: unknown) => FileOperation<string | Buffer>) {
+    function sync(target: unknown): string;
+    function sync(target: unknown, options: unknown): string | Buffer;
+    function sync(...args: [target: unknown, options?: unknown]): string | Buffer { return run(operation(...args)); }
+    return sync;
+  }
   return {
     Dirent, constants: fileAccessConstants,
     accessSync: (...args: Parameters<typeof operations.access>) => run(operations.access(...args)),
@@ -28,14 +44,14 @@ export function createSyncFiles(call: (operation: AssistanceOperation) => Assist
     closeSync: (...args: Parameters<typeof operations.close>) => run(operations.close(...args)),
     readSync: (...args: Parameters<typeof operations.read>) => run(operations.read(...args)),
     writeSync: (...args: Parameters<typeof operations.write>) => run(operations.write(...args)),
-    readFileSync: (...args: Parameters<typeof operations.readFile>) => run(operations.readFile(...args)),
-    statSync: (...args: Parameters<typeof operations.stat>) => run(operations.stat(...args)),
+    readFileSync: (...args: Parameters<typeof operations.readFile>) => run(operations.sync.readFile(...args)),
+    statSync: status(operations.stat),
     // Node's existsSync answers false for every failure, including invalid arguments.
     existsSync: (path: unknown): boolean => { try { run(operations.access(path)); return true; } catch { return false; } },
-    lstatSync: (...args: Parameters<typeof operations.lstat>) => run(operations.lstat(...args)),
-    fstatSync: (...args: Parameters<typeof operations.fstat>) => run(operations.fstat(...args)),
-    writeFileSync: (...args: Parameters<typeof operations.writeFile>) => run(operations.writeFile(...args)),
-    appendFileSync: (...args: Parameters<typeof operations.appendFile>) => run(operations.appendFile(...args)),
+    lstatSync: status(operations.lstat),
+    fstatSync: status(operations.fstat),
+    writeFileSync: (...args: Parameters<typeof operations.writeFile>) => run(operations.sync.writeFile(...args)),
+    appendFileSync: (...args: Parameters<typeof operations.appendFile>) => run(operations.sync.appendFile(...args)),
     fsyncSync: (...args: Parameters<typeof operations.fsync>) => run(operations.fsync(...args)),
     fdatasyncSync: (...args: Parameters<typeof operations.fdatasync>) => run(operations.fdatasync(...args)),
     unlinkSync: (...args: Parameters<typeof operations.unlink>) => run(operations.unlink(...args)),
@@ -54,8 +70,8 @@ export function createSyncFiles(call: (operation: AssistanceOperation) => Assist
     renameSync: (...args: Parameters<typeof operations.rename>) => run(operations.rename(...args)),
     linkSync: (...args: Parameters<typeof operations.link>) => run(operations.link(...args)),
     symlinkSync: (...args: Parameters<typeof operations.symlink>) => run(operations.symlink(...args)),
-    readlinkSync: (...args: Parameters<typeof operations.readlink>) => run(operations.readlink(...args)),
-    realpathSync: (...args: Parameters<typeof operations.realpath>) => run(operations.realpath(...args)),
+    readlinkSync: located(operations.readlink),
+    realpathSync: located(operations.realpath),
     readdirSync: (...args: Parameters<typeof operations.readdir>) => run(operations.readdir(...args)),
   };
 }

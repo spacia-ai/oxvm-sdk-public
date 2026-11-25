@@ -1,10 +1,11 @@
+import { moduleFileOperations } from "../../../runtime/js-process/at-operations.js";
 import { WASI } from "./errno.js";
 import { LINUX } from "./host.js";
 import { WasiError, type WasiContext } from "./context.js";
 import { linuxStatusFlags, timesOf } from "./fd.js";
 import { CONFINED, guestPath, openTarget, withParent } from "./paths-resolve.js";
 import { READ_RIGHTS, RIGHT, WRITE_RIGHTS } from "./rights.js";
-import { writeFilestat } from "./stat.js";
+import { FILETYPE, filetypeOf, writeFilestat } from "./stat.js";
 
 type ImportFunction = (...args: never[]) => number;
 const LOOKUP_SYMLINK_FOLLOW = 1;
@@ -34,10 +35,18 @@ export function pathFunctions(context: WasiContext): Readonly<Record<string, Imp
       const name = path(pointer, length);
       memory().check(out, 4);
       const flags = openFlags(oflags, base, fdflags, (lookup & LOOKUP_SYMLINK_FOLLOW) !== 0);
-      const opened = context.at.openat(dir.host, name, flags, (oflags & OFLAG.creat) !== 0 ? 0o666 : 0, dir.confined ? CONFINED : 0);
-      let kind: "file" | "directory";
-      try { kind = (context.host.fs.fstat(opened).mode & 0o170000) === 0o040000 ? "directory" : "file"; }
-      catch (error) { context.host.fs.close(opened); throw error; }
+      const at = context.at, compound = moduleFileOperations(at);
+      const mode = (oflags & OFLAG.creat) !== 0 ? 0o666 : 0, resolve = dir.confined ? CONFINED : 0;
+      let opened, fileMode;
+      if (compound !== undefined) {
+        ({ fd: opened, mode: fileMode } = compound.openatMode(dir.host, name, flags, mode, resolve));
+      } else {
+        opened = at.openat(dir.host, name, flags, mode, resolve);
+        try { fileMode = context.host.fs.fstat(opened).mode; }
+        catch (error) { context.host.fs.close(opened); throw error; }
+      }
+      const type = filetypeOf(fileMode);
+      const kind = type === FILETYPE.regularFile ? "regularFile" : type === FILETYPE.directory ? "directory" : "file";
       const guestFd = table.insert({ kind, host: opened, base, inheriting, owned: true, confined: dir.confined, readOnly: dir.kind !== "stream" && dir.readOnly });
       memory().setU32(out, guestFd);
     }),

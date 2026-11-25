@@ -2,16 +2,21 @@ import { VMError } from "../errors.js";
 import { normalizeWorkspacePath } from "../workspace-path.js";
 import type { WorkspaceStoreBackend } from "./workspace-store.js";
 import { indexedDbWorkspacePaths, opfsWorkspacePaths } from "./workspace-enumeration.js";
-import { refusedForSpace, type SpaceReserve } from "./managed-disk-reserve.js";
+import { availableStorageBytes, refusedForSpace } from "./browser-quota.js";
+import type { SpaceReserve } from "./managed-disk-reserve.js";
+import { decodeManagedGzip } from "./managed-image-fetch.js";
+import { tryWriteImmutableOpfsBody } from "./opfs-body.js";
+import { CHUNK_BYTES } from "./workspace-stream.js";
 
 /** Only durable file publications may spend the guest reserve; snapshot object
  * writes keep using their own backend and report storage pressure. */
 export function reserveWorkspaceWrites(backend: WorkspaceStoreBackend, reserve: SpaceReserve | undefined): WorkspaceStoreBackend {
-  return { ...backend, write: async (path, bytes) => {
-    try { await backend.write(path, bytes); }
+  return { ...backend, write: async (path, bytes, operation) => {
+    if (reserve !== undefined && (await availableStorageBytes() ?? Infinity) <= bytes.byteLength) reserve.release();
+    try { await backend.write(path, bytes, operation); }
     catch (error) {
       if (!refusedForSpace(error) || reserve?.release() !== true) throw error;
-      await backend.write(path, bytes);
+      await backend.write(path, bytes, operation);
     }
   } };
 }
@@ -52,46 +57,103 @@ export function indexedDbWorkspaceStoreBackend(database: Promise<IDBDatabase>): 
   };
 }
 
-export function opfsWorkspaceStoreBackend(root: FileSystemDirectoryHandle): WorkspaceStoreBackend {
+export function opfsWorkspaceStoreBackend(root: FileSystemDirectoryHandle, compactChunks = false): WorkspaceStoreBackend {
   return {
     list: (prefix) => opfsWorkspacePaths(root, prefix),
     read: async (path, maximumBytes, signal) => {
-      try {
-        requireActive(signal);
-        const segments = normalizeWorkspacePath(path);
-        const { directory, name } = await parentDirectory(root, segments, false);
-        const file = await (await directory.getFileHandle(name)).getFile();
-        return await readWorkspaceBlob(file, maximumBytes, signal);
-      } catch (error) {
-        if (error instanceof DOMException && error.name === "NotFoundError") {
-          requireActive(signal);
-          return undefined;
-        }
-        throw error;
-      }
-    },
-    write: async (path, bytes) => {
+      requireActive(signal);
       const segments = normalizeWorkspacePath(path);
+      const raw = await findWorkspaceBlob(root, segments);
+      if (raw !== undefined) return readWorkspaceBlob(raw, maximumBytes, signal);
+      const packedPath = packedChunkPath(segments);
+      const packed = packedPath === undefined ? undefined : await findWorkspaceBlob(root, packedPath);
+      requireActive(signal);
+      return packed === undefined ? undefined : readPackedChunk(packed, maximumBytes, signal);
+    },
+    write: async (path, bytes, operation) => {
+      let segments = normalizeWorkspacePath(path);
+      let body = bytes;
+      const compact = compactChunks && operation === "immutable-chunk" ? packedChunkPath(segments) : undefined;
+      if (compact !== undefined) {
+        const packed = await packChunk(bytes);
+        if (packed !== undefined) { segments = compact; body = packed; }
+      }
       const { directory, name } = await parentDirectory(root, segments, true);
-      const writable = await (await directory.getFileHandle(name, { create: true })).createWritable({ keepExistingData: false });
+      const file = await directory.getFileHandle(name, { create: true });
+      if (operation === "immutable-chunk") {
+        try { if (await tryWriteImmutableOpfsBody(file, body, "workspace")) return; }
+        catch (error) {
+          // A sync handle can reserve more space than the body needs.
+          if (!refusedForSpace(error)) throw error;
+        }
+      }
+      const writable = await file.createWritable({ keepExistingData: false });
       try {
-        await writable.write(bytes.slice());
+        await writable.write(body.slice());
         await writable.close();
       } catch (error) {
-        await writable.abort(error);
+        await writable.abort(error).catch(() => undefined);
         throw error;
       }
     },
     remove: async (path) => {
       const segments = normalizeWorkspacePath(path);
-      try {
-        const { directory, name } = await parentDirectory(root, segments, false);
-        await directory.removeEntry(name);
-      } catch (error) {
-        if (!(error instanceof DOMException) || error.name !== "NotFoundError") throw error;
-      }
+      await removeWorkspaceBlob(root, segments);
+      const packed = packedChunkPath(segments);
+      if (packed !== undefined) await removeWorkspaceBlob(root, packed);
     },
   };
+}
+
+async function findWorkspaceBlob(root: FileSystemDirectoryHandle, segments: string[]): Promise<File | undefined> {
+  try {
+    const { directory, name } = await parentDirectory(root, segments, false);
+    return await (await directory.getFileHandle(name)).getFile();
+  } catch (error) {
+    if (error instanceof DOMException && error.name === "NotFoundError") return undefined;
+    throw error;
+  }
+}
+
+async function removeWorkspaceBlob(root: FileSystemDirectoryHandle, segments: string[]): Promise<void> {
+  try {
+    const { directory, name } = await parentDirectory(root, segments, false);
+    await directory.removeEntry(name);
+  } catch (error) {
+    if (!(error instanceof DOMException) || error.name !== "NotFoundError") throw error;
+  }
+}
+
+// The journal names the logical chunk. The versioned suffix selects its physical encoding.
+function packedChunkPath(segments: string[]): string[] | undefined {
+  const name = segments.at(-1);
+  if (name === undefined || segments.at(-2) !== "chunks" || !/^[a-f0-9]{64}$/u.test(name)) return undefined;
+  return [...segments.slice(0, -1), `${name}.gzip-v1`];
+}
+
+async function packChunk(bytes: Uint8Array<ArrayBuffer>): Promise<Uint8Array<ArrayBuffer> | undefined> {
+  if (bytes.length > CHUNK_BYTES || typeof CompressionStream !== "function") return undefined;
+  const stream = new Blob([bytes]).stream().pipeThrough(new CompressionStream("gzip"));
+  const encoded = new Uint8Array(await new Response(stream).arrayBuffer());
+  if (encoded.length + 4 >= bytes.length) return undefined;
+  const result = new Uint8Array(encoded.length + 4);
+  new DataView(result.buffer).setUint32(0, bytes.length, true);
+  result.set(encoded, 4);
+  return result;
+}
+
+async function readPackedChunk(file: File, maximumBytes = CHUNK_BYTES, signal?: AbortSignal): Promise<Uint8Array<ArrayBuffer>> {
+  const limit = Math.min(CHUNK_BYTES, maximumBytes);
+  if (file.size <= 4 || file.size >= limit) {
+    throw new VMError("STORAGE_ERROR", "Invalid compressed workspace chunk");
+  }
+  const packed = new Uint8Array(await file.arrayBuffer());
+  requireActive(signal);
+  const bytes = new DataView(packed.buffer).getUint32(0, true);
+  if (bytes <= file.size || bytes > limit) throw new VMError("STORAGE_ERROR", "Invalid compressed workspace chunk length");
+  const content = decodeManagedGzip(packed.subarray(4), bytes);
+  if (content === undefined) throw new VMError("STORAGE_ERROR", "Workspace chunk did not decompress");
+  return content;
 }
 
 export function indexedDbRead(database: IDBDatabase, path: string, maximumBytes?: number, signal?: AbortSignal): Promise<Uint8Array<ArrayBuffer> | undefined> {
@@ -135,8 +197,12 @@ export function indexedDbRead(database: IDBDatabase, path: string, maximumBytes?
 export async function readWorkspaceBlob(file: Blob, maximumBytes?: number, signal?: AbortSignal): Promise<Uint8Array<ArrayBuffer>> {
   requireActive(signal);
   if (maximumBytes !== undefined && file.size > maximumBytes) throw new VMError("STORAGE_ERROR", "workspace object exceeds its declared bound");
-  const bytes = new Uint8Array(file.size);
-  const reader = file.stream().getReader();
+  return readWorkspaceBody(file.stream(), file.size, signal);
+}
+
+async function readWorkspaceBody(stream: ReadableStream<Uint8Array<ArrayBuffer>>, size: number, signal?: AbortSignal): Promise<Uint8Array<ArrayBuffer>> {
+  const bytes = new Uint8Array(size);
+  const reader = stream.getReader();
   let retirement: Promise<void> | undefined;
   const retire = () => retirement ??= reader.cancel();
   const abort = () => { void retire().catch(() => { /* Awaited below before returning ownership. */ }); };

@@ -6,6 +6,8 @@
 
 import { serializeUnknownError } from "../errors.js";
 import { postCounted, type AttentionCounter } from "../host-attention.js";
+import { decodeJitModuleExit, JIT_CONTEXT_LENGTH } from "../core-abi.js";
+import { JIT_DISPATCH_TABLE_ENTRIES, MAX_LINKED_JIT_MEMBERS } from "../jit-cache.js";
 import {
   JIT_COMPILER_PROTOCOL_VERSION,
   type JitCompilerRequest,
@@ -14,6 +16,8 @@ import {
 } from "./control/jit-compiler-protocol.js";
 
 let ready: AttentionCounter | null = null;
+let warmEntries = false;
+let scratch: WebAssembly.ModuleImports | undefined;
 
 self.addEventListener("message", (event: MessageEvent<unknown>) => {
   let request: JitCompilerRequest;
@@ -25,6 +29,7 @@ self.addEventListener("message", (event: MessageEvent<unknown>) => {
   }
   if (request.type === "attach") {
     ready = request.ready;
+    warmEntries = request.warmEntries;
     return;
   }
   compile(request).catch(fail);
@@ -44,6 +49,7 @@ async function compile(request: Extract<JitCompilerRequest, { readonly type: "co
   let response: JitCompilerResponse;
   try {
     const module = await WebAssembly.compile(request.bytes);
+    if (warmEntries) warmModuleEntries(module);
     response = {
       version: JIT_COMPILER_PROTOCOL_VERSION,
       type: "compiled",
@@ -63,4 +69,39 @@ async function compile(request: Extract<JitCompilerRequest, { readonly type: "co
     };
   }
   postCounted(ready, () => { self.postMessage(response); });
+}
+
+function warmModuleEntries(module: WebAssembly.Module): void {
+  if (scratch === undefined) {
+    const pages = Math.ceil(JIT_CONTEXT_LENGTH / 65_536);
+    const table = new WebAssembly.Table({ element: "anyfunc", initial: JIT_DISPATCH_TABLE_ENTRIES });
+    scratch = {
+      memory: new WebAssembly.Memory({ initial: pages, maximum: pages }),
+      dispatch_table: table,
+      record_dispatch_table: table,
+    };
+  }
+  const functions = WebAssembly.Module.imports(module).filter(entry => entry.kind === "function");
+  const imports = Object.fromEntries(functions.map(entry => [entry.name, warmupImport]));
+  const instance = new WebAssembly.Instance(module, { oxidevm: { ...imports, ...scratch } });
+  const members = instance.exports["member_table"];
+  if (members === undefined) {
+    warmEntry(instance.exports["trace"]);
+    return;
+  }
+  if (!(members instanceof WebAssembly.Table) || members.length === 0 || members.length > MAX_LINKED_JIT_MEMBERS) {
+    throw new Error("Invalid JIT warm-up member table");
+  }
+  for (let index = 0; index < members.length; index++) warmEntry(members.get(index));
+}
+
+function warmupImport(): never {
+  throw new Error("JIT warm-up reached an engine helper");
+}
+
+function warmEntry(entry: unknown): void {
+  if (typeof entry !== "function") throw new Error("Invalid JIT warm-up entry");
+  // A zero budget stops the translated entry before it executes a guest instruction.
+  const exit: unknown = Reflect.apply(entry, undefined, [0, 0n, 0]);
+  if (decodeJitModuleExit(exit) !== "guard") throw new Error("JIT warm-up did not return the entry guard exit");
 }

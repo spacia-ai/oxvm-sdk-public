@@ -7,13 +7,15 @@ import { ScriptedWorker } from "./system-vm.test-support.js";
 const received = vi.hoisted(() => new Array<readonly unknown[]>());
 
 vi.mock("./userspace-process.js", async () => {
-  const { nativeBackend } = await import("./userspace-vm.test-support.js");
+  const { startNativeBackend } = await import("./userspace-vm.test-support.js");
   return {
     UserspaceProcessBackend: {
-      create: () => Promise.resolve({
-        ...nativeBackend(),
-        moduleCommands: (request: unknown, signal: unknown) => { received.push([request, signal]); return Promise.resolve({ operation: "disable" }); },
-      }),
+      start: (...args: Parameters<typeof startNativeBackend>) => {
+        const opening = startNativeBackend(...args);
+        return { ...opening, backend: { ...opening.backend,
+          moduleCommands: (request: unknown, signal: unknown) => { received.push([request, signal]); return Promise.resolve({ operation: "disable" }); },
+        } };
+      },
     },
   };
 });

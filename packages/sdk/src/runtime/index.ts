@@ -1,4 +1,4 @@
-import { createUserspaceRuntimeVM, decodeUserspaceProfileOptions } from "./userspace-vm.js";
+import { bootUserspaceRuntimeVM, createUserspaceRuntimeVM, decodeUserspaceProfileOptions, type BootedUserspaceRuntimeVM } from "./userspace-vm.js";
 import { createSystemRuntimeVM } from "./system-vm.js";
 import { BrowserAssistance } from "./browser-assistance.js";
 import { validateRuntimeVMOptions } from "./vm-options.js";
@@ -8,7 +8,7 @@ import { VMError } from "./errors.js";
 import { ORIGIN_STORAGE } from "./storage-scope.js";
 import { openDurableOrTemporary } from "./workspace-lease.js";
 import { newEphemeralWorkspaceId } from "./workspace-path.js";
-import type { RuntimeVMOptions, RuntimeVM } from "./vm-types.js";
+import type { ManagedImageBootOptions, RuntimeVMOptions, RuntimeVM } from "./vm-types.js";
 export type { NetworkState, RelayConnectionOptions, RelayFailureReason, VMNetwork } from "./network-types.js";
 export { VMError } from "./errors.js";
 export { acquireLocalDataLease } from "./local-data.js";
@@ -90,7 +90,30 @@ export async function createRuntimeVM(options: RuntimeVMOptions): Promise<Runtim
   return openDurableOrTemporary(validated.storage ?? ORIGIN_STORAGE, validated.workspaceId, temporary => create(temporary ? onTemporaryRuntimeWorkspace(validated) : validated));
 }
 
+/** Starts a managed Userspace image on a new VM. The callback receives the initialized VM before guest execution. */
+export async function createManagedUserspaceRuntimeVM(
+  options: Extract<RuntimeVMOptions, { mode: "userspace" }>,
+  manifestUrl: string | URL,
+  bootOptions: ManagedImageBootOptions,
+  onCreated?: (vm: RuntimeVM) => void,
+): Promise<BootedUserspaceRuntimeVM> {
+  const profile = decodeUserspaceProfileOptions(options);
+  const jitInstall = decodeJitInstallOption(options);
+  const jitTier = decodeJitTierOption(options);
+  const validated = validateRuntimeVMOptions(options);
+  if (validated.mode !== "userspace") throw new VMError("INVALID_ARGUMENT", "Managed Userspace startup requires Userspace mode");
+  const create = (selected: typeof validated) => bootUserspaceRuntimeVM(selected, {
+    manifestUrl, options: bootOptions, ...(onCreated === undefined ? {} : { onCreated }),
+    closeFailure: (_failure, cleanup) => cleanup,
+  }, profile, jitInstall, jitTier);
+  if (validated.ephemeral === true || validated.workspaceInUse !== "temporary") return create(validated);
+  return openDurableOrTemporary(validated.storage ?? ORIGIN_STORAGE, validated.workspaceId,
+    temporary => create(temporary ? onTemporaryRuntimeWorkspace(validated) : validated));
+}
+
 /** The same VM on a new temporary workspace that saves nothing, because another VM holds the durable one. */
+function onTemporaryRuntimeWorkspace(options: Extract<RuntimeVMOptions, { mode: "userspace" }>): Extract<RuntimeVMOptions, { mode: "userspace" }>;
+function onTemporaryRuntimeWorkspace(options: RuntimeVMOptions): RuntimeVMOptions;
 function onTemporaryRuntimeWorkspace(options: RuntimeVMOptions): RuntimeVMOptions {
   const temporary = { workspaceId: newEphemeralWorkspaceId(), ephemeral: true } as const;
   if (options.mode === "system") return { ...options, ...temporary };

@@ -1,6 +1,6 @@
 import type { FileDescriptor, LinuxAtFiles, LinuxDirent, LinuxFileStat, LinuxNanoTime, LinuxPath, LinuxPollReady, LinuxPollRequest } from "../../js-process-types.js";
 import { VMError } from "../errors.js";
-import { JS_MAX_IO_BYTES, type LinuxOperation, type LinuxResult, descriptor, noValue, operation, protocol, value, Writer } from "./codec.js";
+import { JS_FILE_SERVICES_VERSION, JS_MAX_IO_BYTES, type LinuxOperation, type LinuxResult, descriptor, noValue, operation, protocol, value, Writer } from "./codec.js";
 import { decodeDirents, decodeStat } from "./file-operations.js";
 import type { LinuxClient } from "./transport.js";
 
@@ -64,11 +64,40 @@ function decodePoll(entries: readonly LinuxPollRequest[], result: LinuxResult): 
   return ready;
 }
 
+function openatPayload(at: number, path: LinuxPath, flags: number, mode: number, resolve = 0): Writer {
+  return new Writer().u64(dir(at)).path(path).u64(flagsArgument(flags, "openat flags"))
+    .u64(flagsArgument(mode, "openat mode")).u64(flagsArgument(resolve, "openat resolve"));
+}
+
+function getdentsOperation(fd: number, maxBytes: number, cookie?: bigint): LinuxOperation<readonly LinuxDirent[]> {
+  const limit = countArgument(maxBytes, "A getdents buffer", 1, JS_MAX_IO_BYTES);
+  const payload = new Writer().u64(fdOf(fd)).u64(limit);
+  if (cookie !== undefined) payload.u64(offsetArgument(cookie));
+  return operation(cookie === undefined ? 217 : 65554, payload, result =>
+    decodeDirents(result, limit).map(record => ({ name: record.nameBytes, inode: record.inode, type: record.type, next: record.next })));
+}
+
+function readVectorOperation(fd: FileDescriptor, lengths: readonly number[], offset?: bigint): LinuxOperation<Uint8Array | undefined> {
+  const payload = new Writer().u64(fdOf(fd)).u32(countArgument(lengths.length, "A read vector count", 1, 128));
+  let total = 0;
+  for (const length of lengths) {
+    payload.u32(countArgument(length, "A read vector length", 1, 64 * 1024));
+    total += length;
+  }
+  countArgument(total, "A read vector total", 1, 1024 * 1024);
+  if (offset !== undefined) payload.u64(offsetArgument(offset));
+  return operation(offset === undefined ? 65556 : 65555, payload, result => {
+    if (result.value === 0xffff_ffff_ffff_ffffn && result.bytes.byteLength === 0) return undefined;
+    if (result.value !== BigInt(result.bytes.byteLength) || result.bytes.byteLength > total) protocol("Invalid vector read result");
+    return result.bytes;
+  });
+}
+
 /** The wire operations behind `LinuxAtFiles` (Userspace API 147); each validates its reply exactly. */
 export const atFileOperations = {
   /** OXJR 437: dirfd, path, flags, mode, resolve; the reply value is the new descriptor. */
   openat: (at: number, path: LinuxPath, flags: number, mode: number, resolve = 0): LinuxOperation<FileDescriptor> =>
-    operation(437, new Writer().u64(dir(at)).path(path).u64(flagsArgument(flags, "openat flags")).u64(flagsArgument(mode, "openat mode")).u64(flagsArgument(resolve, "openat resolve")), result => descriptor(value(result))),
+    operation(437, openatPayload(at, path, flags, mode, resolve), result => descriptor(value(result))),
   /** OXJR 262: dirfd, path, flags; the 144-byte stat record of ops 4 and 5. */
   statAt: (at: number, path: LinuxPath, flags = 0): LinuxOperation<LinuxFileStat> =>
     operation(262, new Writer().u64(dir(at)).path(path).u64(flagsArgument(flags, "newfstatat flags")), decodeStat),
@@ -101,33 +130,48 @@ export const atFileOperations = {
   /** OXJR 72 F_SETFL (4). */
   setStatusFlags: (fd: number, flags: number): LinuxOperation<void> => operation(72, new Writer().u64(fdOf(fd)).u32(4).u64(flagsArgument(flags, "Status flags")), noValue),
   /** OXJR 217: one getdents64 batch of at most `maxBytes`, with each record's inode and d_off cookie. */
-  getdents: (fd: number, maxBytes: number): LinuxOperation<readonly LinuxDirent[]> => {
-    const limit = countArgument(maxBytes, "A getdents buffer", 1, JS_MAX_IO_BYTES);
-    return operation(217, new Writer().u64(fdOf(fd)).u64(limit), result => decodeDirents(result, limit).map(record => ({ name: record.nameBytes, inode: record.inode, type: record.type, next: record.next })));
-  },
+  getdents: (fd: number, maxBytes: number): LinuxOperation<readonly LinuxDirent[]> => getdentsOperation(fd, maxBytes),
   /** OXJR 75: fdatasync. */
   fdatasync: (fd: number): LinuxOperation<void> => operation(75, new Writer().u64(fdOf(fd)), noValue),
   /** OXJR 65552: 1 to 16 descriptors with POLLIN/POLLOUT, then the timeout in ms (-1 forever); value 0 is a timeout. */
   poll: (entries: readonly LinuxPollRequest[], timeoutMs: number): LinuxOperation<readonly LinuxPollReady[]> => {
-    if (entries.length === 0 || entries.length > 16) invalid("poll takes 1 to 16 descriptors");
     if (timeoutMs !== -1) countArgument(timeoutMs, "A poll timeout", 0, MAX_POLL_TIMEOUT_MS);
-    const payload = new Writer().u32(entries.length);
-    for (const entry of entries) {
-      // The type admits only these; a caller that passes another value anyway is refused before anything is sent.
-      const events: unknown = entry.events;
-      if (events !== 1 && events !== 4 && events !== 5) invalid("poll events are POLLIN (1), POLLOUT (4) or both (5)");
-      payload.u64(fdOf(entry.fd)).u32(entry.events);
-    }
-    const requested = entries.map(entry => ({ fd: entry.fd, events: entry.events }));
-    return operation(65552, payload.u64(BigInt.asUintN(64, BigInt(timeoutMs))), result => decodePoll(requested, result));
+    return pollOperation(entries, BigInt.asUintN(64, BigInt(timeoutMs)), false);
   },
+  /** A runSync poll uses the same guest monotonic deadline for every attempt. */
+  pollUntil: (entries: readonly LinuxPollRequest[], deadline: bigint): LinuxOperation<readonly LinuxPollReady[]> => pollOperation(entries, deadline, true),
 };
 
+function pollOperation(entries: readonly LinuxPollRequest[], timeout: bigint, absolute: boolean): LinuxOperation<readonly LinuxPollReady[]> {
+  if (entries.length === 0 || entries.length > 16) invalid("poll takes 1 to 16 descriptors");
+  const payload = new Writer().u32(entries.length);
+  for (const entry of entries) {
+    // The type admits only these; a caller that passes another value anyway is refused before anything is sent.
+    const events: unknown = entry.events;
+    if (events !== 1 && events !== 4 && events !== 5) invalid("poll events are POLLIN (1), POLLOUT (4) or both (5)");
+    payload.u64(fdOf(entry.fd)).u32(entry.events);
+  }
+  const requested = entries.map(entry => ({ fd: entry.fd, events: entry.events }));
+  payload.u64(timeout);
+  if (absolute) payload.u8(1);
+  return operation(65552, payload, result => decodePoll(requested, result));
+}
+
+interface ModuleFileOperations {
+  openatMode(at: FileDescriptor, path: LinuxPath, flags: number, mode: number, resolve: number): { readonly fd: FileDescriptor; readonly mode: number };
+  getdentsAt(fd: FileDescriptor, maxBytes: number, cookie: bigint): readonly LinuxDirent[];
+  readVectors(fd: FileDescriptor, lengths: readonly number[], offset?: bigint): Uint8Array | undefined;
+}
+
+const moduleFiles = new WeakMap<LinuxAtFiles, ModuleFileOperations>();
+/** A private capability of an SDK-created files.at facade. */
+export const moduleFileOperations = moduleFiles.get.bind(moduleFiles);
+
 /** `host.at`: every operation travels synchronously on this process's own Linux channel. */
-export function atFiles(client: Pick<LinuxClient, "sync">): LinuxAtFiles {
+export function atFiles(client: Pick<LinuxClient, "sync">, version?: typeof JS_FILE_SERVICES_VERSION): LinuxAtFiles {
   const call = <T>(request: LinuxOperation<T>): T => client.sync(request);
   const ops = atFileOperations;
-  return Object.freeze({
+  const files = Object.freeze({
     cwd: CWD,
     openat: (at, path, flags, mode, resolve) => call(ops.openat(at, path, flags, mode, resolve)),
     statAt: (at, path, flags) => call(ops.statAt(at, path, flags)),
@@ -139,11 +183,24 @@ export function atFiles(client: Pick<LinuxClient, "sync">): LinuxAtFiles {
     readlinkAt: (at, path) => call(ops.readlinkAt(at, path)),
     utimensAt: (at, path, access, modification, flags) => { call(ops.utimensAt(at, path, access, modification, flags)); },
     pread: (fd, count, offset) => call(ops.pread(fd, count, offset)),
-    pwrite: (fd, bytes, offset) => call(ops.pwrite(fd, bytes, offset)),
+    // The encoder owns the wire record. The caller can still reuse its bytes.
+    pwrite: (fd, bytes, offset) => client.sync(ops.pwrite(fd, bytes, offset), "owned"),
     statusFlags: fd => call(ops.statusFlags(fd)),
     setStatusFlags: (fd, flags) => { call(ops.setStatusFlags(fd, flags)); },
     getdents: (fd, maxBytes) => call(ops.getdents(fd, maxBytes)),
     fdatasync: fd => { call(ops.fdatasync(fd)); },
     poll: (entries, timeoutMs) => call(ops.poll(entries, timeoutMs)),
   } satisfies LinuxAtFiles);
+  if (version === JS_FILE_SERVICES_VERSION) {
+    moduleFiles.set(files, {
+      openatMode: (at, path, flags, mode, resolve) => call(operation(65553, openatPayload(at, path, flags, mode, resolve), result => {
+        if (result.bytes.byteLength !== 4) protocol("Invalid openat mode reply");
+        const mode = new DataView(result.bytes.buffer, result.bytes.byteOffset, 4).getUint32(0, true);
+        return { fd: descriptor(Number(result.value)), mode };
+      })),
+      getdentsAt: (fd, maxBytes, cookie) => call(getdentsOperation(fd, maxBytes, cookie)),
+      readVectors: (fd, lengths, offset) => call(readVectorOperation(fd, lengths, offset)),
+    });
+  }
+  return files;
 }

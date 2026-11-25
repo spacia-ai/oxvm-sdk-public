@@ -3,9 +3,12 @@ import { integer } from "../decode.ts";
 import type { FileDescriptor, LinuxPath } from "../../js-process-types.js";
 import type { AttentionCounter } from "../host-attention.js";
 
-const Number = globalThis.Number, BigInt = globalThis.BigInt, DataView = globalThis.DataView, Uint8Array = globalThis.Uint8Array;
+const Number = globalThis.Number, BigInt = globalThis.BigInt, DataView = globalThis.DataView, Uint8Array = globalThis.Uint8Array, ArrayBuffer = globalThis.ArrayBuffer;
 const apply = Reflect.apply, appendPart = Array<Uint8Array>().push, isSafeInteger = Number.isSafeInteger;
 const bytes = new Uint8Array<ArrayBufferLike>(new ArrayBuffer(0));
+const viewPrototype = Reflect.getPrototypeOf(Uint8Array.prototype) ?? protocol("Typed arrays are unavailable");
+const bufferGetter: unknown = Reflect.get(Object.getOwnPropertyDescriptor(viewPrototype, "buffer") ?? {}, "get");
+const byteBuffer = typeof bufferGetter === "function" ? bufferGetter : protocol("Typed array buffer is unavailable");
 const byteSet = Reflect.get(bytes, "set"), byteSubarray = Reflect.get(bytes, "subarray"), byteSlice = Reflect.get(bytes, "slice");
 const viewMethods = Object.getOwnPropertyDescriptors(DataView.prototype);
 const getUint16 = viewMethods.getUint16.value ?? protocol("Binary u16 reader is unavailable");
@@ -31,8 +34,12 @@ export const JS_PROCESS_PROTOCOL_VERSION = 5;
 export const NATIVE_BROKER_PROCESS_VERSION = 2;
 export const JS_MAILBOX_BYTES = 16 * 1024 ** 2 + 4096;
 export const JS_MAX_IO_BYTES = 16 * 1024 ** 2;
-/** OXJR 65550 sets a trappable signal's host disposition (engine ADR 0027). */
-export const JS_MAX_OPERATION = 65552;
+export const JS_LEGACY_MAX_OPERATION = 65552;
+export const JS_MAX_OPERATION = 65556;
+/** Additive OXJR file operations advertised by an optional engine export. */
+export const JS_FILE_SERVICES_VERSION = 1;
+/** Optional owned-child pipe flags and absolute poll deadlines. */
+export const JS_CHILD_SERVICES_VERSION = 1;
 /** The mailbox header is four Int32s: reply state, reply length and reply sequence, then the count of
  * requests the worker posted, which the execution worker compares with the requests it received. */
 export function jsMailboxAttention(mailbox: SharedArrayBuffer): AttentionCounter {
@@ -41,6 +48,12 @@ export function jsMailboxAttention(mailbox: SharedArrayBuffer): AttentionCounter
 export function writeBytes(target: Uint8Array, source: ArrayLike<number>, offset = 0): void { apply(byteSet, target, [source, offset]); }
 export function viewBytes(target: Uint8Array, begin: number, end?: number): Uint8Array { return apply(byteSubarray, target, [begin, end]); }
 export function copyBytes(target: Uint8Array, begin = 0, end?: number): Uint8Array<ArrayBuffer> { return apply(byteSlice, target, [begin, end]); }
+/** The caller owns the entire backing buffer. Large transfers avoid a structured-clone copy. */
+export function postOwnedPayload(port: Pick<InstanceType<typeof MessagePort>, "postMessage">, message: unknown, payload: Uint8Array): void {
+  const buffer: unknown = payload.byteLength >= 4096 ? apply(byteBuffer, payload, []) : undefined;
+  if (buffer instanceof ArrayBuffer) port.postMessage(message, [buffer]);
+  else port.postMessage(message);
+}
 export interface LinuxResult { readonly value: bigint; readonly bytes: Uint8Array }
 declare const generationBrand: unique symbol;
 declare const incarnationBrand: unique symbol;
@@ -101,11 +114,20 @@ export class Reader {
   #offset = 0;
   readonly bytes: Uint8Array;
   constructor(bytes: Uint8Array) { this.bytes = bytes; this.#view = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength); }
-  raw(length: number): Uint8Array { integer(length, "record length", 0); const end = this.#offset + length; if (end > this.bytes.byteLength) protocol("Truncated Linux record"); const result = viewBytes(this.bytes, this.#offset, end); this.#offset = end; return result; }
-  u8(): number { return this.raw(1)[0] ?? protocol("Truncated u8"); }
-  u16(): number { const offset = this.#offset; this.raw(2); return apply(getUint16, this.#view, [offset, true]); }
-  u32(): number { const offset = this.#offset; this.raw(4); return apply(getUint32, this.#view, [offset, true]); }
-  u64(): bigint { const offset = this.#offset; this.raw(8); return apply(getBigUint64, this.#view, [offset, true]); }
+  #take(length: number): number {
+    const start = this.#offset, end = start + length;
+    if (end > this.bytes.byteLength) protocol("Truncated Linux record");
+    this.#offset = end;
+    return start;
+  }
+  raw(length: number): Uint8Array {
+    const start = this.#take(integer(length, "record length", 0));
+    return viewBytes(this.bytes, start, this.#offset);
+  }
+  u8(): number { return this.bytes[this.#take(1)] ?? protocol("Truncated u8"); }
+  u16(): number { return apply(getUint16, this.#view, [this.#take(2), true]); }
+  u32(): number { return apply(getUint32, this.#view, [this.#take(4), true]); }
+  u64(): bigint { return apply(getBigUint64, this.#view, [this.#take(8), true]); }
   blob(maximum = JS_MAX_IO_BYTES): Uint8Array { const length = this.u32(); if (length > maximum) protocol("Linux record field exceeds its limit"); return this.raw(length); }
   text(maximum = 1024 * 1024): string { try { return new TextDecoder("utf-8", { fatal: true }).decode(this.blob(maximum)); } catch { return protocol("Invalid UTF-8 in Linux metadata"); } }
   strings(): string[] { const count = this.u32(); if (count > 4096) protocol("Linux argument count exceeds 4096"); return Array.from({ length: count }, () => this.text()); }

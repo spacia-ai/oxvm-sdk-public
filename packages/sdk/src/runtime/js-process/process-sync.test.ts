@@ -38,7 +38,12 @@ class Child {
     switch (number) {
       case 228: reader.u32(); return empty(this.clock);
       case 65538: { this.spawns.push(reader); const bytes = new Uint8Array(12), view = new DataView(bytes.buffer); view.setInt32(0, STDIN, true); view.setInt32(4, STDOUT, true); view.setInt32(8, STDERR, true); return { value: BigInt(PID), bytes }; }
-      case 72: { reader.u64(); const command = reader.u32(); if (command === 4) reader.u64(); return empty(command === 3 ? 2n : 0n); }
+      case 72: {
+        const fd = reader.u64(), command = reader.u32();
+        this.log.push(`fcntl ${String(fd)} ${String(command)}`);
+        if (command === 4) expect(reader.u64()).toBe(0o4000n);
+        return empty(command === 3 ? 2n : 0n);
+      }
       case 65552: return this.#poll(reader);
       case 1: {
         reader.u64(); const bytes = Array.from(reader.blob());
@@ -58,8 +63,12 @@ class Child {
   }
   #poll(reader: Reader): LinuxResult {
     const count = reader.u32(), entries = Array.from({ length: count }, () => ({ fd: Number(reader.u64()), events: reader.u32() }));
-    const timeout = BigInt.asIntN(64, reader.u64()); reader.end();
-    this.log.push(`poll ${entries.map(entry => String(entry.fd)).join(",")} ${String(timeout)}`);
+    const timeout = BigInt.asIntN(64, reader.u64());
+    const absolute = reader.bytes.byteLength === 4 + count * 12 + 9;
+    if (absolute) expect(reader.u8()).toBe(1);
+    reader.end();
+    this.log.push(`poll ${entries.map(entry => String(entry.fd)).join(",")} ${String(timeout)}${absolute ? " absolute" : ""}`);
+    if (absolute && this.clock >= timeout) throw new LinuxError(110);
     // A run that keeps polling past any deadline is the defect under test, not a reason to hang the suite.
     if (++this.polls > 1000) throw new Error("runSync kept polling past its deadline");
     const revents = entries.map(({ fd, events }) => {
@@ -68,7 +77,11 @@ class Child {
       return queue.length > 0 || this.#ended() ? 1 : 0;
     });
     const ready = revents.filter(value => value !== 0).length;
-    if (ready === 0) { if (timeout < 0n) throw new Error("an infinite poll in a timed run"); this.clock += timeout * 1_000_000n; }
+    if (ready === 0) {
+      if (timeout < 0n) throw new Error("an infinite poll in a timed run");
+      if (absolute) { this.clock = timeout; throw new LinuxError(110); }
+      this.clock += timeout * 1_000_000n;
+    }
     const bytes = new Uint8Array(count * 8), view = new DataView(bytes.buffer);
     entries.forEach((entry, index) => { view.setInt32(index * 8, entry.fd, true); view.setUint16(index * 8 + 4, entry.events, true); view.setUint16(index * 8 + 6, revents[index] ?? 0, true); });
     return { value: BigInt(ready), bytes };
@@ -90,14 +103,29 @@ describe("runSync", () => {
     expect(payload?.text()).toBe("/bin/cat"); expect(payload?.strings()).toEqual(["-"]);
     expect(payload?.u8()).toBe(0); expect(payload?.u8()).toBe(0); expect(payload?.u8()).toBe(1 | 2 | 4 | 64); payload?.end();
     expect(child.log.filter(entry => entry.startsWith("kill"))).toEqual([]);
+    expect(child.log.filter(entry => entry.startsWith("fcntl"))).toEqual(["fcntl 10 4", "fcntl 11 4", "fcntl 12 4"]);
     expect(child.log.at(-1)).toBe("wait");
     // Every wait is bounded by what remains of the deadline (1000 ms), never infinite.
     expect(child.log.filter(entry => entry.startsWith("poll")).every(entry => /\s(?:[1-9]\d*)$/u.test(entry))).toBe(true);
   });
 
-  it("ends a run whose output never ends at its deadline: killed, reaped, then ETIMEDOUT", () => {
+  it("sets child pipe flags at spawn and reuses one absolute guest deadline", () => {
+    const child = new Child();
+    expect(text(runSync(child, spec(), 1).stdout)).toBe("hello");
+    const payload = child.spawns[0];
+    expect(payload?.text()).toBe("/bin/cat"); expect(payload?.strings()).toEqual(["-"]);
+    expect(payload?.u8()).toBe(0); expect(payload?.u8()).toBe(0);
+    expect(payload?.u8()).toBe(128 | 64 | 7);
+    expect(child.log.filter(entry => entry === "72")).toEqual([]);
+    expect(child.log.filter(entry => entry === "228")).toEqual(["228"]);
+    const polls = child.log.filter(entry => entry.startsWith("poll "));
+    expect(polls.length).toBeGreaterThan(1);
+    expect(polls.every(entry => entry.endsWith(" 1005000000 absolute"))).toBe(true);
+  });
+
+  it.each([undefined, 1] as const)("ends a run whose output never ends at its deadline with child services %s", version => {
     const child = new Child({ stall: true });
-    const error = thrown(() => runSync(child, spec({ timeoutMs: 250 })));
+    const error = thrown(() => runSync(child, spec({ timeoutMs: 250 }), version));
     expect(error).toBeInstanceOf(LinuxError);
     expect(error).toMatchObject({ errno: 110 });
     expect(child.log).toContain("kill 9");

@@ -1,5 +1,5 @@
 import { normalizeStorageError } from "../errors.js";
-import { refusedForSpace } from "./browser-quota.js";
+import { availableStorageBytes, refusedForSpace } from "./browser-quota.js";
 export { DISK_RESERVE_BYTES, refusedForSpace } from "./browser-quota.js";
 const FILE = "space.reserve";
 
@@ -24,19 +24,22 @@ export class SpaceReserve {
   }
 
   /** Opens the reserve in `directory` and holds it if there is room; none when `bytes` is 0. */
-  static async open(directory: FileSystemDirectoryHandle, bytes: number): Promise<SpaceReserve | undefined> {
+  static async open(directory: FileSystemDirectoryHandle, bytes: number, holdImmediately = true): Promise<SpaceReserve | undefined> {
     if (bytes === 0) return undefined;
     const reserve = new SpaceReserve(await directory.getFileHandle(FILE, { create: true }), bytes);
-    await reserve.hold();
+    if (holdImmediately) await reserve.hold();
     return reserve;
   }
 
   /** Holds the reserve again when the origin has room for it; whether it holds it now. */
   async hold(): Promise<boolean> {
+    if (this.#isClosed()) return false;
     if (this.#handle !== undefined) return true;
+    // A sync handle can reserve more capacity than the file's logical length.
+    if ((await availableStorageBytes() ?? Infinity) < 2 * this.#bytes) return false;
     const handle = await this.#file.createSyncAccessHandle();
     // A disk closed meanwhile holds no reserve.
-    if (this.#closed) {
+    if (this.#isClosed()) {
       handle.close();
       return false;
     }
@@ -50,6 +53,10 @@ export class SpaceReserve {
     }
     this.#handle = handle;
     return true;
+  }
+
+  #isClosed(): boolean {
+    return this.#closed;
   }
 
   /** Gives the reserve's storage back to the origin; false when it held none. */

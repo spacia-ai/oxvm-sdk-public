@@ -2,7 +2,7 @@ import { serveRestoreStream } from "./snapshot-restore-stream.js";
 import { decodeImagePreparationReport } from "../protocol/image-preparation.js";
 import type { SnapshotStorageProgress } from "./snapshot-channel.js";
 import type {ShippedInstallIdentity} from "../protocol.js";
-import { NativeColdFiles, type NativeColdSelection } from "./native-cold-files.js";
+import { NativeColdFiles, type NativeColdSelection, type NativeRootRead } from "./native-cold-files.js";
 import {stageNativeWorkspace} from "./native-workspace-stage.js";
 import type {RootfsCheckpointDestination} from "./rootfs-store.js";
 import { VMError } from "../errors.js";
@@ -21,7 +21,7 @@ import { NativePayloadRounds } from "./snapshot-native-payload-rounds.js";
 export interface NativeSnapshotEnvironment {
   readonly workspaceId: string;
   readonly selections: WorkspaceSelections;
-  readonly rootfs: Pick<RootfsStore, "pinImage" | "captureCheckpoint" | "acquireCheckpoint" | "releaseCheckpoint" | "prepareCheckpoint" | "currentRootfs" | "currentCheckpointSource" | "prepareImage" | "compactImage" | "reclaimAccelerators" | "activateCheckpoint" | "beginCheckpointVerification">;
+  readonly rootfs: Pick<RootfsStore, "pinImage" | "captureCheckpoint" | "acquireCheckpoint" | "releaseCheckpoint" | "prepareCheckpoint" | "currentRootfs" | "currentCheckpointSource" | "prepareImage" | "compactImage" | "reclaimAccelerators" | "previousRootfs" | "activateCheckpoint" | "beginCheckpointVerification">;
 }
 type Open = Extract<NativeSnapshotStorageRequest, { readonly type: "open-native-capture" }>;
 type Prepare = Extract<NativeSnapshotStorageRequest, { readonly type: "prepare-native-restore" }>;
@@ -77,7 +77,13 @@ export class NativeSnapshotStore {
 
   get busy(): boolean { return this.#capture !== undefined || this.#restore !== undefined || this.#cold.busy || this.#selecting; }
 
+  get priorColdWorkspaceImage(): NativeColdFiles["priorWorkspaceImage"] { return this.#cold.priorWorkspaceImage; }
+
   /** Imported ancestors use the prepared portable files until reconciliation stages its result. */
+  readColdRoot(selection: NativeRootRead, base: string, signal: AbortSignal): ReturnType<NativeColdFiles["rootRead"]> {
+    return this.#cold.rootRead(selection, base, signal);
+  }
+
   retainedReadId(id:string):string {
     const restore=this.#restore;
     if(restore===undefined||restore.manifest.id!==id)return id;
@@ -145,7 +151,7 @@ export class NativeSnapshotStore {
         active(signal);
         return bytes;
       }
-      case "stage-native-cold-workspace": case "publish-native-cold": case "complete-native-cold": return this.#cold.handle(request, signal);
+      case "inspect-native-cold-root": case "stage-native-cold-root": case "stage-native-cold-workspace": case "publish-native-cold": case "complete-native-cold": return this.#cold.handle(request, signal);
       case "stage-native-workspace": {
         let restore:Restore|undefined;
         const result=await stageNativeWorkspace(()=>{

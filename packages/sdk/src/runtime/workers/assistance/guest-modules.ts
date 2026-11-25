@@ -1,5 +1,5 @@
 import { VMError } from "../../errors.ts";
-import type { LocalModuleFiles, ModuleDependencyIdentity, ModulePathInfo, ModuleSource } from "./module-files.ts";
+import { moduleIdentity, type LocalModuleFiles, type ModuleDependencyIdentity, type ModulePathInfo, type ModuleSource } from "./module-files.ts";
 import { hasModuleSyntax } from "./module-detection.ts";
 import { createNodePath } from "./node-path.ts";
 import { fileURLToPath } from "./node-url.ts";
@@ -174,8 +174,8 @@ export function createGuestModules(files: GuestModuleFiles, selected?: ModuleDep
     if (kind === "import" && specifier.startsWith("file:")) {
       const url = new URL(specifier);
       if (/%2f|%5c/iu.test(url.pathname)) throw Object.assign(new Error("Encoded path separator in file URL"), { code: "ERR_INVALID_MODULE_SPECIFIER" });
-      if (url.search !== "" || url.hash !== "") throw unsupported(specifier, "ESM URL query and fragment identities are unavailable", "an import URL with a query or fragment");
-      return resolve(fileURLToPath(url), parent, kind, depth + 1);
+      const found = resolve(fileURLToPath(url), parent, kind, depth + 1);
+      return found.startsWith("node:") ? found : moduleIdentity(found, url.search + url.hash);
     }
     if (isNodeBuiltin(specifier)) return specifier.startsWith("node:") ? specifier : `node:${specifier}`;
     // CommonJS also takes "." and ".." as relative: the requiring file's directory and its parent.

@@ -45,13 +45,15 @@ async function openLocalVM(options: ValidatedVMOptions, baseUrl: string, hosting
   if (typeof Worker !== "function" || typeof globalThis.location !== "object") throw new VMError("FEATURE_NOT_AVAILABLE", "VM creation requires a browser with module workers", { reason: "browser-unsupported" });
   if (options.mode === "system" && options.vcpus !== 1) throw new VMError("FEATURE_NOT_AVAILABLE", "this SDK release qualifies one System vCPU", { reason: "release-gate-open" });
   const requestedImage = options.image ?? defaultImage(options.mode);
+  const pinnedCache = options.mode === "userspace" && options.imagePreparation !== "before-ready"
+    ? "reserve-workspace" : "ordinary";
   // Without a retained image the pinned manifest is fetched and verified while the engine loads; its progress is held
   // until the engine's is done, and failures keep their order: retained inspection, then engine, then image.
   const inspecting = inspectRetainedStart(options, requestedImage, location.href, storage), imageProgress = heldProgress(options.onProgress);
   const [inspection, loading, verification] = await Promise.allSettled([
     inspecting,
-    loadEngineAssets(options.mode, new URL(baseUrl, location.href).href, options.signal, options.onProgress),
-    inspecting.then((retained): Promise<StartImage> | StartImage => retained === null ? verifyImage(requestedImage, location.href, options.signal, imageProgress.report)
+    loadEngineAssets(options.mode, new URL(baseUrl, location.href).href, options.signal, options.onProgress, pinnedCache),
+    inspecting.then((retained): Promise<StartImage> | StartImage => retained === null ? verifyImage(requestedImage, location.href, options.signal, imageProgress.report, pinnedCache)
       : {info:retained.image,memoryMiB:retained.memoryMiB,...(retained.maxProcesses===undefined?{}:{maxProcesses:retained.maxProcesses})}),
   ]);
   if (inspection.status === "rejected") { if (loading.status === "fulfilled") loading.value.dispose(); const failure: unknown = inspection.reason; throw failure; }

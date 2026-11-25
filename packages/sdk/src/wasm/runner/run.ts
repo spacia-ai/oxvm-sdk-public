@@ -1,9 +1,10 @@
 import type { LinuxProcessInfo } from "../../js-process-types.js";
+import type { ProcessId } from "../../values.js";
 import { VMError } from "../../runtime/errors.js";
 import type { RunnerLaunch } from "../../runtime/js-process/launch.js";
 import { MODULE_EXIT } from "../exit-codes.js";
 import type { CommandIO } from "../define.js";
-import type { ResolvedManifest } from "../manifest-types.js";
+import type { EndpointDecl, ResolvedManifest } from "../manifest-types.js";
 import { isServiceDecl } from "../manifest.js";
 import { resolveOptions } from "../options.js";
 import { preverifiedArtifacts, type SyncBlobReader, type VerifiedArtifacts } from "./artifacts.js";
@@ -68,7 +69,7 @@ function adapterFactory(imported: unknown): (...args: unknown[]) => unknown {
   };
 }
 
-async function runCommand(context: RunnerContext, manifest: ResolvedManifest, hooks: unknown, process: Process): Promise<number> {
+async function runCommand(context: RunnerContext, manifest: ResolvedManifest, hooks: unknown, process: CommandProcess): Promise<number> {
   const run = commandRun(hooks);
   const { start, info } = process;
   const io: CommandIO<string> = {
@@ -88,11 +89,17 @@ async function runCommand(context: RunnerContext, manifest: ResolvedManifest, ho
 }
 
 /** One start of the runner: how it was started, and the process as Rust reports it. */
-interface Process { readonly start: RunnerStart; readonly info: LinuxProcessInfo }
+interface CommandProcess { readonly kind: "command"; readonly start: RunnerStart; readonly info: LinuxProcessInfo }
+interface ServiceProcess {
+  readonly kind: "service";
+  readonly pid: ProcessId;
+  readonly endpoints: Readonly<Record<string, EndpointDecl>>;
+  readonly exclusive: boolean;
+}
 
 /** What one start owns until the module ends. */
 interface Run {
-  readonly process: Process;
+  readonly process: CommandProcess | ServiceProcess;
   readonly artifacts: VerifiedArtifacts;
   readonly lifecycle: AbortController;
   /** Undeclared members the adapter reached, for the fault report. */
@@ -101,7 +108,7 @@ interface Run {
 }
 
 async function start(context: RunnerContext, descriptor: LaunchDescriptor, { process, artifacts, lifecycle, undeclared, signals }: Run): Promise<number> {
-  const { manifest } = descriptor, guest = process.start.invocation.kind === "command";
+  const { manifest } = descriptor, guest = process.kind === "command" && process.start.invocation.kind === "command";
   let options;
   try { options = resolveOptions(manifest.options, descriptor.options); }
   catch (error: unknown) { throw new ModuleFailure("launch", error instanceof Error ? error.message : "The options are invalid"); }
@@ -136,14 +143,11 @@ async function start(context: RunnerContext, descriptor: LaunchDescriptor, { pro
     },
   });
   const hooks: unknown = await factory(host);
-  if (!isServiceDecl(manifest)) return runCommand(context, manifest, hooks, process);
-  const run = serviceRun(hooks, Object.keys(manifest.expose));
+  if (process.kind === "command") return runCommand(context, manifest, hooks, process);
+  const run = serviceRun(hooks, Object.keys(process.endpoints));
   await runService({
-    linux: context, endpoints: manifest.expose, leftovers: leftoverCheck(manifest.process.exclusive === "workspace", moduleReach(manifest.requires.host)), maxClients: manifest.limits?.clients ?? DEFAULT_CLIENTS, run, lifecycle, log,
-    ready: async info => {
-      const current = await context.process.info();
-      await writeLine(context, context.stdout, { oxidevm: "ready", v: 1, pid: current.pid, info });
-    },
+    linux: context, endpoints: process.endpoints, leftovers: leftoverCheck(process.exclusive, moduleReach(manifest.requires.host)), maxClients: manifest.limits?.clients ?? DEFAULT_CLIENTS, run, lifecycle, log,
+    ready: info => writeLine(context, context.stdout, { oxidevm: "ready", v: 1, pid: process.pid, info }),
   });
   return 0;
 }
@@ -189,13 +193,21 @@ export async function runModule(context: RunnerContext, launch: RunnerLaunch | u
   let artifacts: VerifiedArtifacts | undefined;
   try {
     if (launch === undefined) throw new ModuleFailure("launch", "The module runner started without its launch");
-    const info = await context.process.info(), process = { start: runnerStart(launch, info.args), info };
     let descriptor: LaunchDescriptor;
-    try { descriptor = parseLaunchArgument(process.start.descriptor); }
+    try { descriptor = parseLaunchArgument(launch.descriptor); }
     catch (error: unknown) { throw new ModuleFailure("launch", error instanceof VMError ? error.message : "The launch descriptor is invalid"); }
     // Only a command module runs as a program; its files were checked when its commands were turned on.
-    if (process.start.invocation.kind === "command" && isServiceDecl(descriptor.manifest)) throw new ModuleFailure("launch", `${descriptor.manifest.id} is a service and runs no commands`);
-    artifacts = preverifiedArtifacts(descriptor, process.start.copies, context.readBlobSync);
+    const { manifest } = descriptor;
+    let process: Run["process"];
+    if (isServiceDecl(manifest)) {
+      if (launch.kind !== "host") throw new ModuleFailure("launch", `${manifest.id} is a service and runs no commands`);
+      const pid = launch.pid ?? (await context.process.info()).pid;
+      process = { kind: "service", pid, endpoints: manifest.expose, exclusive: manifest.process.exclusive === "workspace" };
+    } else {
+      const info = await context.process.info();
+      process = { kind: "command", start: runnerStart(launch, info.args), info };
+    }
+    artifacts = preverifiedArtifacts(descriptor, launch, context.readBlobSync);
     const run: Run = { process, artifacts, lifecycle, undeclared, signals };
     // An exclusive service's workspace lease was taken by the Userspace worker before this process existed (ADR 0028).
     return await start(context, descriptor, run);

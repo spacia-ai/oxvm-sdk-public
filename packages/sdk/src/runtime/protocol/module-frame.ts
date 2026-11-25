@@ -19,6 +19,9 @@ import { MODULE_ISOLATION_CAPABILITIES, type ModuleIsolationCapability } from ".
 export const MODULE_FRAME_BOOTSTRAP_VERSION = 2;
 /** Spawn, start, stop and signal notices on the attached port and each process's channel. */
 export const MODULE_BROKER_VERSION = 1;
+/** Private bootstrap between the broker and an unassigned runner. */
+export const MODULE_PREPARED_RUNNER_NAME = "oxidevm-module-prepared";
+export const MODULE_RUNNER_READY = "runner-ready";
 
 function protocol(message: string): never { throw new VMError("PROTOCOL_ERROR", message); }
 
