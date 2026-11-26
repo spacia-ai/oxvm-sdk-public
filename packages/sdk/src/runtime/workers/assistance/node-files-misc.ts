@@ -39,6 +39,8 @@ export interface NodeMiscellaneousFiles {
   readonly openAsBlob: (path: unknown, options?: unknown) => Promise<Blob>;
   readonly mkdtempDisposableSync: (prefix: unknown, options: unknown) => { path: string; remove: () => void; [Symbol.dispose](): void };
   readonly _toUnixTimestamp: typeof toUnixTimestamp;
+  readonly lchmod: undefined;
+  readonly lchmodSync: undefined;
   readonly promises: {
     readonly mkdtempDisposable: (prefix: unknown, options: unknown) => Promise<{ path: string; remove: () => Promise<void>; [Symbol.asyncDispose](): Promise<void> }>;
     readonly lchmod: typeof lchmod;
@@ -93,5 +95,6 @@ export function createNodeMiscellaneousFiles(ports: MiscellaneousFilePorts): Nod
     Object.setPrototypeOf(result, null);
     return result;
   }, "mkdtempDisposable");
-  return { exists, openAsBlob, mkdtempDisposableSync, _toUnixTimestamp: toUnixTimestamp, promises: { mkdtempDisposable, lchmod } };
+  // Node on Linux exports `lchmod` and `lchmodSync` with the value undefined; libraries test for them.
+  return { exists, openAsBlob, mkdtempDisposableSync, _toUnixTimestamp: toUnixTimestamp, lchmod: undefined, lchmodSync: undefined, promises: { mkdtempDisposable, lchmod } };
 }

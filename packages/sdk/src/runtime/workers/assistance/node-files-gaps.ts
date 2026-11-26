@@ -74,7 +74,7 @@ export function createNodeFilesGaps(dependencies: NodeFilesGapsDependencies) {
   }, "open");
   return {
     fs: { Dir: directories.Dir, opendir: directories.opendir, opendirSync: directories.opendirSync, ...vectored, cpSync, cp: copies.cp, glob: globs.glob, globSync: globs.globSync, watchFile: polling.watchFile, unwatchFile: polling.unwatchFile,
-      exists: miscellaneous.exists, openAsBlob: miscellaneous.openAsBlob, mkdtempDisposableSync: miscellaneous.mkdtempDisposableSync, _toUnixTimestamp: miscellaneous._toUnixTimestamp,
+      exists: miscellaneous.exists, openAsBlob: miscellaneous.openAsBlob, mkdtempDisposableSync: miscellaneous.mkdtempDisposableSync, _toUnixTimestamp: miscellaneous._toUnixTimestamp, lchmod: miscellaneous.lchmod, lchmodSync: miscellaneous.lchmodSync,
       FileReadStream: dependencies.ReadStream, FileWriteStream: dependencies.WriteStream },
     promises: { opendir: directories.promises.opendir, open, cp: copies.promises.cp, glob: globs.promises.glob, watch: polling.promises.watch, ...miscellaneous.promises },
   };
