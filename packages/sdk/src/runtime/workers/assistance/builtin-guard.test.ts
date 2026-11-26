@@ -38,3 +38,11 @@ it("leaves frozen modules, modules without a real list and present exports as th
   expect(Object.getOwnPropertyNames(builtins.fs)).toEqual(["readFileSync"]);
   expect(touched()).toBeUndefined();
 });
+
+it("leaves alone an export Node itself defines as undefined, such as fs.lchmod on Linux, so testing for it reports nothing", () => {
+  const builtins: { fs: Record<string, unknown> } = { fs: { readFileSync: () => "", lchmod: undefined } };
+  const touched = guardMissingExports(builtins, { fs: ["lchmod", "readFileSync"] });
+  expect(Object.getOwnPropertyDescriptor(builtins.fs, "lchmod")).toEqual({ value: undefined, writable: true, enumerable: true, configurable: true });
+  expect(Reflect.get(builtins.fs, "lchmod")).toBeUndefined();
+  expect(touched()).toBeUndefined();
+});
