@@ -5,6 +5,7 @@ import browserProcess from "process/";
 import { VMError, deserializeError, serializeUnknownError } from "../../errors.js";
 import { ASSISTANCE_LIMITS } from "../../protocol/assistance.js";
 import type { AsyncContext } from "./async-context.js";
+import { duplexPair } from "./node-stream-duplexpair.ts";
 
 export { EventEmitter, Readable, Writable };
 
@@ -37,6 +38,13 @@ export function createNodeStreamModule(context: AsyncContext, retain: () => () =
     Object.defineProperties(wrapped, Object.getOwnPropertyDescriptors(operation));
     Object.defineProperty(Stream, name, { ...descriptor, value: wrapped });
     restore.push(() => { Object.defineProperty(Stream, name, descriptor); });
+  }
+  // Node exports these two; the pinned library predates them.
+  const isView: unknown = Reflect.get(ArrayBuffer, "isView");
+  for (const [name, value] of [["duplexPair", duplexPair], ["_isArrayBufferView", isView]] as const) {
+    if (Object.hasOwn(Stream, name)) continue;
+    Object.defineProperty(Stream, name, { configurable: true, enumerable: true, writable: true, value });
+    restore.push(() => { Reflect.deleteProperty(Stream, name); });
   }
   // The library's private browser nextTick queue bypasses application timers.
   // Account each scheduled callback, not stream objects: an unused stream must

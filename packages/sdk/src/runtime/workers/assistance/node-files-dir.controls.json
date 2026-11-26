@@ -1,0 +1,864 @@
+{
+ "node": "v24.18.1",
+ "recorder": "// Recorder for the node-files-*.controls.json files. Every scenario is the body of an async function of\n// (fs, h) that the test runs again, unchanged, against the emulated fs. Run with Node 24.18.1 on a tmpfs\n// (its readdir order is the byte order the file service's readdir has):\n//   docker run --rm --tmpfs /work -v \"$PWD\":/w:ro node:24.18.1-alpine node /w/record.cjs /w/sc/<set> > node-files-<set>.controls.json\nconst fs = require(\"fs\"), path = require(\"path\"), util = require(\"util\");\nconst dir = process.argv[2], out = {};\nfunction describe(e) {\n  if (!(e instanceof Error)) return { thrown: String(e) };\n  const d = { name: e.name, ctor: e.constructor.name, message: e.message };\n  for (const k of [\"code\", \"errno\", \"syscall\", \"path\", \"dest\"]) if (e[k] !== undefined) d[k] = e[k];\n  return d;\n}\nfunction helpers(warnings) {\n  return {\n    Buffer, custom: util.promisify.custom, warnings, err: describe,\n    attempt(fn) { try { return { ok: fn() }; } catch (e) { return { error: describe(e) }; } },\n    async attemptAsync(fn) { try { return { ok: await fn() }; } catch (e) { return { error: describe(e) }; } },\n    turn: () => new Promise(resolve => setImmediate(resolve)),\n    // Long enough for several polls of a 20 ms stat watcher; the replay fires its timer instead.\n    wait: () => new Promise(resolve => setTimeout(resolve, 150)),\n    dirent: d => d === null ? null : [Buffer.isBuffer(d.name) ? { hex: d.name.toString(\"hex\") } : d.name, Buffer.isBuffer(d.parentPath) ? { hex: d.parentPath.toString(\"hex\") } : d.parentPath,\n      d.isDirectory() ? \"dir\" : d.isSymbolicLink() ? \"link\" : d.isFile() ? \"file\" : \"other\"],\n    fn: f => typeof f === \"function\" ? [f.name, f.length] : typeof f,\n  };\n}\n(async () => {\n  for (const file of fs.readdirSync(dir).sort()) {\n    for (const name of fs.readdirSync(\"/work\")) fs.rmSync(\"/work/\" + name, { recursive: true, force: true });\n    process.chdir(\"/work\");\n    const warnings = [], onWarning = w => warnings.push([w.name, w.message]);\n    process.on(\"warning\", onWarning);\n    const source = fs.readFileSync(path.join(dir, file), \"utf8\");\n    const result = await new Function(\"fs\", \"h\", \"return (async () => {\" + source + \"\\n})()\")(fs, helpers(warnings));\n    process.off(\"warning\", onWarning);\n    out[file.replace(/\\.js$/, \"\")] = { source, result: JSON.parse(JSON.stringify(result)) };\n  }\n  console.log(JSON.stringify({ node: process.version, recorder: fs.readFileSync(__filename, \"utf8\"), scenarios: out }, null, 1));\n})();\n",
+ "scenarios": {
+  "async": {
+   "source": "fs.mkdirSync(\"d\"); for (const n of [\"e\", \"d\", \"c\", \"b\", \"a\"]) fs.writeFileSync(\"d/\" + n, n);\nconst out = {};\nconst dir = await fs.promises.opendir(\"d\", { bufferSize: 2 });\nout.path = dir.path; out.isDir = dir instanceof fs.Dir;\nout.first = h.dirent(await dir.read());\nout.viaCallback = await new Promise(resolve => { const order = []; const r = dir.read((e, d) => { order.push(\"callback\"); resolve({ order, e, d: h.dirent(d), r }); }); order.push(\"returned\"); });\nconst names = []; for await (const e of dir) names.push(e.name); out.rest = names;\nout.afterIteration = await h.attemptAsync(() => dir.read());\nconst early = await fs.promises.opendir(\"d\");\nfor await (const e of early) { out.early = e.name; break; }\nout.earlyClosed = h.attempt(() => early.readSync());\n// Concurrency: a pending asynchronous read refuses the synchronous forms and queues the others.\nconst busy = fs.opendirSync(\"d\", { bufferSize: 1 });\nconst order = [];\nconst pending = busy.read().then(d => { order.push(\"read1:\" + d.name); });\nout.readSyncBusy = h.attempt(() => busy.readSync()); out.closeSyncBusy = h.attempt(() => busy.closeSync()); out.disposeBusy = h.attempt(() => busy[Symbol.dispose]());\nconst second = busy.read().then(d => { order.push(\"read2:\" + d.name); });\nconst closing = busy.close().then(() => { order.push(\"closed\"); });\nawait Promise.all([pending, second, closing]);\nout.order = order;\nconst disposing = fs.opendirSync(\"d\"); out.asyncDispose = await disposing[Symbol.asyncDispose](); out.afterAsyncDispose = h.attempt(() => disposing.readSync());\nconst viaClose = fs.opendirSync(\"d\"); out.closeCallback = await new Promise(resolve => { const r = viaClose.close((...args) => resolve({ args, r })); });\nconst entries = fs.opendirSync(\"d\").entries(); out.entriesFirst = (await entries.next()).value.name; out.entriesReturn = await entries.return(); \nreturn out;\n",
+   "result": {
+    "path": "d",
+    "isDir": true,
+    "first": [
+     "a",
+     "d",
+     "file"
+    ],
+    "viaCallback": {
+     "order": [
+      "returned",
+      "callback"
+     ],
+     "e": null,
+     "d": [
+      "b",
+      "d",
+      "file"
+     ]
+    },
+    "rest": [
+     "c",
+     "d",
+     "e"
+    ],
+    "afterIteration": {
+     "error": {
+      "name": "Error",
+      "ctor": "Error",
+      "message": "Directory handle was closed",
+      "code": "ERR_DIR_CLOSED"
+     }
+    },
+    "early": "a",
+    "earlyClosed": {
+     "error": {
+      "name": "Error",
+      "ctor": "Error",
+      "message": "Directory handle was closed",
+      "code": "ERR_DIR_CLOSED"
+     }
+    },
+    "readSyncBusy": {
+     "error": {
+      "name": "Error",
+      "ctor": "Error",
+      "message": "Cannot do synchronous work on directory handle with concurrent asynchronous operations",
+      "code": "ERR_DIR_CONCURRENT_OPERATION"
+     }
+    },
+    "closeSyncBusy": {
+     "error": {
+      "name": "Error",
+      "ctor": "Error",
+      "message": "Cannot do synchronous work on directory handle with concurrent asynchronous operations",
+      "code": "ERR_DIR_CONCURRENT_OPERATION"
+     }
+    },
+    "disposeBusy": {
+     "error": {
+      "name": "Error",
+      "ctor": "Error",
+      "message": "Cannot do synchronous work on directory handle with concurrent asynchronous operations",
+      "code": "ERR_DIR_CONCURRENT_OPERATION"
+     }
+    },
+    "order": [
+     "read1:a",
+     "read2:b",
+     "closed"
+    ],
+    "afterAsyncDispose": {
+     "error": {
+      "name": "Error",
+      "ctor": "Error",
+      "message": "Directory handle was closed",
+      "code": "ERR_DIR_CLOSED"
+     }
+    },
+    "closeCallback": {
+     "args": [
+      null
+     ]
+    },
+    "entriesFirst": "a",
+    "entriesReturn": {
+     "done": true
+    }
+   }
+  },
+  "errors": {
+   "source": "fs.writeFileSync(\"f\", \"x\"); fs.mkdirSync(\"d\");\nconst cb = (...args) => new Promise(resolve => { try { fs.opendir(...args, (e, d) => { resolve(e ? { error: h.err(e) } : { ok: d.path }); if (d) d.closeSync(); }); } catch (e) { resolve({ thrown: h.err(e) }); } });\nreturn {\n  missingSync: h.attempt(() => fs.opendirSync(\"nope\")), fileSync: h.attempt(() => fs.opendirSync(\"f\")), emptySync: h.attempt(() => fs.opendirSync(\"\")),\n  typeSync: h.attempt(() => fs.opendirSync(5)), nulSync: h.attempt(() => fs.opendirSync(\"a\\0b\")),\n  missingCb: await cb(\"nope\"), fileCb: await cb(\"f\"), typeCb: await cb(5), okCb: await cb(\"d\"), okCbOptions: await cb(\"d\", { bufferSize: 4 }),\n  noCallback: h.attempt(() => fs.opendir(\"d\")), badCallback: h.attempt(() => fs.opendir(\"d\", {}, 5)),\n  missingPromise: await h.attemptAsync(() => fs.promises.opendir(\"nope\")), filePromise: await h.attemptAsync(() => fs.promises.opendir(\"f\")), typePromise: await h.attemptAsync(() => fs.promises.opendir(5)),\n  bufferSize0: h.attempt(() => fs.opendirSync(\"d\", { bufferSize: 0 })), bufferSizeNeg: h.attempt(() => fs.opendirSync(\"d\", { bufferSize: -1 })), bufferSizeText: h.attempt(() => fs.opendirSync(\"d\", { bufferSize: \"8\" })),\n  bufferSizeFloat: h.attempt(() => fs.opendirSync(\"d\", { bufferSize: 1.5 })), bufferSizeBig: h.attempt(() => fs.opendirSync(\"d\", { bufferSize: 2 ** 32 })),\n  badEncoding: h.attempt(() => fs.opendirSync(\"d\", { encoding: \"nope\" })), badOptions: h.attempt(() => fs.opendirSync(\"d\", 5)), nullOptions: h.attempt(() => { fs.opendirSync(\"d\", null).closeSync(); return true; }),\n  stringOptions: h.attempt(() => { fs.opendirSync(\"d\", \"utf8\").closeSync(); return true; }),\n  readBadCallback: h.attempt(() => { const d = fs.opendirSync(\"d\"); try { return d.read(5); } finally { d.closeSync(); } }),\n  closeBadCallback: h.attempt(() => { const d = fs.opendirSync(\"d\"); try { return d.close(5); } finally { d.closeSync(); } }),\n};\n",
+   "result": {
+    "missingSync": {
+     "error": {
+      "name": "Error",
+      "ctor": "Error",
+      "message": "ENOENT: no such file or directory, opendir",
+      "code": "ENOENT",
+      "errno": -2,
+      "syscall": "opendir"
+     }
+    },
+    "fileSync": {
+     "error": {
+      "name": "Error",
+      "ctor": "Error",
+      "message": "ENOTDIR: not a directory, opendir",
+      "code": "ENOTDIR",
+      "errno": -20,
+      "syscall": "opendir"
+     }
+    },
+    "emptySync": {
+     "error": {
+      "name": "Error",
+      "ctor": "Error",
+      "message": "ENOENT: no such file or directory, opendir",
+      "code": "ENOENT",
+      "errno": -2,
+      "syscall": "opendir"
+     }
+    },
+    "typeSync": {
+     "error": {
+      "name": "TypeError",
+      "ctor": "TypeError",
+      "message": "The \"path\" argument must be of type string or an instance of Buffer or URL. Received type number (5)",
+      "code": "ERR_INVALID_ARG_TYPE"
+     }
+    },
+    "nulSync": {
+     "error": {
+      "name": "TypeError",
+      "ctor": "TypeError",
+      "message": "The argument 'path' must be a string, Uint8Array, or URL without null bytes. Received 'a\\x00b'",
+      "code": "ERR_INVALID_ARG_VALUE"
+     }
+    },
+    "missingCb": {
+     "error": {
+      "name": "Error",
+      "ctor": "Error",
+      "message": "ENOENT: no such file or directory, opendir 'nope'",
+      "code": "ENOENT",
+      "errno": -2,
+      "syscall": "opendir",
+      "path": "nope"
+     }
+    },
+    "fileCb": {
+     "error": {
+      "name": "Error",
+      "ctor": "Error",
+      "message": "ENOTDIR: not a directory, opendir 'f'",
+      "code": "ENOTDIR",
+      "errno": -20,
+      "syscall": "opendir",
+      "path": "f"
+     }
+    },
+    "typeCb": {
+     "thrown": {
+      "name": "TypeError",
+      "ctor": "TypeError",
+      "message": "The \"path\" argument must be of type string or an instance of Buffer or URL. Received type number (5)",
+      "code": "ERR_INVALID_ARG_TYPE"
+     }
+    },
+    "okCb": {
+     "ok": "d"
+    },
+    "okCbOptions": {
+     "ok": "d"
+    },
+    "noCallback": {
+     "error": {
+      "name": "TypeError",
+      "ctor": "TypeError",
+      "message": "The \"callback\" argument must be of type function. Received undefined",
+      "code": "ERR_INVALID_ARG_TYPE"
+     }
+    },
+    "badCallback": {
+     "error": {
+      "name": "TypeError",
+      "ctor": "TypeError",
+      "message": "The \"callback\" argument must be of type function. Received type number (5)",
+      "code": "ERR_INVALID_ARG_TYPE"
+     }
+    },
+    "missingPromise": {
+     "error": {
+      "name": "Error",
+      "ctor": "Error",
+      "message": "ENOENT: no such file or directory, opendir 'nope'",
+      "code": "ENOENT",
+      "errno": -2,
+      "syscall": "opendir",
+      "path": "nope"
+     }
+    },
+    "filePromise": {
+     "error": {
+      "name": "Error",
+      "ctor": "Error",
+      "message": "ENOTDIR: not a directory, opendir 'f'",
+      "code": "ENOTDIR",
+      "errno": -20,
+      "syscall": "opendir",
+      "path": "f"
+     }
+    },
+    "typePromise": {
+     "error": {
+      "name": "TypeError",
+      "ctor": "TypeError",
+      "message": "The \"path\" argument must be of type string or an instance of Buffer or URL. Received type number (5)",
+      "code": "ERR_INVALID_ARG_TYPE"
+     }
+    },
+    "bufferSize0": {
+     "error": {
+      "name": "RangeError",
+      "ctor": "RangeError",
+      "message": "The value of \"options.bufferSize\" is out of range. It must be >= 1 && <= 4294967295. Received 0",
+      "code": "ERR_OUT_OF_RANGE"
+     }
+    },
+    "bufferSizeNeg": {
+     "error": {
+      "name": "RangeError",
+      "ctor": "RangeError",
+      "message": "The value of \"options.bufferSize\" is out of range. It must be >= 1 && <= 4294967295. Received -1",
+      "code": "ERR_OUT_OF_RANGE"
+     }
+    },
+    "bufferSizeText": {
+     "error": {
+      "name": "TypeError",
+      "ctor": "TypeError",
+      "message": "The \"options.bufferSize\" property must be of type number. Received type string ('8')",
+      "code": "ERR_INVALID_ARG_TYPE"
+     }
+    },
+    "bufferSizeFloat": {
+     "error": {
+      "name": "RangeError",
+      "ctor": "RangeError",
+      "message": "The value of \"options.bufferSize\" is out of range. It must be an integer. Received 1.5",
+      "code": "ERR_OUT_OF_RANGE"
+     }
+    },
+    "bufferSizeBig": {
+     "error": {
+      "name": "RangeError",
+      "ctor": "RangeError",
+      "message": "The value of \"options.bufferSize\" is out of range. It must be >= 1 && <= 4294967295. Received 4294967296",
+      "code": "ERR_OUT_OF_RANGE"
+     }
+    },
+    "badEncoding": {
+     "error": {
+      "name": "TypeError",
+      "ctor": "TypeError",
+      "message": "The argument 'encoding' is invalid encoding. Received 'nope'",
+      "code": "ERR_INVALID_ARG_VALUE"
+     }
+    },
+    "badOptions": {
+     "error": {
+      "name": "TypeError",
+      "ctor": "TypeError",
+      "message": "The \"options\" argument must be one of type string or object. Received type number (5)",
+      "code": "ERR_INVALID_ARG_TYPE"
+     }
+    },
+    "nullOptions": {
+     "ok": true
+    },
+    "stringOptions": {
+     "ok": true
+    },
+    "readBadCallback": {
+     "error": {
+      "name": "TypeError",
+      "ctor": "TypeError",
+      "message": "The \"callback\" argument must be of type function. Received type number (5)",
+      "code": "ERR_INVALID_ARG_TYPE"
+     }
+    },
+    "closeBadCallback": {
+     "error": {
+      "name": "TypeError",
+      "ctor": "TypeError",
+      "message": "The \"callback\" argument must be of type function. Received type number (5)",
+      "code": "ERR_INVALID_ARG_TYPE"
+     }
+    }
+   }
+  },
+  "options": {
+   "source": "fs.mkdirSync(\"r/z\", { recursive: true }); fs.mkdirSync(\"r/x/y\", { recursive: true }); fs.symlinkSync(\"x\", \"r/link\"); fs.writeFileSync(\"r/a\", \"\"); fs.writeFileSync(\"r/x/b\", \"\"); fs.writeFileSync(\"r/x/y/c\", \"\"); fs.writeFileSync(\"r/z/d\", \"\");\nconst all = (dir) => { const list = []; for (let e; (e = dir.readSync()) !== null;) list.push(h.dirent(e)); dir.closeSync(); return list; };\nconst out = { recursive: all(fs.opendirSync(\"r\", { recursive: true })), recursiveSmall: all(fs.opendirSync(\"r\", { recursive: true, bufferSize: 1 })), plain: all(fs.opendirSync(\"r\", { recursive: false })) };\nconst names = []; for await (const e of await fs.promises.opendir(\"r\", { recursive: true })) names.push(h.dirent(e)); out.recursiveAsync = names;\nout.recursiveCallback = await new Promise(resolve => fs.opendir(\"r\", { recursive: true, bufferSize: 2 }, async (e, dir) => { const list = []; for (;;) { const d = await dir.read(); if (d === null) break; list.push(h.dirent(d)); } await dir.close(); resolve(list); }));\nout.buffer = all(fs.opendirSync(\"r\", { encoding: \"buffer\" })); out.bufferText = all(fs.opendirSync(\"r\", \"buffer\"));\nout.hex = all(fs.opendirSync(\"r\", { encoding: \"hex\" })); out.base64 = all(fs.opendirSync(\"r/x\", \"base64\")); out.latin1 = all(fs.opendirSync(\"r/x\", { encoding: \"latin1\" }));\nout.recursiveBuffer = h.attempt(() => { const d = fs.opendirSync(\"r\", { encoding: \"buffer\", recursive: true }); try { return [h.dirent(d.readSync()), h.dirent(d.readSync()), h.dirent(d.readSync())]; } finally { d.closeSync(); } });\nout.recursiveTruthy = all(fs.opendirSync(\"r/x\", { recursive: 1 }));\nreturn out;\n",
+   "result": {
+    "recursive": [
+     [
+      "a",
+      "r",
+      "file"
+     ],
+     [
+      "link",
+      "r",
+      "link"
+     ],
+     [
+      "x",
+      "r",
+      "dir"
+     ],
+     [
+      "z",
+      "r",
+      "dir"
+     ],
+     [
+      "b",
+      "r/x",
+      "file"
+     ],
+     [
+      "y",
+      "r/x",
+      "dir"
+     ],
+     [
+      "d",
+      "r/z",
+      "file"
+     ],
+     [
+      "c",
+      "r/x/y",
+      "file"
+     ]
+    ],
+    "recursiveSmall": [
+     [
+      "a",
+      "r",
+      "file"
+     ],
+     [
+      "link",
+      "r",
+      "link"
+     ],
+     [
+      "x",
+      "r",
+      "dir"
+     ],
+     [
+      "b",
+      "r/x",
+      "file"
+     ],
+     [
+      "y",
+      "r/x",
+      "dir"
+     ],
+     [
+      "c",
+      "r/x/y",
+      "file"
+     ],
+     [
+      "z",
+      "r",
+      "dir"
+     ],
+     [
+      "d",
+      "r/z",
+      "file"
+     ]
+    ],
+    "plain": [
+     [
+      "a",
+      "r",
+      "file"
+     ],
+     [
+      "link",
+      "r",
+      "link"
+     ],
+     [
+      "x",
+      "r",
+      "dir"
+     ],
+     [
+      "z",
+      "r",
+      "dir"
+     ]
+    ],
+    "recursiveAsync": [
+     [
+      "a",
+      "r",
+      "file"
+     ],
+     [
+      "link",
+      "r",
+      "link"
+     ],
+     [
+      "x",
+      "r",
+      "dir"
+     ],
+     [
+      "z",
+      "r",
+      "dir"
+     ],
+     [
+      "b",
+      "r/x",
+      "file"
+     ],
+     [
+      "y",
+      "r/x",
+      "dir"
+     ],
+     [
+      "d",
+      "r/z",
+      "file"
+     ],
+     [
+      "c",
+      "r/x/y",
+      "file"
+     ]
+    ],
+    "recursiveCallback": [
+     [
+      "a",
+      "r",
+      "file"
+     ],
+     [
+      "link",
+      "r",
+      "link"
+     ],
+     [
+      "x",
+      "r",
+      "dir"
+     ],
+     [
+      "z",
+      "r",
+      "dir"
+     ],
+     [
+      "b",
+      "r/x",
+      "file"
+     ],
+     [
+      "y",
+      "r/x",
+      "dir"
+     ],
+     [
+      "d",
+      "r/z",
+      "file"
+     ],
+     [
+      "c",
+      "r/x/y",
+      "file"
+     ]
+    ],
+    "buffer": [
+     [
+      {
+       "hex": "61"
+      },
+      "r",
+      "file"
+     ],
+     [
+      {
+       "hex": "6c696e6b"
+      },
+      "r",
+      "link"
+     ],
+     [
+      {
+       "hex": "78"
+      },
+      "r",
+      "dir"
+     ],
+     [
+      {
+       "hex": "7a"
+      },
+      "r",
+      "dir"
+     ]
+    ],
+    "bufferText": [
+     [
+      {
+       "hex": "61"
+      },
+      "r",
+      "file"
+     ],
+     [
+      {
+       "hex": "6c696e6b"
+      },
+      "r",
+      "link"
+     ],
+     [
+      {
+       "hex": "78"
+      },
+      "r",
+      "dir"
+     ],
+     [
+      {
+       "hex": "7a"
+      },
+      "r",
+      "dir"
+     ]
+    ],
+    "hex": [
+     [
+      "61",
+      "r",
+      "file"
+     ],
+     [
+      "6c696e6b",
+      "r",
+      "link"
+     ],
+     [
+      "78",
+      "r",
+      "dir"
+     ],
+     [
+      "7a",
+      "r",
+      "dir"
+     ]
+    ],
+    "base64": [
+     [
+      "Yg==",
+      "r/x",
+      "file"
+     ],
+     [
+      "eQ==",
+      "r/x",
+      "dir"
+     ]
+    ],
+    "latin1": [
+     [
+      "b",
+      "r/x",
+      "file"
+     ],
+     [
+      "y",
+      "r/x",
+      "dir"
+     ]
+    ],
+    "recursiveBuffer": {
+     "error": {
+      "name": "TypeError",
+      "ctor": "TypeError",
+      "message": "The \"path\" argument must be of type string. Received an instance of Buffer",
+      "code": "ERR_INVALID_ARG_TYPE"
+     }
+    },
+    "recursiveTruthy": [
+     [
+      "b",
+      "r/x",
+      "file"
+     ],
+     [
+      "y",
+      "r/x",
+      "dir"
+     ],
+     [
+      "c",
+      "r/x/y",
+      "file"
+     ]
+    ]
+   }
+  },
+  "shape": {
+   "source": "const proto = fs.Dir.prototype;\nconst own = Reflect.ownKeys(proto).filter(k => ![\"processReadResult\", \"readSyncRecursive\"].includes(k)).map(k => { const d = Object.getOwnPropertyDescriptor(proto, k); return [String(k), d.get ? \"get\" : h.fn(d.value), d.enumerable]; });\nreturn { own, dir: h.fn(fs.Dir), opendir: h.fn(fs.opendir), opendirSync: h.fn(fs.opendirSync), promised: h.fn(fs.promises.opendir), iterator: proto[Symbol.asyncIterator] === proto.entries,\n  construct: h.attempt(() => new fs.Dir()), call: h.attempt(() => fs.Dir()),\n  thisCheck: h.attempt(() => Object.getOwnPropertyDescriptor(proto, \"path\").get.call({})) };\n",
+   "result": {
+    "own": [
+     [
+      "constructor",
+      [
+       "Dir",
+       3
+      ],
+      false
+     ],
+     [
+      "path",
+      "get",
+      false
+     ],
+     [
+      "read",
+      [
+       "read",
+       1
+      ],
+      false
+     ],
+     [
+      "readSync",
+      [
+       "readSync",
+       0
+      ],
+      false
+     ],
+     [
+      "close",
+      [
+       "close",
+       1
+      ],
+      false
+     ],
+     [
+      "closeSync",
+      [
+       "closeSync",
+       0
+      ],
+      false
+     ],
+     [
+      "entries",
+      [
+       "entries",
+       0
+      ],
+      false
+     ],
+     [
+      "Symbol(Symbol.dispose)",
+      [
+       "[Symbol.dispose]",
+       0
+      ],
+      false
+     ],
+     [
+      "Symbol(Symbol.asyncDispose)",
+      [
+       "[Symbol.asyncDispose]",
+       0
+      ],
+      false
+     ],
+     [
+      "Symbol(Symbol.asyncIterator)",
+      [
+       "entries",
+       0
+      ],
+      false
+     ]
+    ],
+    "dir": [
+     "Dir",
+     3
+    ],
+    "opendir": [
+     "opendir",
+     3
+    ],
+    "opendirSync": [
+     "opendirSync",
+     2
+    ],
+    "promised": [
+     "opendir",
+     3
+    ],
+    "iterator": true,
+    "construct": {
+     "error": {
+      "name": "TypeError",
+      "ctor": "TypeError",
+      "message": "The \"handle\" argument must be specified",
+      "code": "ERR_MISSING_ARGS"
+     }
+    },
+    "call": {
+     "error": {
+      "name": "TypeError",
+      "ctor": "TypeError",
+      "message": "Class constructor Dir cannot be invoked without 'new'"
+     }
+    },
+    "thisCheck": {
+     "error": {
+      "name": "TypeError",
+      "ctor": "TypeError",
+      "message": "Value of \"this\" must be of type Dir",
+      "code": "ERR_INVALID_THIS"
+     }
+    }
+   }
+  },
+  "sync": {
+   "source": "// tmpfs lists a directory newest first, so creating in descending name order gives the byte order the file service lists in.\nfs.mkdirSync(\"d/sub\", { recursive: true }); fs.symlinkSync(\"a.txt\", \"d/l\"); fs.writeFileSync(\"d/b.txt\", \"b\"); fs.writeFileSync(\"d/a.txt\", \"a\");\nconst dir = fs.opendirSync(\"d\");\nconst out = { path: dir.path, ctor: dir.constructor.name, isDir: dir instanceof fs.Dir, keys: Object.keys(dir), entries: [] };\nfor (let e; (e = dir.readSync()) !== null;) out.entries.push(h.dirent(e));\nout.afterEnd = dir.readSync();\nout.close = dir.closeSync();\nout.readClosed = h.attempt(() => dir.readSync());\nout.closeClosed = h.attempt(() => dir.closeSync());\nout.readClosedAsync = h.attempt(() => dir.read(() => {}));\nout.readClosedPromise = await h.attemptAsync(() => dir.read());\nout.closeClosedPromise = await h.attemptAsync(() => dir.close());\nout.closeClosedCallback = await new Promise(resolve => dir.close(e => resolve(h.err(e))));\nout.dispose = h.attempt(() => dir[Symbol.dispose]());\nout.asyncDispose = await h.attemptAsync(() => dir[Symbol.asyncDispose]());\nconst abs = fs.opendirSync(\"/work/d/\");\nout.absPath = abs.path; out.absFirst = h.dirent(abs.readSync()); abs[Symbol.dispose](); out.disposed = h.attempt(() => abs.readSync());\nconst url = fs.opendirSync(new URL(\"file:///work/d\")); out.urlPath = url.path; url.closeSync();\nconst buf = fs.opendirSync(h.Buffer.from(\"d\")); out.bufPath = h.Buffer.isBuffer(buf.path) ? { hex: buf.path.toString(\"hex\") } : buf.path; out.bufFirst = h.dirent(buf.readSync()); buf.closeSync();\nreturn out;\n",
+   "result": {
+    "path": "d",
+    "ctor": "Dir",
+    "isDir": true,
+    "keys": [],
+    "entries": [
+     [
+      "a.txt",
+      "d",
+      "file"
+     ],
+     [
+      "b.txt",
+      "d",
+      "file"
+     ],
+     [
+      "l",
+      "d",
+      "link"
+     ],
+     [
+      "sub",
+      "d",
+      "dir"
+     ]
+    ],
+    "afterEnd": null,
+    "readClosed": {
+     "error": {
+      "name": "Error",
+      "ctor": "Error",
+      "message": "Directory handle was closed",
+      "code": "ERR_DIR_CLOSED"
+     }
+    },
+    "closeClosed": {
+     "error": {
+      "name": "Error",
+      "ctor": "Error",
+      "message": "Directory handle was closed",
+      "code": "ERR_DIR_CLOSED"
+     }
+    },
+    "readClosedAsync": {
+     "error": {
+      "name": "Error",
+      "ctor": "Error",
+      "message": "Directory handle was closed",
+      "code": "ERR_DIR_CLOSED"
+     }
+    },
+    "readClosedPromise": {
+     "error": {
+      "name": "Error",
+      "ctor": "Error",
+      "message": "Directory handle was closed",
+      "code": "ERR_DIR_CLOSED"
+     }
+    },
+    "closeClosedPromise": {
+     "error": {
+      "name": "Error",
+      "ctor": "Error",
+      "message": "Directory handle was closed",
+      "code": "ERR_DIR_CLOSED"
+     }
+    },
+    "closeClosedCallback": {
+     "name": "Error",
+     "ctor": "Error",
+     "message": "Directory handle was closed",
+     "code": "ERR_DIR_CLOSED"
+    },
+    "dispose": {},
+    "asyncDispose": {},
+    "absPath": "/work/d/",
+    "absFirst": [
+     "a.txt",
+     "/work/d/",
+     "file"
+    ],
+    "disposed": {
+     "error": {
+      "name": "Error",
+      "ctor": "Error",
+      "message": "Directory handle was closed",
+      "code": "ERR_DIR_CLOSED"
+     }
+    },
+    "urlPath": "/work/d",
+    "bufPath": {
+     "hex": "64"
+    },
+    "bufFirst": [
+     "a.txt",
+     {
+      "hex": "64"
+     },
+     "file"
+    ]
+   }
+  }
+ }
+}

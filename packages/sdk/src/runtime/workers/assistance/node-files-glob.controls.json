@@ -1,0 +1,4122 @@
+{
+ "node": "v24.18.1",
+ "recorder": "// Recorder for the node-files-*.controls.json files. Every scenario is the body of an async function of\n// (fs, h) that the test runs again, unchanged, against the emulated fs. Run with Node 24.18.1 on a tmpfs\n// (its readdir order is the byte order the file service's readdir has):\n//   docker run --rm --tmpfs /work -v \"$PWD\":/w:ro node:24.18.1-alpine node /w/record.cjs /w/sc/<set> > node-files-<set>.controls.json\nconst fs = require(\"fs\"), path = require(\"path\"), util = require(\"util\");\nconst dir = process.argv[2], out = {};\nfunction describe(e) {\n  if (!(e instanceof Error)) return { thrown: String(e) };\n  const d = { name: e.name, ctor: e.constructor.name, message: e.message };\n  for (const k of [\"code\", \"errno\", \"syscall\", \"path\", \"dest\"]) if (e[k] !== undefined) d[k] = e[k];\n  return d;\n}\nfunction helpers(warnings) {\n  return {\n    Buffer, custom: util.promisify.custom, warnings, err: describe,\n    attempt(fn) { try { return { ok: fn() }; } catch (e) { return { error: describe(e) }; } },\n    async attemptAsync(fn) { try { return { ok: await fn() }; } catch (e) { return { error: describe(e) }; } },\n    turn: () => new Promise(resolve => setImmediate(resolve)),\n    // Long enough for several polls of a 20 ms stat watcher; the replay fires its timer instead.\n    wait: () => new Promise(resolve => setTimeout(resolve, 150)),\n    dirent: d => d === null ? null : [Buffer.isBuffer(d.name) ? { hex: d.name.toString(\"hex\") } : d.name, Buffer.isBuffer(d.parentPath) ? { hex: d.parentPath.toString(\"hex\") } : d.parentPath,\n      d.isDirectory() ? \"dir\" : d.isSymbolicLink() ? \"link\" : d.isFile() ? \"file\" : \"other\"],\n    fn: f => typeof f === \"function\" ? [f.name, f.length] : typeof f,\n  };\n}\n(async () => {\n  for (const file of fs.readdirSync(dir).sort()) {\n    for (const name of fs.readdirSync(\"/work\")) fs.rmSync(\"/work/\" + name, { recursive: true, force: true });\n    process.chdir(\"/work\");\n    const warnings = [], onWarning = w => warnings.push([w.name, w.message]);\n    process.on(\"warning\", onWarning);\n    const source = fs.readFileSync(path.join(dir, file), \"utf8\");\n    const result = await new Function(\"fs\", \"h\", \"return (async () => {\" + source + \"\\n})()\")(fs, helpers(warnings));\n    process.off(\"warning\", onWarning);\n    out[file.replace(/\\.js$/, \"\")] = { source, result: JSON.parse(JSON.stringify(result)) };\n  }\n  console.log(JSON.stringify({ node: process.version, recorder: fs.readFileSync(__filename, \"utf8\"), scenarios: out }, null, 1));\n})();\n",
+ "scenarios": {
+  "errors": {
+   "source": "fs.writeFileSync(\"f.js\", \"\");\nconst out = {};\nconst each = async (name, ...args) => { out[name] = { sync: h.attempt(() => fs.globSync(...args)), promise: h.attempt(() => { const it = fs.promises.glob(...args); return typeof it[Symbol.asyncIterator]; }),\n  callback: await new Promise(resolve => { try { fs.glob(...args, (e, list) => resolve(e ? { error: h.err(e) } : list)); } catch (e) { resolve({ thrown: h.err(e) }); } }) }; };\nawait each(\"patternNumber\", 5); await each(\"patternNull\", null); await each(\"patternUndefined\"); await each(\"patternMixed\", [\"a\", 5]); await each(\"patternObject\", { a: 1 });\nawait each(\"optionsNull\", \"*\", null); await each(\"optionsText\", \"*\", \"x\"); await each(\"optionsArray\", \"*\", []); await each(\"excludeText\", \"*\", { exclude: \"x\" }); await each(\"excludeMixed\", \"*\", { exclude: [\"a\", 5] });\nawait each(\"cwdNumber\", \"*\", { cwd: 5 }); await each(\"cwdBuffer\", \"*\", { cwd: h.Buffer.from(\"/work\") }); await each(\"followText\", \"*\", { followSymlinks: \"yes\" }); await each(\"followNull\", \"*\", { followSymlinks: null });\nout.noCallback = h.attempt(() => fs.glob(\"*\")); out.badCallback = h.attempt(() => fs.glob(\"*\", {}, 5));\nout.callbackTiming = await new Promise(resolve => { const order = []; const r = fs.glob(\"*\", (e, list) => { order.push(\"callback\"); resolve({ order, list, r }); }); order.push(\"returned\"); });\nconst it = fs.promises.glob(\"*\"); out.iterator = [Object.prototype.toString.call(it), typeof it.next, typeof it.return, it[Symbol.asyncIterator]() === it, await it.next(), await it.next()];\nconst lazy = fs.promises.glob(\"nope/**\", { cwd: 5 === 6 ? \"\" : \"missing-dir\" }); out.lazy = await lazy.next();\nout.excludeThrows = { sync: h.attempt(() => fs.globSync(\"*\", { exclude: () => { throw new RangeError(\"stop\"); } })), promise: await h.attemptAsync(async () => { for await (const e of fs.promises.glob(\"*\", { exclude: () => { throw new RangeError(\"stop\"); } })) void e; }) };\nawait h.turn(); out.warnings = h.warnings.slice();\nreturn out;\n",
+   "result": {
+    "patternNumber": {
+     "sync": {
+      "error": {
+       "name": "TypeError",
+       "ctor": "TypeError",
+       "message": "The \"patterns\" argument must be of type string. Received type number (5)",
+       "code": "ERR_INVALID_ARG_TYPE"
+      }
+     },
+     "promise": {
+      "ok": "function"
+     },
+     "callback": {
+      "thrown": {
+       "name": "TypeError",
+       "ctor": "TypeError",
+       "message": "The \"patterns\" argument must be of type string. Received type number (5)",
+       "code": "ERR_INVALID_ARG_TYPE"
+      }
+     }
+    },
+    "patternNull": {
+     "sync": {
+      "error": {
+       "name": "TypeError",
+       "ctor": "TypeError",
+       "message": "The \"patterns\" argument must be an instance of Array. Received null",
+       "code": "ERR_INVALID_ARG_TYPE"
+      }
+     },
+     "promise": {
+      "ok": "function"
+     },
+     "callback": {
+      "thrown": {
+       "name": "TypeError",
+       "ctor": "TypeError",
+       "message": "The \"patterns\" argument must be an instance of Array. Received null",
+       "code": "ERR_INVALID_ARG_TYPE"
+      }
+     }
+    },
+    "patternUndefined": {
+     "sync": {
+      "error": {
+       "name": "TypeError",
+       "ctor": "TypeError",
+       "message": "The \"patterns\" argument must be of type string. Received undefined",
+       "code": "ERR_INVALID_ARG_TYPE"
+      }
+     },
+     "promise": {
+      "ok": "function"
+     },
+     "callback": {
+      "thrown": {
+       "name": "TypeError",
+       "ctor": "TypeError",
+       "message": "The \"cb\" argument must be of type function. Received undefined",
+       "code": "ERR_INVALID_ARG_TYPE"
+      }
+     }
+    },
+    "patternMixed": {
+     "sync": {
+      "error": {
+       "name": "TypeError",
+       "ctor": "TypeError",
+       "message": "The \"patterns[1]\" argument must be of type string. Received type number (5)",
+       "code": "ERR_INVALID_ARG_TYPE"
+      }
+     },
+     "promise": {
+      "ok": "function"
+     },
+     "callback": {
+      "thrown": {
+       "name": "TypeError",
+       "ctor": "TypeError",
+       "message": "The \"patterns[1]\" argument must be of type string. Received type number (5)",
+       "code": "ERR_INVALID_ARG_TYPE"
+      }
+     }
+    },
+    "patternObject": {
+     "sync": {
+      "error": {
+       "name": "TypeError",
+       "ctor": "TypeError",
+       "message": "The \"patterns\" argument must be an instance of Array. Received an instance of Object",
+       "code": "ERR_INVALID_ARG_TYPE"
+      }
+     },
+     "promise": {
+      "ok": "function"
+     },
+     "callback": {
+      "thrown": {
+       "name": "TypeError",
+       "ctor": "TypeError",
+       "message": "The \"patterns\" argument must be an instance of Array. Received an instance of Object",
+       "code": "ERR_INVALID_ARG_TYPE"
+      }
+     }
+    },
+    "optionsNull": {
+     "sync": {
+      "error": {
+       "name": "TypeError",
+       "ctor": "TypeError",
+       "message": "The \"options\" argument must be of type object. Received null",
+       "code": "ERR_INVALID_ARG_TYPE"
+      }
+     },
+     "promise": {
+      "ok": "function"
+     },
+     "callback": {
+      "thrown": {
+       "name": "TypeError",
+       "ctor": "TypeError",
+       "message": "The \"options\" argument must be of type object. Received null",
+       "code": "ERR_INVALID_ARG_TYPE"
+      }
+     }
+    },
+    "optionsText": {
+     "sync": {
+      "error": {
+       "name": "TypeError",
+       "ctor": "TypeError",
+       "message": "The \"options\" argument must be of type object. Received type string ('x')",
+       "code": "ERR_INVALID_ARG_TYPE"
+      }
+     },
+     "promise": {
+      "ok": "function"
+     },
+     "callback": {
+      "thrown": {
+       "name": "TypeError",
+       "ctor": "TypeError",
+       "message": "The \"options\" argument must be of type object. Received type string ('x')",
+       "code": "ERR_INVALID_ARG_TYPE"
+      }
+     }
+    },
+    "optionsArray": {
+     "sync": {
+      "error": {
+       "name": "TypeError",
+       "ctor": "TypeError",
+       "message": "The \"options\" argument must be of type object. Received an instance of Array",
+       "code": "ERR_INVALID_ARG_TYPE"
+      }
+     },
+     "promise": {
+      "ok": "function"
+     },
+     "callback": {
+      "thrown": {
+       "name": "TypeError",
+       "ctor": "TypeError",
+       "message": "The \"options\" argument must be of type object. Received an instance of Array",
+       "code": "ERR_INVALID_ARG_TYPE"
+      }
+     }
+    },
+    "excludeText": {
+     "sync": {
+      "error": {
+       "name": "TypeError",
+       "ctor": "TypeError",
+       "message": "The \"options.exclude\" property must be of type function or string[]. Received type string ('x')",
+       "code": "ERR_INVALID_ARG_TYPE"
+      }
+     },
+     "promise": {
+      "ok": "function"
+     },
+     "callback": {
+      "thrown": {
+       "name": "TypeError",
+       "ctor": "TypeError",
+       "message": "The \"options.exclude\" property must be of type function or string[]. Received type string ('x')",
+       "code": "ERR_INVALID_ARG_TYPE"
+      }
+     }
+    },
+    "excludeMixed": {
+     "sync": {
+      "error": {
+       "name": "TypeError",
+       "ctor": "TypeError",
+       "message": "The \"options.exclude[1]\" property must be of type string. Received type number (5)",
+       "code": "ERR_INVALID_ARG_TYPE"
+      }
+     },
+     "promise": {
+      "ok": "function"
+     },
+     "callback": {
+      "thrown": {
+       "name": "TypeError",
+       "ctor": "TypeError",
+       "message": "The \"options.exclude[1]\" property must be of type string. Received type number (5)",
+       "code": "ERR_INVALID_ARG_TYPE"
+      }
+     }
+    },
+    "cwdNumber": {
+     "sync": {
+      "error": {
+       "name": "TypeError",
+       "ctor": "TypeError",
+       "message": "The \"paths[0]\" argument must be of type string. Received type number (5)",
+       "code": "ERR_INVALID_ARG_TYPE"
+      }
+     },
+     "promise": {
+      "ok": "function"
+     },
+     "callback": {
+      "error": {
+       "name": "TypeError",
+       "ctor": "TypeError",
+       "message": "The \"paths[0]\" argument must be of type string. Received type number (5)",
+       "code": "ERR_INVALID_ARG_TYPE"
+      }
+     }
+    },
+    "cwdBuffer": {
+     "sync": {
+      "error": {
+       "name": "TypeError",
+       "ctor": "TypeError",
+       "message": "The \"paths[0]\" argument must be of type string. Received an instance of Buffer",
+       "code": "ERR_INVALID_ARG_TYPE"
+      }
+     },
+     "promise": {
+      "ok": "function"
+     },
+     "callback": {
+      "error": {
+       "name": "TypeError",
+       "ctor": "TypeError",
+       "message": "The \"paths[0]\" argument must be of type string. Received an instance of Buffer",
+       "code": "ERR_INVALID_ARG_TYPE"
+      }
+     }
+    },
+    "followText": {
+     "sync": {
+      "error": {
+       "name": "TypeError",
+       "ctor": "TypeError",
+       "message": "The \"options.followSymlinks\" property must be of type boolean. Received type string ('yes')",
+       "code": "ERR_INVALID_ARG_TYPE"
+      }
+     },
+     "promise": {
+      "ok": "function"
+     },
+     "callback": {
+      "thrown": {
+       "name": "TypeError",
+       "ctor": "TypeError",
+       "message": "The \"options.followSymlinks\" property must be of type boolean. Received type string ('yes')",
+       "code": "ERR_INVALID_ARG_TYPE"
+      }
+     }
+    },
+    "followNull": {
+     "sync": {
+      "ok": [
+       "f.js"
+      ]
+     },
+     "promise": {
+      "ok": "function"
+     },
+     "callback": [
+      "f.js"
+     ]
+    },
+    "noCallback": {
+     "error": {
+      "name": "TypeError",
+      "ctor": "TypeError",
+      "message": "The \"cb\" argument must be of type function. Received undefined",
+      "code": "ERR_INVALID_ARG_TYPE"
+     }
+    },
+    "badCallback": {
+     "error": {
+      "name": "TypeError",
+      "ctor": "TypeError",
+      "message": "The \"cb\" argument must be of type function. Received type number (5)",
+      "code": "ERR_INVALID_ARG_TYPE"
+     }
+    },
+    "callbackTiming": {
+     "order": [
+      "returned",
+      "callback"
+     ],
+     "list": [
+      "f.js"
+     ]
+    },
+    "iterator": [
+     "[object AsyncGenerator]",
+     "function",
+     "function",
+     true,
+     {
+      "value": "f.js",
+      "done": false
+     },
+     {
+      "done": true
+     }
+    ],
+    "lazy": {
+     "done": true
+    },
+    "excludeThrows": {
+     "sync": {
+      "ok": [
+       "f.js"
+      ]
+     },
+     "promise": {}
+    },
+    "warnings": []
+   }
+  },
+  "tree": {
+   "source": "const files = [\"a/b/c/deep.js\", \"a/b/one.js\", \"a/b/two.ts\", \"a/x/c\", \"a/y/c/z.js\", \"a/.hidden.js\", \"a/file.js\", \"b/b.js\", \"b/sub/inner.js\", \".dot/file.js\", \".dotfile\", \"x.js\", \"y.md\", \"sp ace/f.js\", \"e/.keep\"];\nfor (const f of files) { fs.mkdirSync(f.slice(0, f.lastIndexOf(\"/\") + 1) || \".\", { recursive: true }); fs.writeFileSync(f, \"\"); }\nfs.mkdirSync(\"empty\"); fs.symlinkSync(\"a\", \"link\"); fs.symlinkSync(\"../x.js\", \"b/flink\"); fs.symlinkSync(\"nowhere\", \"b/dangling\"); fs.symlinkSync(\"..\", \"a/y/up\");\nconst item = v => typeof v === \"string\" ? v : h.dirent(v);\nconst collect = async (pattern, options) => { const list = []; for await (const e of options === undefined ? fs.promises.glob(pattern) : fs.promises.glob(pattern, options)) list.push(item(e)); return list; };\nconst viaCallback = (pattern, options) => new Promise(resolve => { const done = (e, list) => resolve(e ? { error: h.err(e) } : list.map(item)); try { if (options === undefined) fs.glob(pattern, done); else fs.glob(pattern, options, done); } catch (e) { resolve({ thrown: h.err(e) }); } });\nconst seen = [];\nconst cases = [\n  [\"**\"], [\"**/*.js\"], [\"a/*/c\"], [\"{a,b}/**\"], [\"*\"], [\"*/\"], [\"**/\"], [\"a/**\"], [\"a/**/c\"], [\"./a/*\"], [\"a/./b/*.js\"], [\"a/../b/*.js\"], [\"/work/a/*.js\"], [\"/work/**/deep.js\"], [\".*\"], [\"**/.*\"], [\"*.{js,md}\"],\n  [\"a/b/one.js\"], [\"nope/*\"], [\"nope\"], [\"link/*\"], [\"link/**\"], [\"**/c\"], [\"**/c/**\"], [\"a/**/*.js\"], [\"**/b/*\"], [\"a/*/\"], [\"?.js\"], [\"[xy].*\"], [\"**/..\"], [\"a/b/..\"], [\".\"], [\"..\"], [\"./\"], [\"\"], [\"a/\"], [\"a/b/c/\"],\n  [\"*/*/*\"], [\"**/*\"], [\"!(a)\"], [\"+(a|b)/*.js\"], [\"sp ace/*\"], [\"a//b//one.js\"], [\"x.js/\"], [\"./**\"], [\"././a\"], [\"a\\\\b\\\\one.js\"], [\"**/**\"], [\"{a/b,b}/*.js\"], [\"a/b/*.{js,ts}\"], [\"**/*.ts\"], [\"a/**/\"], [\"../work/*.md\"], [\"**/sub/**\"],\n  [\"a/y/**\"], [\"a/y/up/x.js\"], [\"b/*\"], [\"**/dangling\"], [\"*/**/c\"], [\"**/b/**/*.js\"], [\"a/**/../*.js\"], [\"**/../x.js\"], [\"/\"], [\"/work\"], [\"/work/\"], [\"a/b/c\"], [\"a/b/c/*\"], [\"./a/b/../file.js\"], [\"**/file.js\"], [\".dot/*\"], [\"*/file.js\"], [\"{.dot,a}/file.js\"],\n  [[\"a/*.js\", \"b/*.js\"]], [[\"**/*.js\", \"a/**\"]], [[\"x.js\", \"x.js\", \"./x.js\"]], [[]],\n  [\"*.js\", { cwd: \"a\" }], [\"**\", { cwd: \"/work/a/b\" }], [\"**/*.js\", { cwd: new URL(\"file:///work/b\") }], [\"*\", { cwd: \"nope\" }], [\"**\", { cwd: \"nope\" }], [\"../x/*\", { cwd: \"a/b\" }], [\"../../*.js\", { cwd: \"a/b\" }], [\"/work/a/*.js\", { cwd: \"b\" }], [\"**\", { cwd: \"x.js\" }], [\"*\", { cwd: \"\" }],\n  [\"**/*.js\", { exclude: [\"**/b/**\"] }], [\"**\", { exclude: [\"a\", \"b/sub\"] }], [\"**\", { exclude: [\"a/**\", \".dot\", \"**/*.js\"] }], [\"a/**\", { exclude: [\"a/b/\"] }], [\"**\", { exclude: [] }], [\"*.js\", { cwd: \"a\", exclude: [\"file.js\"] }],\n  [\"**\", { exclude: n => { seen.push(n); return n === \"a\" || n === \"sub\"; } }], [\"a/**/*.js\", { exclude: n => n === \"b\" }], [\"*\", { exclude: () => true }], [\"a/b/*.js\", { exclude: n => n === \"one.js\" }],\n  [\"a/*\", { withFileTypes: true }], [\"**/c\", { withFileTypes: true }], [\"a/b/one.js\", { withFileTypes: true }], [\"./a/b/\", { withFileTypes: true }], [\"*\", { withFileTypes: 1, cwd: \"b\" }], [\"**\", { withFileTypes: true, cwd: \"a/y\" }],\n  [\"a/**\", { withFileTypes: true, exclude: e => { seen.push(typeof e === \"string\" ? e : [\"dirent\", e.name, e.parentPath]); return e.name === \"b\"; } }],\n  [\"**/*.js\", { followSymlinks: true }], [\"link/**\", { followSymlinks: true }], [\"a/y/**\", { followSymlinks: true }], [\"b/*\", { followSymlinks: true, withFileTypes: true }], [\"**\", {}], [\"**\", { cwd: undefined, exclude: undefined, withFileTypes: undefined }],\n];\nconst out = { shapes: [h.fn(fs.glob), h.fn(fs.globSync), h.fn(fs.promises.glob)], cases: [] };\nfor (const [pattern, options] of cases) {\n  const row = { pattern, options: options === undefined ? null : Object.fromEntries(Object.entries(options).map(([k, v]) => [k, typeof v === \"function\" ? \"function\" : v instanceof URL ? v.href : v === undefined ? \"undefined\" : v])) };\n  seen.length = 0; row.sync = h.attempt(() => (options === undefined ? fs.globSync(pattern) : fs.globSync(pattern, options)).map(item)); if (seen.length) row.syncSeen = seen.slice();\n  seen.length = 0; row.promise = await h.attemptAsync(() => collect(pattern, options)); if (seen.length) row.promiseSeen = seen.slice();\n  row.callback = await viaCallback(pattern, options);\n  out.cases.push(row);\n}\nawait h.turn();\nout.warnings = h.warnings.slice();\nreturn out;\n",
+   "result": {
+    "shapes": [
+     [
+      "glob",
+      3
+     ],
+     [
+      "globSync",
+      2
+     ],
+     [
+      "glob",
+      2
+     ]
+    ],
+    "cases": [
+     {
+      "pattern": "**",
+      "options": null,
+      "sync": {
+       "ok": [
+        ".",
+        "link",
+        "x.js",
+        "y.md",
+        "sp ace",
+        "sp ace/f.js",
+        "empty",
+        "e",
+        "b",
+        "b/b.js",
+        "b/dangling",
+        "b/flink",
+        "b/sub",
+        "b/sub/inner.js",
+        "a",
+        "a/file.js",
+        "a/y",
+        "a/y/up",
+        "a/y/c",
+        "a/y/c/z.js",
+        "a/x",
+        "a/x/c",
+        "a/b",
+        "a/b/one.js",
+        "a/b/two.ts",
+        "a/b/c",
+        "a/b/c/deep.js"
+       ]
+      },
+      "promise": {
+       "ok": [
+        ".",
+        "link",
+        "x.js",
+        "y.md",
+        "sp ace",
+        "sp ace/f.js",
+        "empty",
+        "e",
+        "b",
+        "b/b.js",
+        "b/dangling",
+        "b/flink",
+        "b/sub",
+        "b/sub/inner.js",
+        "a",
+        "a/file.js",
+        "a/y",
+        "a/y/up",
+        "a/y/c",
+        "a/y/c/z.js",
+        "a/x",
+        "a/x/c",
+        "a/b",
+        "a/b/one.js",
+        "a/b/two.ts",
+        "a/b/c",
+        "a/b/c/deep.js"
+       ]
+      },
+      "callback": [
+       ".",
+       "link",
+       "x.js",
+       "y.md",
+       "sp ace",
+       "sp ace/f.js",
+       "empty",
+       "e",
+       "b",
+       "b/b.js",
+       "b/dangling",
+       "b/flink",
+       "b/sub",
+       "b/sub/inner.js",
+       "a",
+       "a/file.js",
+       "a/y",
+       "a/y/up",
+       "a/y/c",
+       "a/y/c/z.js",
+       "a/x",
+       "a/x/c",
+       "a/b",
+       "a/b/one.js",
+       "a/b/two.ts",
+       "a/b/c",
+       "a/b/c/deep.js"
+      ]
+     },
+     {
+      "pattern": "**/*.js",
+      "options": null,
+      "sync": {
+       "ok": [
+        "x.js",
+        "sp ace/f.js",
+        "b/b.js",
+        "b/sub/inner.js",
+        "a/file.js",
+        "a/y/c/z.js",
+        "a/b/one.js",
+        "a/b/c/deep.js"
+       ]
+      },
+      "promise": {
+       "ok": [
+        "x.js",
+        "sp ace/f.js",
+        "b/b.js",
+        "b/sub/inner.js",
+        "a/file.js",
+        "a/y/c/z.js",
+        "a/b/one.js",
+        "a/b/c/deep.js"
+       ]
+      },
+      "callback": [
+       "x.js",
+       "sp ace/f.js",
+       "b/b.js",
+       "b/sub/inner.js",
+       "a/file.js",
+       "a/y/c/z.js",
+       "a/b/one.js",
+       "a/b/c/deep.js"
+      ]
+     },
+     {
+      "pattern": "a/*/c",
+      "options": null,
+      "sync": {
+       "ok": [
+        "a/y/c",
+        "a/x/c",
+        "a/b/c"
+       ]
+      },
+      "promise": {
+       "ok": [
+        "a/y/c",
+        "a/x/c",
+        "a/b/c"
+       ]
+      },
+      "callback": [
+       "a/y/c",
+       "a/x/c",
+       "a/b/c"
+      ]
+     },
+     {
+      "pattern": "{a,b}/**",
+      "options": null,
+      "sync": {
+       "ok": [
+        "b",
+        "b/b.js",
+        "b/dangling",
+        "b/flink",
+        "b/sub",
+        "b/sub/inner.js",
+        "a",
+        "a/file.js",
+        "a/y",
+        "a/y/up",
+        "a/y/c",
+        "a/y/c/z.js",
+        "a/x",
+        "a/x/c",
+        "a/b",
+        "a/b/one.js",
+        "a/b/two.ts",
+        "a/b/c",
+        "a/b/c/deep.js"
+       ]
+      },
+      "promise": {
+       "ok": [
+        "b",
+        "b/b.js",
+        "b/dangling",
+        "b/flink",
+        "b/sub",
+        "b/sub/inner.js",
+        "a",
+        "a/file.js",
+        "a/y",
+        "a/y/up",
+        "a/y/c",
+        "a/y/c/z.js",
+        "a/x",
+        "a/x/c",
+        "a/b",
+        "a/b/one.js",
+        "a/b/two.ts",
+        "a/b/c",
+        "a/b/c/deep.js"
+       ]
+      },
+      "callback": [
+       "b",
+       "b/b.js",
+       "b/dangling",
+       "b/flink",
+       "b/sub",
+       "b/sub/inner.js",
+       "a",
+       "a/file.js",
+       "a/y",
+       "a/y/up",
+       "a/y/c",
+       "a/y/c/z.js",
+       "a/x",
+       "a/x/c",
+       "a/b",
+       "a/b/one.js",
+       "a/b/two.ts",
+       "a/b/c",
+       "a/b/c/deep.js"
+      ]
+     },
+     {
+      "pattern": "*",
+      "options": null,
+      "sync": {
+       "ok": [
+        "a",
+        "b",
+        "e",
+        "empty",
+        "link",
+        "sp ace",
+        "x.js",
+        "y.md"
+       ]
+      },
+      "promise": {
+       "ok": [
+        "a",
+        "b",
+        "e",
+        "empty",
+        "link",
+        "sp ace",
+        "x.js",
+        "y.md"
+       ]
+      },
+      "callback": [
+       "a",
+       "b",
+       "e",
+       "empty",
+       "link",
+       "sp ace",
+       "x.js",
+       "y.md"
+      ]
+     },
+     {
+      "pattern": "*/",
+      "options": null,
+      "sync": {
+       "ok": [
+        "sp ace",
+        "empty",
+        "e",
+        "b",
+        "a"
+       ]
+      },
+      "promise": {
+       "ok": [
+        "sp ace",
+        "empty",
+        "e",
+        "b",
+        "a"
+       ]
+      },
+      "callback": [
+       "sp ace",
+       "empty",
+       "e",
+       "b",
+       "a"
+      ]
+     },
+     {
+      "pattern": "**/",
+      "options": null,
+      "sync": {
+       "ok": [
+        ".",
+        "sp ace",
+        "empty",
+        "e",
+        "b",
+        "b/sub",
+        "a",
+        "a/y",
+        "a/y/c",
+        "a/x",
+        "a/b",
+        "a/b/c"
+       ]
+      },
+      "promise": {
+       "ok": [
+        ".",
+        "sp ace",
+        "empty",
+        "e",
+        "b",
+        "b/sub",
+        "a",
+        "a/y",
+        "a/y/c",
+        "a/x",
+        "a/b",
+        "a/b/c"
+       ]
+      },
+      "callback": [
+       ".",
+       "sp ace",
+       "empty",
+       "e",
+       "b",
+       "b/sub",
+       "a",
+       "a/y",
+       "a/y/c",
+       "a/x",
+       "a/b",
+       "a/b/c"
+      ]
+     },
+     {
+      "pattern": "a/**",
+      "options": null,
+      "sync": {
+       "ok": [
+        "a",
+        "a/file.js",
+        "a/y",
+        "a/y/up",
+        "a/y/c",
+        "a/y/c/z.js",
+        "a/x",
+        "a/x/c",
+        "a/b",
+        "a/b/one.js",
+        "a/b/two.ts",
+        "a/b/c",
+        "a/b/c/deep.js"
+       ]
+      },
+      "promise": {
+       "ok": [
+        "a",
+        "a/file.js",
+        "a/y",
+        "a/y/up",
+        "a/y/c",
+        "a/y/c/z.js",
+        "a/x",
+        "a/x/c",
+        "a/b",
+        "a/b/one.js",
+        "a/b/two.ts",
+        "a/b/c",
+        "a/b/c/deep.js"
+       ]
+      },
+      "callback": [
+       "a",
+       "a/file.js",
+       "a/y",
+       "a/y/up",
+       "a/y/c",
+       "a/y/c/z.js",
+       "a/x",
+       "a/x/c",
+       "a/b",
+       "a/b/one.js",
+       "a/b/two.ts",
+       "a/b/c",
+       "a/b/c/deep.js"
+      ]
+     },
+     {
+      "pattern": "a/**/c",
+      "options": null,
+      "sync": {
+       "ok": [
+        "a/y/c",
+        "a/x/c",
+        "a/b/c"
+       ]
+      },
+      "promise": {
+       "ok": [
+        "a/y/c",
+        "a/x/c",
+        "a/b/c"
+       ]
+      },
+      "callback": [
+       "a/y/c",
+       "a/x/c",
+       "a/b/c"
+      ]
+     },
+     {
+      "pattern": "./a/*",
+      "options": null,
+      "sync": {
+       "ok": [
+        "a/b",
+        "a/file.js",
+        "a/x",
+        "a/y"
+       ]
+      },
+      "promise": {
+       "ok": [
+        "a/b",
+        "a/file.js",
+        "a/x",
+        "a/y"
+       ]
+      },
+      "callback": [
+       "a/b",
+       "a/file.js",
+       "a/x",
+       "a/y"
+      ]
+     },
+     {
+      "pattern": "a/./b/*.js",
+      "options": null,
+      "sync": {
+       "ok": [
+        "a/b/one.js"
+       ]
+      },
+      "promise": {
+       "ok": [
+        "a/b/one.js"
+       ]
+      },
+      "callback": [
+       "a/b/one.js"
+      ]
+     },
+     {
+      "pattern": "a/../b/*.js",
+      "options": null,
+      "sync": {
+       "ok": [
+        "b/b.js"
+       ]
+      },
+      "promise": {
+       "ok": [
+        "b/b.js"
+       ]
+      },
+      "callback": [
+       "b/b.js"
+      ]
+     },
+     {
+      "pattern": "/work/a/*.js",
+      "options": null,
+      "sync": {
+       "ok": [
+        "/work/a/file.js"
+       ]
+      },
+      "promise": {
+       "ok": [
+        "/work/a/file.js"
+       ]
+      },
+      "callback": [
+       "/work/a/file.js"
+      ]
+     },
+     {
+      "pattern": "/work/**/deep.js",
+      "options": null,
+      "sync": {
+       "ok": [
+        "/work/a/b/c/deep.js"
+       ]
+      },
+      "promise": {
+       "ok": [
+        "/work/a/b/c/deep.js"
+       ]
+      },
+      "callback": [
+       "/work/a/b/c/deep.js"
+      ]
+     },
+     {
+      "pattern": ".*",
+      "options": null,
+      "sync": {
+       "ok": [
+        ".dot",
+        ".dotfile"
+       ]
+      },
+      "promise": {
+       "ok": [
+        ".dot",
+        ".dotfile"
+       ]
+      },
+      "callback": [
+       ".dot",
+       ".dotfile"
+      ]
+     },
+     {
+      "pattern": "**/.*",
+      "options": null,
+      "sync": {
+       "ok": [
+        ".dot",
+        ".dotfile",
+        "e/.keep",
+        "a/.hidden.js"
+       ]
+      },
+      "promise": {
+       "ok": [
+        ".dot",
+        ".dotfile",
+        "e/.keep",
+        "a/.hidden.js"
+       ]
+      },
+      "callback": [
+       ".dot",
+       ".dotfile",
+       "e/.keep",
+       "a/.hidden.js"
+      ]
+     },
+     {
+      "pattern": "*.{js,md}",
+      "options": null,
+      "sync": {
+       "ok": [
+        "x.js",
+        "y.md"
+       ]
+      },
+      "promise": {
+       "ok": [
+        "x.js",
+        "y.md"
+       ]
+      },
+      "callback": [
+       "x.js",
+       "y.md"
+      ]
+     },
+     {
+      "pattern": "a/b/one.js",
+      "options": null,
+      "sync": {
+       "ok": [
+        "a/b/one.js"
+       ]
+      },
+      "promise": {
+       "ok": [
+        "a/b/one.js"
+       ]
+      },
+      "callback": [
+       "a/b/one.js"
+      ]
+     },
+     {
+      "pattern": "nope/*",
+      "options": null,
+      "sync": {
+       "ok": []
+      },
+      "promise": {
+       "ok": []
+      },
+      "callback": []
+     },
+     {
+      "pattern": "nope",
+      "options": null,
+      "sync": {
+       "ok": []
+      },
+      "promise": {
+       "ok": []
+      },
+      "callback": []
+     },
+     {
+      "pattern": "link/*",
+      "options": null,
+      "sync": {
+       "ok": [
+        "link/b",
+        "link/file.js",
+        "link/x",
+        "link/y"
+       ]
+      },
+      "promise": {
+       "ok": [
+        "link/b",
+        "link/file.js",
+        "link/x",
+        "link/y"
+       ]
+      },
+      "callback": [
+       "link/b",
+       "link/file.js",
+       "link/x",
+       "link/y"
+      ]
+     },
+     {
+      "pattern": "link/**",
+      "options": null,
+      "sync": {
+       "ok": [
+        "link",
+        "link/file.js",
+        "link/y",
+        "link/y/up",
+        "link/y/c",
+        "link/y/c/z.js",
+        "link/x",
+        "link/x/c",
+        "link/b",
+        "link/b/one.js",
+        "link/b/two.ts",
+        "link/b/c",
+        "link/b/c/deep.js"
+       ]
+      },
+      "promise": {
+       "ok": [
+        "link",
+        "link/file.js",
+        "link/y",
+        "link/y/up",
+        "link/y/c",
+        "link/y/c/z.js",
+        "link/x",
+        "link/x/c",
+        "link/b",
+        "link/b/one.js",
+        "link/b/two.ts",
+        "link/b/c",
+        "link/b/c/deep.js"
+       ]
+      },
+      "callback": [
+       "link",
+       "link/file.js",
+       "link/y",
+       "link/y/up",
+       "link/y/c",
+       "link/y/c/z.js",
+       "link/x",
+       "link/x/c",
+       "link/b",
+       "link/b/one.js",
+       "link/b/two.ts",
+       "link/b/c",
+       "link/b/c/deep.js"
+      ]
+     },
+     {
+      "pattern": "**/c",
+      "options": null,
+      "sync": {
+       "ok": [
+        "a/y/c",
+        "a/x/c",
+        "a/b/c"
+       ]
+      },
+      "promise": {
+       "ok": [
+        "a/y/c",
+        "a/x/c",
+        "a/b/c"
+       ]
+      },
+      "callback": [
+       "a/y/c",
+       "a/x/c",
+       "a/b/c"
+      ]
+     },
+     {
+      "pattern": "**/c/**",
+      "options": null,
+      "sync": {
+       "ok": [
+        "a/y/c",
+        "a/y/c/z.js",
+        "a/b/c",
+        "a/b/c/deep.js"
+       ]
+      },
+      "promise": {
+       "ok": [
+        "a/y/c",
+        "a/y/c/z.js",
+        "a/b/c",
+        "a/b/c/deep.js"
+       ]
+      },
+      "callback": [
+       "a/y/c",
+       "a/y/c/z.js",
+       "a/b/c",
+       "a/b/c/deep.js"
+      ]
+     },
+     {
+      "pattern": "a/**/*.js",
+      "options": null,
+      "sync": {
+       "ok": [
+        "a/file.js",
+        "a/y/c/z.js",
+        "a/b/one.js",
+        "a/b/c/deep.js"
+       ]
+      },
+      "promise": {
+       "ok": [
+        "a/file.js",
+        "a/y/c/z.js",
+        "a/b/one.js",
+        "a/b/c/deep.js"
+       ]
+      },
+      "callback": [
+       "a/file.js",
+       "a/y/c/z.js",
+       "a/b/one.js",
+       "a/b/c/deep.js"
+      ]
+     },
+     {
+      "pattern": "**/b/*",
+      "options": null,
+      "sync": {
+       "ok": [
+        "b/b.js",
+        "b/dangling",
+        "b/flink",
+        "b/sub",
+        "a/b/c",
+        "a/b/one.js",
+        "a/b/two.ts"
+       ]
+      },
+      "promise": {
+       "ok": [
+        "b/b.js",
+        "b/dangling",
+        "b/flink",
+        "b/sub",
+        "a/b/c",
+        "a/b/one.js",
+        "a/b/two.ts"
+       ]
+      },
+      "callback": [
+       "b/b.js",
+       "b/dangling",
+       "b/flink",
+       "b/sub",
+       "a/b/c",
+       "a/b/one.js",
+       "a/b/two.ts"
+      ]
+     },
+     {
+      "pattern": "a/*/",
+      "options": null,
+      "sync": {
+       "ok": [
+        "a/y",
+        "a/x",
+        "a/b"
+       ]
+      },
+      "promise": {
+       "ok": [
+        "a/y",
+        "a/x",
+        "a/b"
+       ]
+      },
+      "callback": [
+       "a/y",
+       "a/x",
+       "a/b"
+      ]
+     },
+     {
+      "pattern": "?.js",
+      "options": null,
+      "sync": {
+       "ok": [
+        "x.js"
+       ]
+      },
+      "promise": {
+       "ok": [
+        "x.js"
+       ]
+      },
+      "callback": [
+       "x.js"
+      ]
+     },
+     {
+      "pattern": "[xy].*",
+      "options": null,
+      "sync": {
+       "ok": [
+        "x.js",
+        "y.md"
+       ]
+      },
+      "promise": {
+       "ok": [
+        "x.js",
+        "y.md"
+       ]
+      },
+      "callback": [
+       "x.js",
+       "y.md"
+      ]
+     },
+     {
+      "pattern": "**/..",
+      "options": null,
+      "sync": {
+       "ok": [
+        ".",
+        "..",
+        "b",
+        "a",
+        "a/y",
+        "a/b"
+       ]
+      },
+      "promise": {
+       "ok": [
+        ".",
+        "..",
+        "b",
+        "a",
+        "a/y",
+        "a/b"
+       ]
+      },
+      "callback": [
+       ".",
+       "..",
+       "b",
+       "a",
+       "a/y",
+       "a/b"
+      ]
+     },
+     {
+      "pattern": "a/b/..",
+      "options": null,
+      "sync": {
+       "ok": [
+        "a"
+       ]
+      },
+      "promise": {
+       "ok": [
+        "a"
+       ]
+      },
+      "callback": [
+       "a"
+      ]
+     },
+     {
+      "pattern": ".",
+      "options": null,
+      "sync": {
+       "ok": []
+      },
+      "promise": {
+       "ok": []
+      },
+      "callback": []
+     },
+     {
+      "pattern": "..",
+      "options": null,
+      "sync": {
+       "ok": []
+      },
+      "promise": {
+       "ok": []
+      },
+      "callback": []
+     },
+     {
+      "pattern": "./",
+      "options": null,
+      "sync": {
+       "ok": []
+      },
+      "promise": {
+       "ok": []
+      },
+      "callback": []
+     },
+     {
+      "pattern": "",
+      "options": null,
+      "sync": {
+       "ok": []
+      },
+      "promise": {
+       "ok": []
+      },
+      "callback": []
+     },
+     {
+      "pattern": "a/",
+      "options": null,
+      "sync": {
+       "ok": [
+        "a"
+       ]
+      },
+      "promise": {
+       "ok": [
+        "a"
+       ]
+      },
+      "callback": [
+       "a"
+      ]
+     },
+     {
+      "pattern": "a/b/c/",
+      "options": null,
+      "sync": {
+       "ok": [
+        "a/b/c"
+       ]
+      },
+      "promise": {
+       "ok": [
+        "a/b/c"
+       ]
+      },
+      "callback": [
+       "a/b/c"
+      ]
+     },
+     {
+      "pattern": "*/*/*",
+      "options": null,
+      "sync": {
+       "ok": [
+        "b/sub/inner.js",
+        "a/y/c",
+        "a/y/up",
+        "a/x/c",
+        "a/b/c",
+        "a/b/one.js",
+        "a/b/two.ts"
+       ]
+      },
+      "promise": {
+       "ok": [
+        "b/sub/inner.js",
+        "a/y/c",
+        "a/y/up",
+        "a/x/c",
+        "a/b/c",
+        "a/b/one.js",
+        "a/b/two.ts"
+       ]
+      },
+      "callback": [
+       "b/sub/inner.js",
+       "a/y/c",
+       "a/y/up",
+       "a/x/c",
+       "a/b/c",
+       "a/b/one.js",
+       "a/b/two.ts"
+      ]
+     },
+     {
+      "pattern": "**/*",
+      "options": null,
+      "sync": {
+       "ok": [
+        "a",
+        "b",
+        "e",
+        "empty",
+        "link",
+        "sp ace",
+        "x.js",
+        "y.md",
+        "sp ace/f.js",
+        "link/b",
+        "link/file.js",
+        "link/x",
+        "link/y",
+        "b/b.js",
+        "b/dangling",
+        "b/flink",
+        "b/sub",
+        "b/sub/inner.js",
+        "a/b",
+        "a/file.js",
+        "a/x",
+        "a/y",
+        "a/y/c",
+        "a/y/up",
+        "a/y/up/b",
+        "a/y/up/file.js",
+        "a/y/up/x",
+        "a/y/up/y",
+        "a/y/c/z.js",
+        "a/x/c",
+        "a/b/c",
+        "a/b/one.js",
+        "a/b/two.ts",
+        "a/b/c/deep.js"
+       ]
+      },
+      "promise": {
+       "ok": [
+        "a",
+        "b",
+        "e",
+        "empty",
+        "link",
+        "sp ace",
+        "x.js",
+        "y.md",
+        "sp ace/f.js",
+        "link/b",
+        "link/file.js",
+        "link/x",
+        "link/y",
+        "b/b.js",
+        "b/dangling",
+        "b/flink",
+        "b/sub",
+        "b/sub/inner.js",
+        "a/b",
+        "a/file.js",
+        "a/x",
+        "a/y",
+        "a/y/c",
+        "a/y/up",
+        "a/y/up/b",
+        "a/y/up/file.js",
+        "a/y/up/x",
+        "a/y/up/y",
+        "a/y/c/z.js",
+        "a/x/c",
+        "a/b/c",
+        "a/b/one.js",
+        "a/b/two.ts",
+        "a/b/c/deep.js"
+       ]
+      },
+      "callback": [
+       "a",
+       "b",
+       "e",
+       "empty",
+       "link",
+       "sp ace",
+       "x.js",
+       "y.md",
+       "sp ace/f.js",
+       "link/b",
+       "link/file.js",
+       "link/x",
+       "link/y",
+       "b/b.js",
+       "b/dangling",
+       "b/flink",
+       "b/sub",
+       "b/sub/inner.js",
+       "a/b",
+       "a/file.js",
+       "a/x",
+       "a/y",
+       "a/y/c",
+       "a/y/up",
+       "a/y/up/b",
+       "a/y/up/file.js",
+       "a/y/up/x",
+       "a/y/up/y",
+       "a/y/c/z.js",
+       "a/x/c",
+       "a/b/c",
+       "a/b/one.js",
+       "a/b/two.ts",
+       "a/b/c/deep.js"
+      ]
+     },
+     {
+      "pattern": "!(a)",
+      "options": null,
+      "sync": {
+       "ok": [
+        "b",
+        "e",
+        "empty",
+        "link",
+        "sp ace",
+        "x.js",
+        "y.md"
+       ]
+      },
+      "promise": {
+       "ok": [
+        "b",
+        "e",
+        "empty",
+        "link",
+        "sp ace",
+        "x.js",
+        "y.md"
+       ]
+      },
+      "callback": [
+       "b",
+       "e",
+       "empty",
+       "link",
+       "sp ace",
+       "x.js",
+       "y.md"
+      ]
+     },
+     {
+      "pattern": "+(a|b)/*.js",
+      "options": null,
+      "sync": {
+       "ok": [
+        "b/b.js",
+        "a/file.js"
+       ]
+      },
+      "promise": {
+       "ok": [
+        "b/b.js",
+        "a/file.js"
+       ]
+      },
+      "callback": [
+       "b/b.js",
+       "a/file.js"
+      ]
+     },
+     {
+      "pattern": "sp ace/*",
+      "options": null,
+      "sync": {
+       "ok": [
+        "sp ace/f.js"
+       ]
+      },
+      "promise": {
+       "ok": [
+        "sp ace/f.js"
+       ]
+      },
+      "callback": [
+       "sp ace/f.js"
+      ]
+     },
+     {
+      "pattern": "a//b//one.js",
+      "options": null,
+      "sync": {
+       "ok": [
+        "a/b/one.js"
+       ]
+      },
+      "promise": {
+       "ok": [
+        "a/b/one.js"
+       ]
+      },
+      "callback": [
+       "a/b/one.js"
+      ]
+     },
+     {
+      "pattern": "x.js/",
+      "options": null,
+      "sync": {
+       "ok": []
+      },
+      "promise": {
+       "ok": []
+      },
+      "callback": []
+     },
+     {
+      "pattern": "./**",
+      "options": null,
+      "sync": {
+       "ok": [
+        ".",
+        "link",
+        "x.js",
+        "y.md",
+        "sp ace",
+        "sp ace/f.js",
+        "empty",
+        "e",
+        "b",
+        "b/b.js",
+        "b/dangling",
+        "b/flink",
+        "b/sub",
+        "b/sub/inner.js",
+        "a",
+        "a/file.js",
+        "a/y",
+        "a/y/up",
+        "a/y/c",
+        "a/y/c/z.js",
+        "a/x",
+        "a/x/c",
+        "a/b",
+        "a/b/one.js",
+        "a/b/two.ts",
+        "a/b/c",
+        "a/b/c/deep.js"
+       ]
+      },
+      "promise": {
+       "ok": [
+        ".",
+        "link",
+        "x.js",
+        "y.md",
+        "sp ace",
+        "sp ace/f.js",
+        "empty",
+        "e",
+        "b",
+        "b/b.js",
+        "b/dangling",
+        "b/flink",
+        "b/sub",
+        "b/sub/inner.js",
+        "a",
+        "a/file.js",
+        "a/y",
+        "a/y/up",
+        "a/y/c",
+        "a/y/c/z.js",
+        "a/x",
+        "a/x/c",
+        "a/b",
+        "a/b/one.js",
+        "a/b/two.ts",
+        "a/b/c",
+        "a/b/c/deep.js"
+       ]
+      },
+      "callback": [
+       ".",
+       "link",
+       "x.js",
+       "y.md",
+       "sp ace",
+       "sp ace/f.js",
+       "empty",
+       "e",
+       "b",
+       "b/b.js",
+       "b/dangling",
+       "b/flink",
+       "b/sub",
+       "b/sub/inner.js",
+       "a",
+       "a/file.js",
+       "a/y",
+       "a/y/up",
+       "a/y/c",
+       "a/y/c/z.js",
+       "a/x",
+       "a/x/c",
+       "a/b",
+       "a/b/one.js",
+       "a/b/two.ts",
+       "a/b/c",
+       "a/b/c/deep.js"
+      ]
+     },
+     {
+      "pattern": "././a",
+      "options": null,
+      "sync": {
+       "ok": [
+        "a"
+       ]
+      },
+      "promise": {
+       "ok": [
+        "a"
+       ]
+      },
+      "callback": [
+       "a"
+      ]
+     },
+     {
+      "pattern": "a\\b\\one.js",
+      "options": null,
+      "sync": {
+       "ok": [
+        "a/b/one.js"
+       ]
+      },
+      "promise": {
+       "ok": [
+        "a/b/one.js"
+       ]
+      },
+      "callback": [
+       "a/b/one.js"
+      ]
+     },
+     {
+      "pattern": "**/**",
+      "options": null,
+      "sync": {
+       "ok": [
+        ".",
+        "link",
+        "x.js",
+        "y.md",
+        "sp ace",
+        "sp ace/f.js",
+        "empty",
+        "e",
+        "b",
+        "b/b.js",
+        "b/dangling",
+        "b/flink",
+        "b/sub",
+        "b/sub/inner.js",
+        "a",
+        "a/file.js",
+        "a/y",
+        "a/y/up",
+        "a/y/c",
+        "a/y/c/z.js",
+        "a/x",
+        "a/x/c",
+        "a/b",
+        "a/b/one.js",
+        "a/b/two.ts",
+        "a/b/c",
+        "a/b/c/deep.js"
+       ]
+      },
+      "promise": {
+       "ok": [
+        ".",
+        "link",
+        "x.js",
+        "y.md",
+        "sp ace",
+        "sp ace/f.js",
+        "empty",
+        "e",
+        "b",
+        "b/b.js",
+        "b/dangling",
+        "b/flink",
+        "b/sub",
+        "b/sub/inner.js",
+        "a",
+        "a/file.js",
+        "a/y",
+        "a/y/up",
+        "a/y/c",
+        "a/y/c/z.js",
+        "a/x",
+        "a/x/c",
+        "a/b",
+        "a/b/one.js",
+        "a/b/two.ts",
+        "a/b/c",
+        "a/b/c/deep.js"
+       ]
+      },
+      "callback": [
+       ".",
+       "link",
+       "x.js",
+       "y.md",
+       "sp ace",
+       "sp ace/f.js",
+       "empty",
+       "e",
+       "b",
+       "b/b.js",
+       "b/dangling",
+       "b/flink",
+       "b/sub",
+       "b/sub/inner.js",
+       "a",
+       "a/file.js",
+       "a/y",
+       "a/y/up",
+       "a/y/c",
+       "a/y/c/z.js",
+       "a/x",
+       "a/x/c",
+       "a/b",
+       "a/b/one.js",
+       "a/b/two.ts",
+       "a/b/c",
+       "a/b/c/deep.js"
+      ]
+     },
+     {
+      "pattern": "{a/b,b}/*.js",
+      "options": null,
+      "sync": {
+       "ok": [
+        "b/b.js",
+        "a/b/one.js"
+       ]
+      },
+      "promise": {
+       "ok": [
+        "b/b.js",
+        "a/b/one.js"
+       ]
+      },
+      "callback": [
+       "b/b.js",
+       "a/b/one.js"
+      ]
+     },
+     {
+      "pattern": "a/b/*.{js,ts}",
+      "options": null,
+      "sync": {
+       "ok": [
+        "a/b/one.js",
+        "a/b/two.ts"
+       ]
+      },
+      "promise": {
+       "ok": [
+        "a/b/one.js",
+        "a/b/two.ts"
+       ]
+      },
+      "callback": [
+       "a/b/one.js",
+       "a/b/two.ts"
+      ]
+     },
+     {
+      "pattern": "**/*.ts",
+      "options": null,
+      "sync": {
+       "ok": [
+        "a/b/two.ts"
+       ]
+      },
+      "promise": {
+       "ok": [
+        "a/b/two.ts"
+       ]
+      },
+      "callback": [
+       "a/b/two.ts"
+      ]
+     },
+     {
+      "pattern": "a/**/",
+      "options": null,
+      "sync": {
+       "ok": [
+        "a",
+        "a/y",
+        "a/y/c",
+        "a/x",
+        "a/b",
+        "a/b/c"
+       ]
+      },
+      "promise": {
+       "ok": [
+        "a",
+        "a/y",
+        "a/y/c",
+        "a/x",
+        "a/b",
+        "a/b/c"
+       ]
+      },
+      "callback": [
+       "a",
+       "a/y",
+       "a/y/c",
+       "a/x",
+       "a/b",
+       "a/b/c"
+      ]
+     },
+     {
+      "pattern": "../work/*.md",
+      "options": null,
+      "sync": {
+       "ok": [
+        "../work/y.md"
+       ]
+      },
+      "promise": {
+       "ok": [
+        "../work/y.md"
+       ]
+      },
+      "callback": [
+       "../work/y.md"
+      ]
+     },
+     {
+      "pattern": "**/sub/**",
+      "options": null,
+      "sync": {
+       "ok": [
+        "b/sub",
+        "b/sub/inner.js"
+       ]
+      },
+      "promise": {
+       "ok": [
+        "b/sub",
+        "b/sub/inner.js"
+       ]
+      },
+      "callback": [
+       "b/sub",
+       "b/sub/inner.js"
+      ]
+     },
+     {
+      "pattern": "a/y/**",
+      "options": null,
+      "sync": {
+       "ok": [
+        "a/y",
+        "a/y/up",
+        "a/y/c",
+        "a/y/c/z.js"
+       ]
+      },
+      "promise": {
+       "ok": [
+        "a/y",
+        "a/y/up",
+        "a/y/c",
+        "a/y/c/z.js"
+       ]
+      },
+      "callback": [
+       "a/y",
+       "a/y/up",
+       "a/y/c",
+       "a/y/c/z.js"
+      ]
+     },
+     {
+      "pattern": "a/y/up/x.js",
+      "options": null,
+      "sync": {
+       "ok": []
+      },
+      "promise": {
+       "ok": []
+      },
+      "callback": []
+     },
+     {
+      "pattern": "b/*",
+      "options": null,
+      "sync": {
+       "ok": [
+        "b/b.js",
+        "b/dangling",
+        "b/flink",
+        "b/sub"
+       ]
+      },
+      "promise": {
+       "ok": [
+        "b/b.js",
+        "b/dangling",
+        "b/flink",
+        "b/sub"
+       ]
+      },
+      "callback": [
+       "b/b.js",
+       "b/dangling",
+       "b/flink",
+       "b/sub"
+      ]
+     },
+     {
+      "pattern": "**/dangling",
+      "options": null,
+      "sync": {
+       "ok": [
+        "b/dangling"
+       ]
+      },
+      "promise": {
+       "ok": [
+        "b/dangling"
+       ]
+      },
+      "callback": [
+       "b/dangling"
+      ]
+     },
+     {
+      "pattern": "*/**/c",
+      "options": null,
+      "sync": {
+       "ok": [
+        "a/y/c",
+        "a/x/c",
+        "a/b/c"
+       ]
+      },
+      "promise": {
+       "ok": [
+        "a/y/c",
+        "a/x/c",
+        "a/b/c"
+       ]
+      },
+      "callback": [
+       "a/y/c",
+       "a/x/c",
+       "a/b/c"
+      ]
+     },
+     {
+      "pattern": "**/b/**/*.js",
+      "options": null,
+      "sync": {
+       "ok": [
+        "b/b.js",
+        "b/sub/inner.js",
+        "a/b/one.js",
+        "a/b/c/deep.js"
+       ]
+      },
+      "promise": {
+       "ok": [
+        "b/b.js",
+        "b/sub/inner.js",
+        "a/b/one.js",
+        "a/b/c/deep.js"
+       ]
+      },
+      "callback": [
+       "b/b.js",
+       "b/sub/inner.js",
+       "a/b/one.js",
+       "a/b/c/deep.js"
+      ]
+     },
+     {
+      "pattern": "a/**/../*.js",
+      "options": null,
+      "sync": {
+       "ok": [
+        "a/file.js",
+        "a/b/one.js"
+       ]
+      },
+      "promise": {
+       "ok": [
+        "a/file.js",
+        "a/b/one.js"
+       ]
+      },
+      "callback": [
+       "a/file.js",
+       "a/b/one.js"
+      ]
+     },
+     {
+      "pattern": "**/../x.js",
+      "options": null,
+      "sync": {
+       "ok": [
+        "x.js"
+       ]
+      },
+      "promise": {
+       "ok": [
+        "x.js"
+       ]
+      },
+      "callback": [
+       "x.js"
+      ]
+     },
+     {
+      "pattern": "/",
+      "options": null,
+      "sync": {
+       "ok": [
+        "/"
+       ]
+      },
+      "promise": {
+       "ok": [
+        "/"
+       ]
+      },
+      "callback": [
+       "/"
+      ]
+     },
+     {
+      "pattern": "/work",
+      "options": null,
+      "sync": {
+       "ok": [
+        "/work"
+       ]
+      },
+      "promise": {
+       "ok": [
+        "/work"
+       ]
+      },
+      "callback": [
+       "/work"
+      ]
+     },
+     {
+      "pattern": "/work/",
+      "options": null,
+      "sync": {
+       "ok": [
+        "/work"
+       ]
+      },
+      "promise": {
+       "ok": [
+        "/work"
+       ]
+      },
+      "callback": [
+       "/work"
+      ]
+     },
+     {
+      "pattern": "a/b/c",
+      "options": null,
+      "sync": {
+       "ok": [
+        "a/b/c"
+       ]
+      },
+      "promise": {
+       "ok": [
+        "a/b/c"
+       ]
+      },
+      "callback": [
+       "a/b/c"
+      ]
+     },
+     {
+      "pattern": "a/b/c/*",
+      "options": null,
+      "sync": {
+       "ok": [
+        "a/b/c/deep.js"
+       ]
+      },
+      "promise": {
+       "ok": [
+        "a/b/c/deep.js"
+       ]
+      },
+      "callback": [
+       "a/b/c/deep.js"
+      ]
+     },
+     {
+      "pattern": "./a/b/../file.js",
+      "options": null,
+      "sync": {
+       "ok": [
+        "a/file.js"
+       ]
+      },
+      "promise": {
+       "ok": [
+        "a/file.js"
+       ]
+      },
+      "callback": [
+       "a/file.js"
+      ]
+     },
+     {
+      "pattern": "**/file.js",
+      "options": null,
+      "sync": {
+       "ok": [
+        "a/file.js"
+       ]
+      },
+      "promise": {
+       "ok": [
+        "a/file.js"
+       ]
+      },
+      "callback": [
+       "a/file.js"
+      ]
+     },
+     {
+      "pattern": ".dot/*",
+      "options": null,
+      "sync": {
+       "ok": [
+        ".dot/file.js"
+       ]
+      },
+      "promise": {
+       "ok": [
+        ".dot/file.js"
+       ]
+      },
+      "callback": [
+       ".dot/file.js"
+      ]
+     },
+     {
+      "pattern": "*/file.js",
+      "options": null,
+      "sync": {
+       "ok": [
+        "a/file.js"
+       ]
+      },
+      "promise": {
+       "ok": [
+        "a/file.js"
+       ]
+      },
+      "callback": [
+       "a/file.js"
+      ]
+     },
+     {
+      "pattern": "{.dot,a}/file.js",
+      "options": null,
+      "sync": {
+       "ok": [
+        "a/file.js",
+        ".dot/file.js"
+       ]
+      },
+      "promise": {
+       "ok": [
+        "a/file.js",
+        ".dot/file.js"
+       ]
+      },
+      "callback": [
+       "a/file.js",
+       ".dot/file.js"
+      ]
+     },
+     {
+      "pattern": [
+       "a/*.js",
+       "b/*.js"
+      ],
+      "options": null,
+      "sync": {
+       "ok": [
+        "b/b.js",
+        "a/file.js"
+       ]
+      },
+      "promise": {
+       "ok": [
+        "b/b.js",
+        "a/file.js"
+       ]
+      },
+      "callback": [
+       "b/b.js",
+       "a/file.js"
+      ]
+     },
+     {
+      "pattern": [
+       "**/*.js",
+       "a/**"
+      ],
+      "options": null,
+      "sync": {
+       "ok": [
+        "x.js",
+        "sp ace/f.js",
+        "b/b.js",
+        "b/sub/inner.js",
+        "a/file.js",
+        "a",
+        "a/y",
+        "a/y/up",
+        "a/y/c/z.js",
+        "a/y/c",
+        "a/x",
+        "a/x/c",
+        "a/b/one.js",
+        "a/b",
+        "a/b/two.ts",
+        "a/b/c/deep.js",
+        "a/b/c"
+       ]
+      },
+      "promise": {
+       "ok": [
+        "x.js",
+        "sp ace/f.js",
+        "b/b.js",
+        "b/sub/inner.js",
+        "a/file.js",
+        "a",
+        "a/y",
+        "a/y/up",
+        "a/y/c/z.js",
+        "a/y/c",
+        "a/x",
+        "a/x/c",
+        "a/b/one.js",
+        "a/b",
+        "a/b/two.ts",
+        "a/b/c/deep.js",
+        "a/b/c"
+       ]
+      },
+      "callback": [
+       "x.js",
+       "sp ace/f.js",
+       "b/b.js",
+       "b/sub/inner.js",
+       "a/file.js",
+       "a",
+       "a/y",
+       "a/y/up",
+       "a/y/c/z.js",
+       "a/y/c",
+       "a/x",
+       "a/x/c",
+       "a/b/one.js",
+       "a/b",
+       "a/b/two.ts",
+       "a/b/c/deep.js",
+       "a/b/c"
+      ]
+     },
+     {
+      "pattern": [
+       "x.js",
+       "x.js",
+       "./x.js"
+      ],
+      "options": null,
+      "sync": {
+       "ok": [
+        "x.js"
+       ]
+      },
+      "promise": {
+       "ok": [
+        "x.js"
+       ]
+      },
+      "callback": [
+       "x.js"
+      ]
+     },
+     {
+      "pattern": [],
+      "options": null,
+      "sync": {
+       "ok": []
+      },
+      "promise": {
+       "ok": []
+      },
+      "callback": []
+     },
+     {
+      "pattern": "*.js",
+      "options": {
+       "cwd": "a"
+      },
+      "sync": {
+       "ok": [
+        "file.js"
+       ]
+      },
+      "promise": {
+       "ok": [
+        "file.js"
+       ]
+      },
+      "callback": [
+       "file.js"
+      ]
+     },
+     {
+      "pattern": "**",
+      "options": {
+       "cwd": "/work/a/b"
+      },
+      "sync": {
+       "ok": [
+        ".",
+        "one.js",
+        "two.ts",
+        "c",
+        "c/deep.js"
+       ]
+      },
+      "promise": {
+       "ok": [
+        ".",
+        "one.js",
+        "two.ts",
+        "c",
+        "c/deep.js"
+       ]
+      },
+      "callback": [
+       ".",
+       "one.js",
+       "two.ts",
+       "c",
+       "c/deep.js"
+      ]
+     },
+     {
+      "pattern": "**/*.js",
+      "options": {
+       "cwd": "file:///work/b"
+      },
+      "sync": {
+       "ok": [
+        "b.js",
+        "sub/inner.js"
+       ]
+      },
+      "promise": {
+       "ok": [
+        "b.js",
+        "sub/inner.js"
+       ]
+      },
+      "callback": [
+       "b.js",
+       "sub/inner.js"
+      ]
+     },
+     {
+      "pattern": "*",
+      "options": {
+       "cwd": "nope"
+      },
+      "sync": {
+       "ok": []
+      },
+      "promise": {
+       "ok": []
+      },
+      "callback": []
+     },
+     {
+      "pattern": "**",
+      "options": {
+       "cwd": "nope"
+      },
+      "sync": {
+       "ok": []
+      },
+      "promise": {
+       "ok": []
+      },
+      "callback": []
+     },
+     {
+      "pattern": "../x/*",
+      "options": {
+       "cwd": "a/b"
+      },
+      "sync": {
+       "ok": [
+        "../x/c"
+       ]
+      },
+      "promise": {
+       "ok": [
+        "../x/c"
+       ]
+      },
+      "callback": [
+       "../x/c"
+      ]
+     },
+     {
+      "pattern": "../../*.js",
+      "options": {
+       "cwd": "a/b"
+      },
+      "sync": {
+       "ok": [
+        "../../x.js"
+       ]
+      },
+      "promise": {
+       "ok": [
+        "../../x.js"
+       ]
+      },
+      "callback": [
+       "../../x.js"
+      ]
+     },
+     {
+      "pattern": "/work/a/*.js",
+      "options": {
+       "cwd": "b"
+      },
+      "sync": {
+       "ok": [
+        "/work/a/file.js"
+       ]
+      },
+      "promise": {
+       "ok": [
+        "/work/a/file.js"
+       ]
+      },
+      "callback": [
+       "/work/a/file.js"
+      ]
+     },
+     {
+      "pattern": "**",
+      "options": {
+       "cwd": "x.js"
+      },
+      "sync": {
+       "ok": [
+        "."
+       ]
+      },
+      "promise": {
+       "ok": [
+        "."
+       ]
+      },
+      "callback": [
+       "."
+      ]
+     },
+     {
+      "pattern": "*",
+      "options": {
+       "cwd": ""
+      },
+      "sync": {
+       "ok": [
+        "a",
+        "b",
+        "e",
+        "empty",
+        "link",
+        "sp ace",
+        "x.js",
+        "y.md"
+       ]
+      },
+      "promise": {
+       "ok": [
+        "a",
+        "b",
+        "e",
+        "empty",
+        "link",
+        "sp ace",
+        "x.js",
+        "y.md"
+       ]
+      },
+      "callback": [
+       "a",
+       "b",
+       "e",
+       "empty",
+       "link",
+       "sp ace",
+       "x.js",
+       "y.md"
+      ]
+     },
+     {
+      "pattern": "**/*.js",
+      "options": {
+       "exclude": [
+        "**/b/**"
+       ]
+      },
+      "sync": {
+       "ok": [
+        "x.js",
+        "sp ace/f.js",
+        "a/file.js",
+        "a/y/c/z.js"
+       ]
+      },
+      "promise": {
+       "ok": [
+        "x.js",
+        "sp ace/f.js",
+        "a/file.js",
+        "a/y/c/z.js"
+       ]
+      },
+      "callback": [
+       "x.js",
+       "sp ace/f.js",
+       "a/file.js",
+       "a/y/c/z.js"
+      ]
+     },
+     {
+      "pattern": "**",
+      "options": {
+       "exclude": [
+        "a",
+        "b/sub"
+       ]
+      },
+      "sync": {
+       "ok": [
+        ".",
+        "link",
+        "x.js",
+        "y.md",
+        "sp ace",
+        "sp ace/f.js",
+        "empty",
+        "e",
+        "b",
+        "b/b.js",
+        "b/dangling",
+        "b/flink"
+       ]
+      },
+      "promise": {
+       "ok": [
+        ".",
+        "link",
+        "x.js",
+        "y.md",
+        "sp ace",
+        "sp ace/f.js",
+        "empty",
+        "e",
+        "b",
+        "b/b.js",
+        "b/dangling",
+        "b/flink"
+       ]
+      },
+      "callback": [
+       ".",
+       "link",
+       "x.js",
+       "y.md",
+       "sp ace",
+       "sp ace/f.js",
+       "empty",
+       "e",
+       "b",
+       "b/b.js",
+       "b/dangling",
+       "b/flink"
+      ]
+     },
+     {
+      "pattern": "**",
+      "options": {
+       "exclude": [
+        "a/**",
+        ".dot",
+        "**/*.js"
+       ]
+      },
+      "sync": {
+       "ok": [
+        ".",
+        "link",
+        "y.md",
+        "sp ace",
+        "empty",
+        "e",
+        "b",
+        "b/dangling",
+        "b/flink",
+        "b/sub"
+       ]
+      },
+      "promise": {
+       "ok": [
+        ".",
+        "link",
+        "y.md",
+        "sp ace",
+        "empty",
+        "e",
+        "b",
+        "b/dangling",
+        "b/flink",
+        "b/sub"
+       ]
+      },
+      "callback": [
+       ".",
+       "link",
+       "y.md",
+       "sp ace",
+       "empty",
+       "e",
+       "b",
+       "b/dangling",
+       "b/flink",
+       "b/sub"
+      ]
+     },
+     {
+      "pattern": "a/**",
+      "options": {
+       "exclude": [
+        "a/b/"
+       ]
+      },
+      "sync": {
+       "ok": [
+        "a",
+        "a/file.js",
+        "a/y",
+        "a/y/up",
+        "a/y/c",
+        "a/y/c/z.js",
+        "a/x",
+        "a/x/c"
+       ]
+      },
+      "promise": {
+       "ok": [
+        "a",
+        "a/file.js",
+        "a/y",
+        "a/y/up",
+        "a/y/c",
+        "a/y/c/z.js",
+        "a/x",
+        "a/x/c"
+       ]
+      },
+      "callback": [
+       "a",
+       "a/file.js",
+       "a/y",
+       "a/y/up",
+       "a/y/c",
+       "a/y/c/z.js",
+       "a/x",
+       "a/x/c"
+      ]
+     },
+     {
+      "pattern": "**",
+      "options": {
+       "exclude": []
+      },
+      "sync": {
+       "ok": [
+        ".",
+        "link",
+        "x.js",
+        "y.md",
+        "sp ace",
+        "sp ace/f.js",
+        "empty",
+        "e",
+        "b",
+        "b/b.js",
+        "b/dangling",
+        "b/flink",
+        "b/sub",
+        "b/sub/inner.js",
+        "a",
+        "a/file.js",
+        "a/y",
+        "a/y/up",
+        "a/y/c",
+        "a/y/c/z.js",
+        "a/x",
+        "a/x/c",
+        "a/b",
+        "a/b/one.js",
+        "a/b/two.ts",
+        "a/b/c",
+        "a/b/c/deep.js"
+       ]
+      },
+      "promise": {
+       "ok": [
+        ".",
+        "link",
+        "x.js",
+        "y.md",
+        "sp ace",
+        "sp ace/f.js",
+        "empty",
+        "e",
+        "b",
+        "b/b.js",
+        "b/dangling",
+        "b/flink",
+        "b/sub",
+        "b/sub/inner.js",
+        "a",
+        "a/file.js",
+        "a/y",
+        "a/y/up",
+        "a/y/c",
+        "a/y/c/z.js",
+        "a/x",
+        "a/x/c",
+        "a/b",
+        "a/b/one.js",
+        "a/b/two.ts",
+        "a/b/c",
+        "a/b/c/deep.js"
+       ]
+      },
+      "callback": [
+       ".",
+       "link",
+       "x.js",
+       "y.md",
+       "sp ace",
+       "sp ace/f.js",
+       "empty",
+       "e",
+       "b",
+       "b/b.js",
+       "b/dangling",
+       "b/flink",
+       "b/sub",
+       "b/sub/inner.js",
+       "a",
+       "a/file.js",
+       "a/y",
+       "a/y/up",
+       "a/y/c",
+       "a/y/c/z.js",
+       "a/x",
+       "a/x/c",
+       "a/b",
+       "a/b/one.js",
+       "a/b/two.ts",
+       "a/b/c",
+       "a/b/c/deep.js"
+      ]
+     },
+     {
+      "pattern": "*.js",
+      "options": {
+       "cwd": "a",
+       "exclude": [
+        "file.js"
+       ]
+      },
+      "sync": {
+       "ok": []
+      },
+      "promise": {
+       "ok": []
+      },
+      "callback": []
+     },
+     {
+      "pattern": "**",
+      "options": {
+       "exclude": "function"
+      },
+      "sync": {
+       "ok": [
+        ".",
+        "link",
+        "x.js",
+        "y.md",
+        "sp ace",
+        "sp ace/f.js",
+        "empty",
+        "e",
+        "b",
+        "b/b.js",
+        "b/dangling",
+        "b/flink"
+       ]
+      },
+      "syncSeen": [
+       "a",
+       "b",
+       "b",
+       "e",
+       "e",
+       "empty",
+       "empty",
+       "link",
+       "sp ace",
+       "sp ace",
+       "x.js",
+       "y.md",
+       "f.js",
+       "b.js",
+       "dangling",
+       "flink",
+       "sub"
+      ],
+      "promise": {
+       "ok": [
+        ".",
+        "link",
+        "x.js",
+        "y.md",
+        "sp ace",
+        "sp ace/f.js",
+        "empty",
+        "e",
+        "b",
+        "b/b.js",
+        "b/dangling",
+        "b/flink"
+       ]
+      },
+      "promiseSeen": [
+       "a",
+       "b",
+       "b",
+       "e",
+       "e",
+       "empty",
+       "empty",
+       "link",
+       "sp ace",
+       "sp ace",
+       "x.js",
+       "y.md",
+       "f.js",
+       "b.js",
+       "dangling",
+       "flink",
+       "sub"
+      ],
+      "callback": [
+       ".",
+       "link",
+       "x.js",
+       "y.md",
+       "sp ace",
+       "sp ace/f.js",
+       "empty",
+       "e",
+       "b",
+       "b/b.js",
+       "b/dangling",
+       "b/flink"
+      ]
+     },
+     {
+      "pattern": "a/**/*.js",
+      "options": {
+       "exclude": "function"
+      },
+      "sync": {
+       "ok": [
+        "a/file.js",
+        "a/y/c/z.js"
+       ]
+      },
+      "promise": {
+       "ok": [
+        "a/file.js",
+        "a/y/c/z.js"
+       ]
+      },
+      "callback": [
+       "a/file.js",
+       "a/y/c/z.js"
+      ]
+     },
+     {
+      "pattern": "*",
+      "options": {
+       "exclude": "function"
+      },
+      "sync": {
+       "ok": [
+        "a",
+        "b",
+        "e",
+        "empty",
+        "link",
+        "sp ace",
+        "x.js",
+        "y.md"
+       ]
+      },
+      "promise": {
+       "ok": [
+        "a",
+        "b",
+        "e",
+        "empty",
+        "link",
+        "sp ace",
+        "x.js",
+        "y.md"
+       ]
+      },
+      "callback": [
+       "a",
+       "b",
+       "e",
+       "empty",
+       "link",
+       "sp ace",
+       "x.js",
+       "y.md"
+      ]
+     },
+     {
+      "pattern": "a/b/*.js",
+      "options": {
+       "exclude": "function"
+      },
+      "sync": {
+       "ok": [
+        "a/b/one.js"
+       ]
+      },
+      "promise": {
+       "ok": [
+        "a/b/one.js"
+       ]
+      },
+      "callback": [
+       "a/b/one.js"
+      ]
+     },
+     {
+      "pattern": "a/*",
+      "options": {
+       "withFileTypes": true
+      },
+      "sync": {
+       "ok": [
+        [
+         "b",
+         "a",
+         "dir"
+        ],
+        [
+         "file.js",
+         "a",
+         "file"
+        ],
+        [
+         "x",
+         "a",
+         "dir"
+        ],
+        [
+         "y",
+         "a",
+         "dir"
+        ]
+       ]
+      },
+      "promise": {
+       "ok": [
+        [
+         "b",
+         "/work/a",
+         "dir"
+        ],
+        [
+         "file.js",
+         "/work/a",
+         "file"
+        ],
+        [
+         "x",
+         "/work/a",
+         "dir"
+        ],
+        [
+         "y",
+         "/work/a",
+         "dir"
+        ]
+       ]
+      },
+      "callback": [
+       [
+        "b",
+        "/work/a",
+        "dir"
+       ],
+       [
+        "file.js",
+        "/work/a",
+        "file"
+       ],
+       [
+        "x",
+        "/work/a",
+        "dir"
+       ],
+       [
+        "y",
+        "/work/a",
+        "dir"
+       ]
+      ]
+     },
+     {
+      "pattern": "**/c",
+      "options": {
+       "withFileTypes": true
+      },
+      "sync": {
+       "ok": [
+        [
+         "c",
+         "a/y",
+         "dir"
+        ],
+        [
+         "c",
+         "a/x",
+         "file"
+        ],
+        [
+         "c",
+         "a/b",
+         "dir"
+        ]
+       ]
+      },
+      "promise": {
+       "ok": [
+        [
+         "c",
+         "/work/a/y",
+         "dir"
+        ],
+        [
+         "c",
+         "/work/a/x",
+         "file"
+        ],
+        [
+         "c",
+         "/work/a/b",
+         "dir"
+        ]
+       ]
+      },
+      "callback": [
+       [
+        "c",
+        "/work/a/y",
+        "dir"
+       ],
+       [
+        "c",
+        "/work/a/x",
+        "file"
+       ],
+       [
+        "c",
+        "/work/a/b",
+        "dir"
+       ]
+      ]
+     },
+     {
+      "pattern": "a/b/one.js",
+      "options": {
+       "withFileTypes": true
+      },
+      "sync": {
+       "ok": [
+        [
+         "one.js",
+         "a/b",
+         "file"
+        ]
+       ]
+      },
+      "promise": {
+       "ok": [
+        [
+         "one.js",
+         "/work/a/b",
+         "file"
+        ]
+       ]
+      },
+      "callback": [
+       [
+        "one.js",
+        "/work/a/b",
+        "file"
+       ]
+      ]
+     },
+     {
+      "pattern": "./a/b/",
+      "options": {
+       "withFileTypes": true
+      },
+      "sync": {
+       "ok": [
+        [
+         "b",
+         "a",
+         "dir"
+        ]
+       ]
+      },
+      "promise": {
+       "ok": [
+        [
+         "b",
+         "/work/a",
+         "dir"
+        ]
+       ]
+      },
+      "callback": [
+       [
+        "b",
+        "/work/a",
+        "dir"
+       ]
+      ]
+     },
+     {
+      "pattern": "*",
+      "options": {
+       "withFileTypes": 1,
+       "cwd": "b"
+      },
+      "sync": {
+       "ok": [
+        [
+         "b.js",
+         "b",
+         "file"
+        ],
+        [
+         "dangling",
+         "b",
+         "link"
+        ],
+        [
+         "flink",
+         "b",
+         "link"
+        ],
+        [
+         "sub",
+         "b",
+         "dir"
+        ]
+       ]
+      },
+      "promise": {
+       "ok": [
+        [
+         "b.js",
+         "/work/b",
+         "file"
+        ],
+        [
+         "dangling",
+         "/work/b",
+         "link"
+        ],
+        [
+         "flink",
+         "/work/b",
+         "link"
+        ],
+        [
+         "sub",
+         "/work/b",
+         "dir"
+        ]
+       ]
+      },
+      "callback": [
+       [
+        "b.js",
+        "/work/b",
+        "file"
+       ],
+       [
+        "dangling",
+        "/work/b",
+        "link"
+       ],
+       [
+        "flink",
+        "/work/b",
+        "link"
+       ],
+       [
+        "sub",
+        "/work/b",
+        "dir"
+       ]
+      ]
+     },
+     {
+      "pattern": "**",
+      "options": {
+       "withFileTypes": true,
+       "cwd": "a/y"
+      },
+      "sync": {
+       "ok": [
+        [
+         "y",
+         "a",
+         "dir"
+        ],
+        [
+         "up",
+         "a/y",
+         "link"
+        ],
+        [
+         "c",
+         "a/y",
+         "dir"
+        ],
+        [
+         "z.js",
+         "a/y/c",
+         "file"
+        ]
+       ]
+      },
+      "promise": {
+       "ok": [
+        [
+         "y",
+         "/work/a",
+         "dir"
+        ],
+        [
+         "up",
+         "/work/a/y",
+         "link"
+        ],
+        [
+         "c",
+         "/work/a/y",
+         "dir"
+        ],
+        [
+         "z.js",
+         "/work/a/y/c",
+         "file"
+        ]
+       ]
+      },
+      "callback": [
+       [
+        "y",
+        "/work/a",
+        "dir"
+       ],
+       [
+        "up",
+        "/work/a/y",
+        "link"
+       ],
+       [
+        "c",
+        "/work/a/y",
+        "dir"
+       ],
+       [
+        "z.js",
+        "/work/a/y/c",
+        "file"
+       ]
+      ]
+     },
+     {
+      "pattern": "a/**",
+      "options": {
+       "withFileTypes": true,
+       "exclude": "function"
+      },
+      "sync": {
+       "ok": [
+        [
+         "a",
+         ".",
+         "dir"
+        ],
+        [
+         "file.js",
+         "a",
+         "file"
+        ],
+        [
+         "y",
+         "a",
+         "dir"
+        ],
+        [
+         "up",
+         "a/y",
+         "link"
+        ],
+        [
+         "c",
+         "a/y",
+         "dir"
+        ],
+        [
+         "z.js",
+         "a/y/c",
+         "file"
+        ],
+        [
+         "x",
+         "a",
+         "dir"
+        ],
+        [
+         "c",
+         "a/x",
+         "file"
+        ]
+       ]
+      },
+      "syncSeen": [
+       [
+        "dirent",
+        "a",
+        "."
+       ],
+       [
+        "dirent",
+        "b",
+        "/work/a"
+       ],
+       [
+        "dirent",
+        "file.js",
+        "/work/a"
+       ],
+       [
+        "dirent",
+        "x",
+        "/work/a"
+       ],
+       [
+        "dirent",
+        "x",
+        "a"
+       ],
+       [
+        "dirent",
+        "y",
+        "/work/a"
+       ],
+       [
+        "dirent",
+        "y",
+        "a"
+       ],
+       [
+        "dirent",
+        "c",
+        "/work/a/y"
+       ],
+       [
+        "dirent",
+        "c",
+        "a/y"
+       ],
+       [
+        "dirent",
+        "up",
+        "/work/a/y"
+       ],
+       [
+        "dirent",
+        "z.js",
+        "/work/a/y/c"
+       ],
+       [
+        "dirent",
+        "c",
+        "/work/a/x"
+       ]
+      ],
+      "promise": {
+       "ok": [
+        [
+         "a",
+         "/work",
+         "dir"
+        ],
+        [
+         "file.js",
+         "/work/a",
+         "file"
+        ],
+        [
+         "y",
+         "/work/a",
+         "dir"
+        ],
+        [
+         "up",
+         "/work/a/y",
+         "link"
+        ],
+        [
+         "c",
+         "/work/a/y",
+         "dir"
+        ],
+        [
+         "z.js",
+         "/work/a/y/c",
+         "file"
+        ],
+        [
+         "x",
+         "/work/a",
+         "dir"
+        ],
+        [
+         "c",
+         "/work/a/x",
+         "file"
+        ]
+       ]
+      },
+      "promiseSeen": [
+       [
+        "dirent",
+        "a",
+        "."
+       ],
+       [
+        "dirent",
+        "b",
+        "/work/a"
+       ],
+       [
+        "dirent",
+        "file.js",
+        "/work/a"
+       ],
+       [
+        "dirent",
+        "x",
+        "/work/a"
+       ],
+       [
+        "dirent",
+        "x",
+        "a"
+       ],
+       [
+        "dirent",
+        "y",
+        "/work/a"
+       ],
+       [
+        "dirent",
+        "y",
+        "a"
+       ],
+       [
+        "dirent",
+        "c",
+        "/work/a/y"
+       ],
+       [
+        "dirent",
+        "c",
+        "a/y"
+       ],
+       [
+        "dirent",
+        "up",
+        "/work/a/y"
+       ],
+       [
+        "dirent",
+        "z.js",
+        "/work/a/y/c"
+       ],
+       [
+        "dirent",
+        "c",
+        "/work/a/x"
+       ]
+      ],
+      "callback": [
+       [
+        "a",
+        "/work",
+        "dir"
+       ],
+       [
+        "file.js",
+        "/work/a",
+        "file"
+       ],
+       [
+        "y",
+        "/work/a",
+        "dir"
+       ],
+       [
+        "up",
+        "/work/a/y",
+        "link"
+       ],
+       [
+        "c",
+        "/work/a/y",
+        "dir"
+       ],
+       [
+        "z.js",
+        "/work/a/y/c",
+        "file"
+       ],
+       [
+        "x",
+        "/work/a",
+        "dir"
+       ],
+       [
+        "c",
+        "/work/a/x",
+        "file"
+       ]
+      ]
+     },
+     {
+      "pattern": "**/*.js",
+      "options": {
+       "followSymlinks": true
+      },
+      "sync": {
+       "ok": [
+        "x.js",
+        "sp ace/f.js",
+        "link/file.js",
+        "link/y/c/z.js",
+        "link/b/one.js",
+        "link/b/c/deep.js",
+        "b/b.js",
+        "b/sub/inner.js",
+        "a/file.js",
+        "a/y/c/z.js",
+        "a/b/one.js",
+        "a/b/c/deep.js"
+       ]
+      },
+      "promise": {
+       "ok": [
+        "x.js",
+        "sp ace/f.js",
+        "link/file.js",
+        "link/y/c/z.js",
+        "link/b/one.js",
+        "link/b/c/deep.js",
+        "b/b.js",
+        "b/sub/inner.js",
+        "a/file.js",
+        "a/y/c/z.js",
+        "a/b/one.js",
+        "a/b/c/deep.js"
+       ]
+      },
+      "callback": [
+       "x.js",
+       "sp ace/f.js",
+       "link/file.js",
+       "link/y/c/z.js",
+       "link/b/one.js",
+       "link/b/c/deep.js",
+       "b/b.js",
+       "b/sub/inner.js",
+       "a/file.js",
+       "a/y/c/z.js",
+       "a/b/one.js",
+       "a/b/c/deep.js"
+      ]
+     },
+     {
+      "pattern": "link/**",
+      "options": {
+       "followSymlinks": true
+      },
+      "sync": {
+       "ok": [
+        "link",
+        "link/file.js",
+        "link/y",
+        "link/y/up",
+        "link/y/c",
+        "link/y/c/z.js",
+        "link/x",
+        "link/x/c",
+        "link/b",
+        "link/b/one.js",
+        "link/b/two.ts",
+        "link/b/c",
+        "link/b/c/deep.js"
+       ]
+      },
+      "promise": {
+       "ok": [
+        "link",
+        "link/file.js",
+        "link/y",
+        "link/y/up",
+        "link/y/c",
+        "link/y/c/z.js",
+        "link/x",
+        "link/x/c",
+        "link/b",
+        "link/b/one.js",
+        "link/b/two.ts",
+        "link/b/c",
+        "link/b/c/deep.js"
+       ]
+      },
+      "callback": [
+       "link",
+       "link/file.js",
+       "link/y",
+       "link/y/up",
+       "link/y/c",
+       "link/y/c/z.js",
+       "link/x",
+       "link/x/c",
+       "link/b",
+       "link/b/one.js",
+       "link/b/two.ts",
+       "link/b/c",
+       "link/b/c/deep.js"
+      ]
+     },
+     {
+      "pattern": "a/y/**",
+      "options": {
+       "followSymlinks": true
+      },
+      "sync": {
+       "ok": [
+        "a/y",
+        "a/y/up",
+        "a/y/c",
+        "a/y/c/z.js"
+       ]
+      },
+      "promise": {
+       "ok": [
+        "a/y",
+        "a/y/up",
+        "a/y/c",
+        "a/y/c/z.js"
+       ]
+      },
+      "callback": [
+       "a/y",
+       "a/y/up",
+       "a/y/c",
+       "a/y/c/z.js"
+      ]
+     },
+     {
+      "pattern": "b/*",
+      "options": {
+       "followSymlinks": true,
+       "withFileTypes": true
+      },
+      "sync": {
+       "ok": [
+        [
+         "b.js",
+         "b",
+         "file"
+        ],
+        [
+         "dangling",
+         "b",
+         "link"
+        ],
+        [
+         "flink",
+         "b",
+         "link"
+        ],
+        [
+         "sub",
+         "b",
+         "dir"
+        ]
+       ]
+      },
+      "promise": {
+       "ok": [
+        [
+         "b.js",
+         "/work/b",
+         "file"
+        ],
+        [
+         "dangling",
+         "/work/b",
+         "link"
+        ],
+        [
+         "flink",
+         "/work/b",
+         "link"
+        ],
+        [
+         "sub",
+         "/work/b",
+         "dir"
+        ]
+       ]
+      },
+      "callback": [
+       [
+        "b.js",
+        "/work/b",
+        "file"
+       ],
+       [
+        "dangling",
+        "/work/b",
+        "link"
+       ],
+       [
+        "flink",
+        "/work/b",
+        "link"
+       ],
+       [
+        "sub",
+        "/work/b",
+        "dir"
+       ]
+      ]
+     },
+     {
+      "pattern": "**",
+      "options": {},
+      "sync": {
+       "ok": [
+        ".",
+        "link",
+        "x.js",
+        "y.md",
+        "sp ace",
+        "sp ace/f.js",
+        "empty",
+        "e",
+        "b",
+        "b/b.js",
+        "b/dangling",
+        "b/flink",
+        "b/sub",
+        "b/sub/inner.js",
+        "a",
+        "a/file.js",
+        "a/y",
+        "a/y/up",
+        "a/y/c",
+        "a/y/c/z.js",
+        "a/x",
+        "a/x/c",
+        "a/b",
+        "a/b/one.js",
+        "a/b/two.ts",
+        "a/b/c",
+        "a/b/c/deep.js"
+       ]
+      },
+      "promise": {
+       "ok": [
+        ".",
+        "link",
+        "x.js",
+        "y.md",
+        "sp ace",
+        "sp ace/f.js",
+        "empty",
+        "e",
+        "b",
+        "b/b.js",
+        "b/dangling",
+        "b/flink",
+        "b/sub",
+        "b/sub/inner.js",
+        "a",
+        "a/file.js",
+        "a/y",
+        "a/y/up",
+        "a/y/c",
+        "a/y/c/z.js",
+        "a/x",
+        "a/x/c",
+        "a/b",
+        "a/b/one.js",
+        "a/b/two.ts",
+        "a/b/c",
+        "a/b/c/deep.js"
+       ]
+      },
+      "callback": [
+       ".",
+       "link",
+       "x.js",
+       "y.md",
+       "sp ace",
+       "sp ace/f.js",
+       "empty",
+       "e",
+       "b",
+       "b/b.js",
+       "b/dangling",
+       "b/flink",
+       "b/sub",
+       "b/sub/inner.js",
+       "a",
+       "a/file.js",
+       "a/y",
+       "a/y/up",
+       "a/y/c",
+       "a/y/c/z.js",
+       "a/x",
+       "a/x/c",
+       "a/b",
+       "a/b/one.js",
+       "a/b/two.ts",
+       "a/b/c",
+       "a/b/c/deep.js"
+      ]
+     },
+     {
+      "pattern": "**",
+      "options": {
+       "cwd": "undefined",
+       "exclude": "undefined",
+       "withFileTypes": "undefined"
+      },
+      "sync": {
+       "ok": [
+        ".",
+        "link",
+        "x.js",
+        "y.md",
+        "sp ace",
+        "sp ace/f.js",
+        "empty",
+        "e",
+        "b",
+        "b/b.js",
+        "b/dangling",
+        "b/flink",
+        "b/sub",
+        "b/sub/inner.js",
+        "a",
+        "a/file.js",
+        "a/y",
+        "a/y/up",
+        "a/y/c",
+        "a/y/c/z.js",
+        "a/x",
+        "a/x/c",
+        "a/b",
+        "a/b/one.js",
+        "a/b/two.ts",
+        "a/b/c",
+        "a/b/c/deep.js"
+       ]
+      },
+      "promise": {
+       "ok": [
+        ".",
+        "link",
+        "x.js",
+        "y.md",
+        "sp ace",
+        "sp ace/f.js",
+        "empty",
+        "e",
+        "b",
+        "b/b.js",
+        "b/dangling",
+        "b/flink",
+        "b/sub",
+        "b/sub/inner.js",
+        "a",
+        "a/file.js",
+        "a/y",
+        "a/y/up",
+        "a/y/c",
+        "a/y/c/z.js",
+        "a/x",
+        "a/x/c",
+        "a/b",
+        "a/b/one.js",
+        "a/b/two.ts",
+        "a/b/c",
+        "a/b/c/deep.js"
+       ]
+      },
+      "callback": [
+       ".",
+       "link",
+       "x.js",
+       "y.md",
+       "sp ace",
+       "sp ace/f.js",
+       "empty",
+       "e",
+       "b",
+       "b/b.js",
+       "b/dangling",
+       "b/flink",
+       "b/sub",
+       "b/sub/inner.js",
+       "a",
+       "a/file.js",
+       "a/y",
+       "a/y/up",
+       "a/y/c",
+       "a/y/c/z.js",
+       "a/x",
+       "a/x/c",
+       "a/b",
+       "a/b/one.js",
+       "a/b/two.ts",
+       "a/b/c",
+       "a/b/c/deep.js"
+      ]
+     }
+    ],
+    "warnings": []
+   }
+  }
+ }
+}

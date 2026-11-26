@@ -8,9 +8,11 @@ import { Http2Session } from "./node-http2-session.js";
 import { Http2Server } from "./node-http2-server.js";
 import { Http2ServerRequest, Http2ServerResponse } from "./node-http2-compat.js";
 import { http2Failure } from "./node-http2-wire.js";
+import { createNodeHttp2Settings } from "./node-http2-settings.ts";
 
-export function createNodeHttp2(children: Http2Children, context: AsyncContext, retain: () => () => void, scheduler?: ProcessScheduler) {
+export function createNodeHttp2(children: Http2Children, context: AsyncContext, retain: () => () => void, scheduler?: ProcessScheduler, warn?: (message: string) => void) {
   return {
+    ...createNodeHttp2Settings(warn),
     constants: Object.freeze(HTTP2_CONSTANTS), getDefaultSettings: () => ({ ...HTTP2_DEFAULT_SETTINGS }),
     Http2ServerRequest, Http2ServerResponse,
     connect(authority: unknown, options: unknown = {}, listener?: unknown): Http2Session {

@@ -1,0 +1,433 @@
+{
+ "description": "crypto.generatePrime(Sync) and checkPrime(Sync) recorded from Node.js v24.18.1 (OpenSSL 3.5.7) with the same recorder as node-crypto-keygen.controls.json. A result { hangs: true } means the call had not returned after four seconds in a process of its own. `primeShapes` (from the `observer` script of the keygen controls) counts 200 primes per option set.",
+ "recorder": "// Records node:crypto behaviour for the cases of a controls file. Usage (Node 24.18.1):\n//   docker run --rm -i -v \"$PWD\":/w node:24.18.1-alpine node /w/recorder.js < controls.json > recorded.json\n// Reads { cases: [{ id, fn, args, isolate? }] } and writes the same document with a `result` per case.\n// Argument notation: { $: 'undefined' | 'cb' | 'fn' | 'sym' }, { $: 'big', v }, { $: 'buffer' | 'u8' | 'ab' | 'dv' | 'u16', hex }.\nconst crypto = require('node:crypto');\nconst { spawnSync } = require('node:child_process');\nfunction decode(value, callback) {\n  if (Array.isArray(value)) return value.map(item => decode(item, callback));\n  if (value === null || typeof value !== 'object') return value;\n  if (typeof value.$ === 'string') {\n    switch (value.$) {\n      case 'undefined': return undefined;\n      case 'cb': return callback;\n      case 'fn': return function () {};\n      case 'sym': return Symbol('s');\n      case 'big': return BigInt(value.v);\n      case 'buffer': return Buffer.from(value.hex, 'hex');\n      case 'u8': return new Uint8Array(Buffer.from(value.hex, 'hex'));\n      case 'u16': { const b = Buffer.from(value.hex, 'hex'); return new Uint16Array(b.buffer.slice(b.byteOffset, b.byteOffset + b.length)); }\n      case 'ab': { const b = Buffer.from(value.hex, 'hex'); return b.buffer.slice(b.byteOffset, b.byteOffset + b.length); }\n      case 'dv': { const b = Buffer.from(value.hex, 'hex'); return new DataView(b.buffer.slice(b.byteOffset, b.byteOffset + b.length)); }\n    }\n  }\n  return Object.fromEntries(Object.entries(value).map(([key, item]) => [key, decode(item, callback)]));\n}\nfunction details(value) {\n  if (value === undefined) return undefined;\n  return Object.fromEntries(Object.entries(value).map(([key, item]) => [key, typeof item === 'bigint' ? `${item}n` : item]));\n}\nfunction summary(value) {\n  if (value === undefined) return { t: 'undefined' };\n  if (value === null) return { t: 'null' };\n  if (typeof value === 'bigint') return { t: 'bigint', bits: value === 0n ? 0 : value.toString(2).length };\n  if (typeof value === 'string') return { t: 'string', line: value.split('\\n')[0] };\n  if (typeof value !== 'object') return { t: typeof value, v: value };\n  if (value instanceof Error) {\n    const out = { t: 'error', name: value.name, message: value.message };\n    for (const key of ['code', 'library', 'reason', 'opensslErrorStack']) if (value[key] !== undefined) out[key] = value[key];\n    out.own = Object.keys(value);\n    return out;\n  }\n  if (value instanceof ArrayBuffer) return { t: 'ArrayBuffer', bytes: value.byteLength };\n  if (Buffer.isBuffer(value)) return { t: 'Buffer' };\n  if (value instanceof crypto.KeyObject) {\n    const out = { t: 'KeyObject', ctor: value.constructor.name, type: value.type };\n    if (value.type === 'secret') out.size = value.symmetricKeySize;\n    else { out.akt = value.asymmetricKeyType; out.details = details(value.asymmetricKeyDetails); }\n    return out;\n  }\n  if ('publicKey' in value && 'privateKey' in value) return { t: 'pair', keys: Object.keys(value), publicKey: summary(value.publicKey), privateKey: summary(value.privateKey) };\n  if (typeof value.kty === 'string') return { t: 'jwk', kty: value.kty, crv: value.crv, keys: Object.keys(value).sort() };\n  return { t: 'object', ctor: value.constructor && value.constructor.name };\n}\nfunction run(item) {\n  return new Promise(resolve => {\n    const result = {};\n    const warnings = [];\n    const emit = process.emitWarning;\n    process.emitWarning = (...args) => { warnings.push(args); };\n    const finish = () => { process.emitWarning = emit; if (warnings.length > 0) result.warnings = warnings; resolve(result); };\n    let sync = true, expectsCallback = false, timer;\n    const callback = function (...args) {\n      result.callback = { sync, this: this === undefined ? 'undefined' : this === null ? 'null' : this.constructor && this.constructor.name, args: args.map(summary) };\n      clearTimeout(timer);\n      finish();\n    };\n    const args = decode(item.args, callback);\n    expectsCallback = args.includes(callback);\n    try { result.returned = summary(crypto[item.fn](...args)); }\n    catch (error) { result.threw = summary(error); expectsCallback = false; }\n    sync = false;\n    if (!expectsCallback) finish();\n    else timer = setTimeout(() => { result.callback = 'never'; finish(); }, 20000);\n  });\n}\nasync function main() {\n  let text = '';\n  for await (const chunk of process.stdin) text += chunk;\n  const document = JSON.parse(text);\n  if (process.argv[2] === 'one') { process.stdout.write(JSON.stringify(await run(document))); return; }\n  for (const item of document.cases) {\n    if (item.isolate === true) {\n      const child = spawnSync(process.execPath, [__filename, 'one'], { input: JSON.stringify(item), timeout: 4000, encoding: 'utf8' });\n      item.result = child.error !== undefined ? { hangs: true } : child.status !== 0 ? { crashes: String(child.stderr).split('\\n').slice(0, 3).join(' | ') } : JSON.parse(child.stdout);\n    } else item.result = await run(item);\n  }\n  document.node = process.version; document.openssl = process.versions.openssl;\n  process.stdout.write(JSON.stringify(document, null, 1));\n}\nmain();\n",
+ "primeShapes": {
+  "b2": {
+   "minBits": 2,
+   "maxBits": 2,
+   "top2": 200,
+   "n": 200,
+   "distinct": [
+    "3"
+   ]
+  },
+  "b3": {
+   "minBits": 3,
+   "maxBits": 3,
+   "top2": 200,
+   "n": 200,
+   "distinct": [
+    "7"
+   ]
+  },
+  "b4": {
+   "minBits": 4,
+   "maxBits": 4,
+   "top2": 200,
+   "n": 200,
+   "distinct": [
+    "13"
+   ]
+  },
+  "b5": {
+   "minBits": 5,
+   "maxBits": 5,
+   "top2": 200,
+   "n": 200,
+   "distinct": [
+    "29",
+    "31"
+   ]
+  },
+  "b8": {
+   "minBits": 8,
+   "maxBits": 8,
+   "top2": 200,
+   "n": 200,
+   "distinct": [
+    "193",
+    "197",
+    "199",
+    "211",
+    "223",
+    "227",
+    "229",
+    "233",
+    "239",
+    "241",
+    "251"
+   ]
+  },
+  "b64": {
+   "minBits": 64,
+   "maxBits": 64,
+   "top2": 200,
+   "n": 200
+  },
+  "safe3": {
+   "minBits": 3,
+   "maxBits": 3,
+   "top2": 200,
+   "n": 200,
+   "distinct": [
+    "7"
+   ]
+  },
+  "safe6": {
+   "minBits": 6,
+   "maxBits": 6,
+   "top2": 200,
+   "n": 200,
+   "distinct": [
+    "59"
+   ]
+  },
+  "safe7": {
+   "minBits": 7,
+   "maxBits": 7,
+   "top2": 200,
+   "n": 200,
+   "distinct": [
+    "107"
+   ]
+  },
+  "safe8": {
+   "minBits": 8,
+   "maxBits": 8,
+   "top2": 200,
+   "n": 200,
+   "distinct": [
+    "227"
+   ]
+  },
+  "add7": {
+   "minBits": 16,
+   "maxBits": 16,
+   "top2": 97,
+   "n": 200
+  },
+  "add12rem5": {
+   "minBits": 16,
+   "maxBits": 17,
+   "top2": 114,
+   "n": 200
+  },
+  "b8add128": {
+   "minBits": 9,
+   "maxBits": 9,
+   "top2": 0,
+   "n": 200,
+   "distinct": [
+    "257"
+   ]
+  },
+  "b8add6rem5": {
+   "minBits": 8,
+   "maxBits": 9,
+   "top2": 119,
+   "n": 200
+  },
+  "b8add6rem1": {
+   "minBits": 8,
+   "maxBits": 9,
+   "top2": 101,
+   "n": 200,
+   "distinct": [
+    "139",
+    "151",
+    "157",
+    "163",
+    "181",
+    "193",
+    "199",
+    "211",
+    "223",
+    "229",
+    "241",
+    "271"
+   ]
+  },
+  "b3add5rem2": {
+   "minBits": 3,
+   "maxBits": 3,
+   "top2": 200,
+   "n": 200,
+   "distinct": [
+    "7"
+   ]
+  },
+  "b2add3rem2": {
+   "minBits": 3,
+   "maxBits": 3,
+   "top2": 0,
+   "n": 200,
+   "distinct": [
+    "5"
+   ]
+  },
+  "b2add3rem0": {
+   "minBits": 2,
+   "maxBits": 2,
+   "top2": 200,
+   "n": 200,
+   "distinct": [
+    "3"
+   ]
+  },
+  "b8add250rem7": {
+   "minBits": 9,
+   "maxBits": 9,
+   "top2": 0,
+   "n": 200,
+   "distinct": [
+    "257"
+   ]
+  },
+  "safe8add12": {
+   "minBits": 8,
+   "maxBits": 9,
+   "top2": 86,
+   "n": 200,
+   "distinct": [
+    "167",
+    "179",
+    "227",
+    "263"
+   ]
+  },
+  "b4add2rem1": {
+   "minBits": 4,
+   "maxBits": 5,
+   "top2": 42,
+   "n": 200,
+   "distinct": [
+    "11",
+    "13",
+    "17"
+   ]
+  },
+  "b4add1": {
+   "minBits": 4,
+   "maxBits": 4,
+   "top2": 200,
+   "n": 200,
+   "distinct": [
+    "13"
+   ]
+  }
+ },
+ "node": "v24.18.1",
+ "openssl": "3.5.7",
+ "cases": [
+ {"id":"generatePrimeSync#393","fn":"generatePrimeSync","args":[],"isolate":true,"result":{"threw":{"t":"error","name":"TypeError","message":"The \"size\" argument must be of type number. Received undefined","code":"ERR_INVALID_ARG_TYPE","own":["code"]}}},
+ {"id":"generatePrimeSync#394","fn":"generatePrimeSync","args":["8"],"isolate":true,"result":{"threw":{"t":"error","name":"TypeError","message":"The \"size\" argument must be of type number. Received type string ('8')","code":"ERR_INVALID_ARG_TYPE","own":["code"]}}},
+ {"id":"generatePrimeSync#395","fn":"generatePrimeSync","args":[0],"isolate":true,"result":{"threw":{"t":"error","name":"RangeError","message":"The value of \"size\" is out of range. It must be >= 1 && <= 2147483647. Received 0","code":"ERR_OUT_OF_RANGE","own":["code"]}}},
+ {"id":"generatePrimeSync#396","fn":"generatePrimeSync","args":[-1],"isolate":true,"result":{"threw":{"t":"error","name":"RangeError","message":"The value of \"size\" is out of range. It must be >= 1 && <= 2147483647. Received -1","code":"ERR_OUT_OF_RANGE","own":["code"]}}},
+ {"id":"generatePrimeSync#397","fn":"generatePrimeSync","args":[1.5],"isolate":true,"result":{"threw":{"t":"error","name":"RangeError","message":"The value of \"size\" is out of range. It must be an integer. Received 1.5","code":"ERR_OUT_OF_RANGE","own":["code"]}}},
+ {"id":"generatePrimeSync#398","fn":"generatePrimeSync","args":[2147483648],"isolate":true,"result":{"threw":{"t":"error","name":"RangeError","message":"The value of \"size\" is out of range. It must be >= 1 && <= 2147483647. Received 2147483648","code":"ERR_OUT_OF_RANGE","own":["code"]}}},
+ {"id":"generatePrimeSync#399","fn":"generatePrimeSync","args":[2147483647.5],"isolate":true,"result":{"threw":{"t":"error","name":"RangeError","message":"The value of \"size\" is out of range. It must be an integer. Received 2147483647.5","code":"ERR_OUT_OF_RANGE","own":["code"]}}},
+ {"id":"generatePrimeSync#400","fn":"generatePrimeSync","args":[null],"isolate":true,"result":{"threw":{"t":"error","name":"TypeError","message":"The \"size\" argument must be of type number. Received null","code":"ERR_INVALID_ARG_TYPE","own":["code"]}}},
+ {"id":"generatePrimeSync#401","fn":"generatePrimeSync","args":[1],"isolate":true,"result":{"threw":{"t":"error","name":"Error","message":"error:01800076:bignum routines::bits too small","own":[]}}},
+ {"id":"generatePrimeSync#402","fn":"generatePrimeSync","args":[2],"isolate":true,"result":{"returned":{"t":"ArrayBuffer","bytes":1}}},
+ {"id":"generatePrimeSync#403","fn":"generatePrimeSync","args":[3],"isolate":true,"result":{"returned":{"t":"ArrayBuffer","bytes":1}}},
+ {"id":"generatePrimeSync#404","fn":"generatePrimeSync","args":[4],"isolate":true,"result":{"returned":{"t":"ArrayBuffer","bytes":1}}},
+ {"id":"generatePrimeSync#405","fn":"generatePrimeSync","args":[5],"isolate":true,"result":{"returned":{"t":"ArrayBuffer","bytes":1}}},
+ {"id":"generatePrimeSync#406","fn":"generatePrimeSync","args":[8],"isolate":true,"result":{"returned":{"t":"ArrayBuffer","bytes":1}}},
+ {"id":"generatePrimeSync#407","fn":"generatePrimeSync","args":[9],"isolate":true,"result":{"returned":{"t":"ArrayBuffer","bytes":2}}},
+ {"id":"generatePrimeSync#408","fn":"generatePrimeSync","args":[16],"isolate":true,"result":{"returned":{"t":"ArrayBuffer","bytes":2}}},
+ {"id":"generatePrimeSync#409","fn":"generatePrimeSync","args":[31],"isolate":true,"result":{"returned":{"t":"ArrayBuffer","bytes":4}}},
+ {"id":"generatePrimeSync#410","fn":"generatePrimeSync","args":[32],"isolate":true,"result":{"returned":{"t":"ArrayBuffer","bytes":4}}},
+ {"id":"generatePrimeSync#411","fn":"generatePrimeSync","args":[33],"isolate":true,"result":{"returned":{"t":"ArrayBuffer","bytes":5}}},
+ {"id":"generatePrimeSync#412","fn":"generatePrimeSync","args":[64],"isolate":true,"result":{"returned":{"t":"ArrayBuffer","bytes":8}}},
+ {"id":"generatePrimeSync#413","fn":"generatePrimeSync","args":[127],"isolate":true,"result":{"returned":{"t":"ArrayBuffer","bytes":16}}},
+ {"id":"generatePrimeSync#414","fn":"generatePrimeSync","args":[256],"isolate":true,"result":{"returned":{"t":"ArrayBuffer","bytes":32}}},
+ {"id":"generatePrimeSync#415","fn":"generatePrimeSync","args":[16,null],"isolate":true,"result":{"threw":{"t":"error","name":"TypeError","message":"The \"options\" argument must be of type object. Received null","code":"ERR_INVALID_ARG_TYPE","own":["code"]}}},
+ {"id":"generatePrimeSync#416","fn":"generatePrimeSync","args":[16,1],"isolate":true,"result":{"threw":{"t":"error","name":"TypeError","message":"The \"options\" argument must be of type object. Received type number (1)","code":"ERR_INVALID_ARG_TYPE","own":["code"]}}},
+ {"id":"generatePrimeSync#417","fn":"generatePrimeSync","args":[16,"x"],"isolate":true,"result":{"threw":{"t":"error","name":"TypeError","message":"The \"options\" argument must be of type object. Received type string ('x')","code":"ERR_INVALID_ARG_TYPE","own":["code"]}}},
+ {"id":"generatePrimeSync#418","fn":"generatePrimeSync","args":[16,[]],"isolate":true,"result":{"threw":{"t":"error","name":"TypeError","message":"The \"options\" argument must be of type object. Received an instance of Array","code":"ERR_INVALID_ARG_TYPE","own":["code"]}}},
+ {"id":"generatePrimeSync#419","fn":"generatePrimeSync","args":[16,{}],"isolate":true,"result":{"returned":{"t":"ArrayBuffer","bytes":2}}},
+ {"id":"generatePrimeSync#420","fn":"generatePrimeSync","args":[16,{"$":"undefined"}],"isolate":true,"result":{"returned":{"t":"ArrayBuffer","bytes":2}}},
+ {"id":"generatePrimeSync#421","fn":"generatePrimeSync","args":[16,{"safe":1}],"isolate":true,"result":{"threw":{"t":"error","name":"TypeError","message":"The \"options.safe\" property must be of type boolean. Received type number (1)","code":"ERR_INVALID_ARG_TYPE","own":["code"]}}},
+ {"id":"generatePrimeSync#422","fn":"generatePrimeSync","args":[16,{"bigint":1}],"isolate":true,"result":{"threw":{"t":"error","name":"TypeError","message":"The \"options.bigint\" property must be of type boolean. Received type number (1)","code":"ERR_INVALID_ARG_TYPE","own":["code"]}}},
+ {"id":"generatePrimeSync#423","fn":"generatePrimeSync","args":[16,{"safe":null}],"isolate":true,"result":{"threw":{"t":"error","name":"TypeError","message":"The \"options.safe\" property must be of type boolean. Received null","code":"ERR_INVALID_ARG_TYPE","own":["code"]}}},
+ {"id":"generatePrimeSync#424","fn":"generatePrimeSync","args":[16,{"bigint":"x"}],"isolate":true,"result":{"threw":{"t":"error","name":"TypeError","message":"The \"options.bigint\" property must be of type boolean. Received type string ('x')","code":"ERR_INVALID_ARG_TYPE","own":["code"]}}},
+ {"id":"generatePrimeSync#425","fn":"generatePrimeSync","args":[16,{"add":"x"}],"isolate":true,"result":{"threw":{"t":"error","name":"TypeError","message":"The \"options.add\" property must be of type bigint or an instance of ArrayBuffer, TypedArray, Buffer, or DataView. Received type string ('x')","code":"ERR_INVALID_ARG_TYPE","own":["code"]}}},
+ {"id":"generatePrimeSync#426","fn":"generatePrimeSync","args":[16,{"rem":"x"}],"isolate":true,"result":{"threw":{"t":"error","name":"TypeError","message":"The \"options.rem\" property must be of type bigint or an instance of ArrayBuffer, TypedArray, Buffer, or DataView. Received type string ('x')","code":"ERR_INVALID_ARG_TYPE","own":["code"]}}},
+ {"id":"generatePrimeSync#427","fn":"generatePrimeSync","args":[16,{"add":1}],"isolate":true,"result":{"threw":{"t":"error","name":"TypeError","message":"The \"options.add\" property must be of type bigint or an instance of ArrayBuffer, TypedArray, Buffer, or DataView. Received type number (1)","code":"ERR_INVALID_ARG_TYPE","own":["code"]}}},
+ {"id":"generatePrimeSync#428","fn":"generatePrimeSync","args":[16,{"rem":1}],"isolate":true,"result":{"threw":{"t":"error","name":"TypeError","message":"The \"options.rem\" property must be of type bigint or an instance of ArrayBuffer, TypedArray, Buffer, or DataView. Received type number (1)","code":"ERR_INVALID_ARG_TYPE","own":["code"]}}},
+ {"id":"generatePrimeSync#429","fn":"generatePrimeSync","args":[16,{"add":null}],"isolate":true,"result":{"threw":{"t":"error","name":"TypeError","message":"The \"options.add\" property must be of type bigint or an instance of ArrayBuffer, TypedArray, Buffer, or DataView. Received null","code":"ERR_INVALID_ARG_TYPE","own":["code"]}}},
+ {"id":"generatePrimeSync#430","fn":"generatePrimeSync","args":[16,{"rem":null}],"isolate":true,"result":{"threw":{"t":"error","name":"TypeError","message":"The \"options.rem\" property must be of type bigint or an instance of ArrayBuffer, TypedArray, Buffer, or DataView. Received null","code":"ERR_INVALID_ARG_TYPE","own":["code"]}}},
+ {"id":"generatePrimeSync#431","fn":"generatePrimeSync","args":[16,{"add":{"$":"big","v":"-1"}}],"isolate":true,"result":{"threw":{"t":"error","name":"RangeError","message":"The value of \"options.add\" is out of range. It must be >= 0. Received -1n","code":"ERR_OUT_OF_RANGE","own":["code"]}}},
+ {"id":"generatePrimeSync#432","fn":"generatePrimeSync","args":[16,{"rem":{"$":"big","v":"-1"}}],"isolate":true,"result":{"threw":{"t":"error","name":"RangeError","message":"The value of \"options.rem\" is out of range. It must be >= 0. Received -1n","code":"ERR_OUT_OF_RANGE","own":["code"]}}},
+ {"id":"generatePrimeSync#433","fn":"generatePrimeSync","args":[16,{"add":{"$":"big","v":"7"},"rem":{"$":"big","v":"-1"}}],"isolate":true,"result":{"threw":{"t":"error","name":"RangeError","message":"The value of \"options.rem\" is out of range. It must be >= 0. Received -1n","code":"ERR_OUT_OF_RANGE","own":["code"]}}},
+ {"id":"generatePrimeSync#434","fn":"generatePrimeSync","args":[16,{"bigint":true}],"isolate":true,"result":{"returned":{"t":"bigint","bits":16}}},
+ {"id":"generatePrimeSync#435","fn":"generatePrimeSync","args":[16,{"bigint":false}],"isolate":true,"result":{"returned":{"t":"ArrayBuffer","bytes":2}}},
+ {"id":"generatePrimeSync#436","fn":"generatePrimeSync","args":[16,{"safe":true}],"isolate":true,"result":{"returned":{"t":"ArrayBuffer","bytes":2}}},
+ {"id":"generatePrimeSync#437","fn":"generatePrimeSync","args":[16,{"safe":true,"bigint":true}],"isolate":true,"result":{"returned":{"t":"bigint","bits":16}}},
+ {"id":"generatePrimeSync#438","fn":"generatePrimeSync","args":[16,{"safe":false}],"isolate":true,"result":{"returned":{"t":"ArrayBuffer","bytes":2}}},
+ {"id":"generatePrimeSync#439","fn":"generatePrimeSync","args":[1,{"safe":true,"bigint":true}],"isolate":true,"result":{"threw":{"t":"error","name":"Error","message":"error:01800076:bignum routines::bits too small","own":[]}}},
+ {"id":"generatePrimeSync#440","fn":"generatePrimeSync","args":[2,{"safe":true,"bigint":true}],"isolate":true,"result":{"threw":{"t":"error","name":"Error","message":"error:01800076:bignum routines::bits too small","own":[]}}},
+ {"id":"generatePrimeSync#441","fn":"generatePrimeSync","args":[3,{"safe":true,"bigint":true}],"isolate":true,"result":{"returned":{"t":"bigint","bits":3}}},
+ {"id":"generatePrimeSync#442","fn":"generatePrimeSync","args":[4,{"safe":true,"bigint":true}],"isolate":true,"result":{"threw":{"t":"error","name":"Error","message":"error:01800076:bignum routines::bits too small","own":[]}}},
+ {"id":"generatePrimeSync#443","fn":"generatePrimeSync","args":[5,{"safe":true,"bigint":true}],"isolate":true,"result":{"threw":{"t":"error","name":"Error","message":"error:01800076:bignum routines::bits too small","own":[]}}},
+ {"id":"generatePrimeSync#444","fn":"generatePrimeSync","args":[6,{"safe":true,"bigint":true}],"isolate":true,"result":{"returned":{"t":"bigint","bits":6}}},
+ {"id":"generatePrimeSync#445","fn":"generatePrimeSync","args":[7,{"safe":true,"bigint":true}],"isolate":true,"result":{"returned":{"t":"bigint","bits":7}}},
+ {"id":"generatePrimeSync#446","fn":"generatePrimeSync","args":[8,{"safe":true,"bigint":true}],"isolate":true,"result":{"returned":{"t":"bigint","bits":8}}},
+ {"id":"generatePrimeSync#447","fn":"generatePrimeSync","args":[9,{"safe":true,"bigint":true}],"isolate":true,"result":{"returned":{"t":"bigint","bits":9}}},
+ {"id":"generatePrimeSync#448","fn":"generatePrimeSync","args":[32,{"safe":true,"bigint":true}],"isolate":true,"result":{"returned":{"t":"bigint","bits":32}}},
+ {"id":"generatePrimeSync#449","fn":"generatePrimeSync","args":[1,{"bigint":true}],"isolate":true,"result":{"threw":{"t":"error","name":"Error","message":"error:01800076:bignum routines::bits too small","own":[]}}},
+ {"id":"generatePrimeSync#450","fn":"generatePrimeSync","args":[2,{"bigint":true}],"isolate":true,"result":{"returned":{"t":"bigint","bits":2}}},
+ {"id":"generatePrimeSync#451","fn":"generatePrimeSync","args":[3,{"bigint":true}],"isolate":true,"result":{"returned":{"t":"bigint","bits":3}}},
+ {"id":"generatePrimeSync#452","fn":"generatePrimeSync","args":[4,{"bigint":true}],"isolate":true,"result":{"returned":{"t":"bigint","bits":4}}},
+ {"id":"generatePrimeSync#453","fn":"generatePrimeSync","args":[8,{"bigint":true}],"isolate":true,"result":{"returned":{"t":"bigint","bits":8}}},
+ {"id":"generatePrimeSync#454","fn":"generatePrimeSync","args":[32,{"add":{"$":"big","v":"7"},"bigint":true}],"isolate":true,"result":{"returned":{"t":"bigint","bits":32}}},
+ {"id":"generatePrimeSync#455","fn":"generatePrimeSync","args":[32,{"add":{"$":"big","v":"7"},"rem":{"$":"big","v":"3"},"bigint":true}],"isolate":true,"result":{"returned":{"t":"bigint","bits":32}}},
+ {"id":"generatePrimeSync#456","fn":"generatePrimeSync","args":[32,{"rem":{"$":"big","v":"3"},"bigint":true}],"isolate":true,"result":{"returned":{"t":"bigint","bits":32}}},
+ {"id":"generatePrimeSync#457","fn":"generatePrimeSync","args":[32,{"add":{"$":"big","v":"7"},"rem":{"$":"big","v":"7"},"bigint":true}],"isolate":true,"result":{"threw":{"t":"error","name":"RangeError","message":"invalid options.rem","code":"ERR_OUT_OF_RANGE","own":["code"]}}},
+ {"id":"generatePrimeSync#458","fn":"generatePrimeSync","args":[32,{"add":{"$":"big","v":"7"},"rem":{"$":"big","v":"8"},"bigint":true}],"isolate":true,"result":{"threw":{"t":"error","name":"RangeError","message":"invalid options.rem","code":"ERR_OUT_OF_RANGE","own":["code"]}}},
+ {"id":"generatePrimeSync#459","fn":"generatePrimeSync","args":[32,{"add":{"$":"big","v":"7"},"rem":{"$":"big","v":"0"},"bigint":true}],"isolate":true,"result":{"hangs":true}},
+ {"id":"generatePrimeSync#460","fn":"generatePrimeSync","args":[32,{"add":{"$":"big","v":"12"},"rem":{"$":"big","v":"5"},"bigint":true}],"isolate":true,"result":{"returned":{"t":"bigint","bits":32}}},
+ {"id":"generatePrimeSync#461","fn":"generatePrimeSync","args":[32,{"add":{"$":"big","v":"12"},"rem":{"$":"big","v":"4"},"bigint":true}],"isolate":true,"result":{"hangs":true}},
+ {"id":"generatePrimeSync#462","fn":"generatePrimeSync","args":[32,{"add":{"$":"big","v":"0"},"bigint":true}],"isolate":true,"result":{"threw":{"t":"error","name":"Error","message":"error:01800067:bignum routines::div by zero","own":[]}}},
+ {"id":"generatePrimeSync#463","fn":"generatePrimeSync","args":[32,{"add":{"$":"big","v":"1"},"bigint":true}],"isolate":true,"result":{"returned":{"t":"bigint","bits":32}}},
+ {"id":"generatePrimeSync#464","fn":"generatePrimeSync","args":[32,{"add":{"$":"big","v":"2"},"bigint":true}],"isolate":true,"result":{"returned":{"t":"bigint","bits":32}}},
+ {"id":"generatePrimeSync#465","fn":"generatePrimeSync","args":[32,{"add":{"$":"big","v":"2"},"rem":{"$":"big","v":"1"},"bigint":true}],"isolate":true,"result":{"returned":{"t":"bigint","bits":32}}},
+ {"id":"generatePrimeSync#466","fn":"generatePrimeSync","args":[32,{"add":{"$":"big","v":"2"},"rem":{"$":"big","v":"0"},"bigint":true}],"isolate":true,"result":{"hangs":true}},
+ {"id":"generatePrimeSync#467","fn":"generatePrimeSync","args":[8,{"add":{"$":"big","v":"256"},"bigint":true}],"isolate":true,"result":{"threw":{"t":"error","name":"RangeError","message":"invalid options.add","code":"ERR_OUT_OF_RANGE","own":["code"]}}},
+ {"id":"generatePrimeSync#468","fn":"generatePrimeSync","args":[8,{"add":{"$":"big","v":"255"},"bigint":true}],"isolate":true,"result":{"hangs":true}},
+ {"id":"generatePrimeSync#469","fn":"generatePrimeSync","args":[8,{"add":{"$":"big","v":"128"},"rem":{"$":"big","v":"1"},"bigint":true}],"isolate":true,"result":{"returned":{"t":"bigint","bits":9}}},
+ {"id":"generatePrimeSync#470","fn":"generatePrimeSync","args":[8,{"add":{"$":"big","v":"257"},"bigint":true}],"isolate":true,"result":{"threw":{"t":"error","name":"RangeError","message":"invalid options.add","code":"ERR_OUT_OF_RANGE","own":["code"]}}},
+ {"id":"generatePrimeSync#471","fn":"generatePrimeSync","args":[32,{"add":{"$":"big","v":"1180591620717411303424"},"bigint":true}],"isolate":true,"result":{"threw":{"t":"error","name":"RangeError","message":"invalid options.add","code":"ERR_OUT_OF_RANGE","own":["code"]}}},
+ {"id":"generatePrimeSync#472","fn":"generatePrimeSync","args":[32,{"add":{"$":"big","v":"4294967296"},"bigint":true}],"isolate":true,"result":{"threw":{"t":"error","name":"RangeError","message":"invalid options.add","code":"ERR_OUT_OF_RANGE","own":["code"]}}},
+ {"id":"generatePrimeSync#473","fn":"generatePrimeSync","args":[32,{"add":{"$":"big","v":"2147483648"},"rem":{"$":"big","v":"1"},"bigint":true}],"isolate":true,"result":{"hangs":true}},
+ {"id":"generatePrimeSync#474","fn":"generatePrimeSync","args":[32,{"add":{"$":"big","v":"7"},"rem":{"$":"big","v":"1180591620717411303424"},"bigint":true}],"isolate":true,"result":{"threw":{"t":"error","name":"RangeError","message":"invalid options.rem","code":"ERR_OUT_OF_RANGE","own":["code"]}}},
+ {"id":"generatePrimeSync#475","fn":"generatePrimeSync","args":[32,{"add":{"$":"buffer","hex":"07"},"bigint":true}],"isolate":true,"result":{"returned":{"t":"bigint","bits":32}}},
+ {"id":"generatePrimeSync#476","fn":"generatePrimeSync","args":[32,{"add":{"$":"u8","hex":"07"},"rem":{"$":"ab","hex":"03"},"bigint":true}],"isolate":true,"result":{"returned":{"t":"bigint","bits":32}}},
+ {"id":"generatePrimeSync#477","fn":"generatePrimeSync","args":[32,{"add":{"$":"dv","hex":"0007"},"rem":{"$":"u16","hex":"0300"},"bigint":true}],"isolate":true,"result":{"threw":{"t":"error","name":"RangeError","message":"invalid options.rem","code":"ERR_OUT_OF_RANGE","own":["code"]}}},
+ {"id":"generatePrimeSync#478","fn":"generatePrimeSync","args":[32,{"add":{"$":"buffer","hex":""},"bigint":true}],"isolate":true,"result":{"threw":{"t":"error","name":"Error","message":"error:01800067:bignum routines::div by zero","own":[]}}},
+ {"id":"generatePrimeSync#479","fn":"generatePrimeSync","args":[32,{"add":{"$":"buffer","hex":"07"},"rem":{"$":"buffer","hex":""},"bigint":true}],"isolate":true,"result":{"hangs":true}},
+ {"id":"generatePrimeSync#480","fn":"generatePrimeSync","args":[32,{"add":{"$":"buffer","hex":"00000000000000000000000007"},"bigint":true}],"isolate":true,"result":{"returned":{"t":"bigint","bits":32}}},
+ {"id":"generatePrimeSync#481","fn":"generatePrimeSync","args":[32,{"add":{"$":"big","v":"7"},"safe":true,"bigint":true}],"isolate":true,"result":{"returned":{"t":"bigint","bits":32}}},
+ {"id":"generatePrimeSync#482","fn":"generatePrimeSync","args":[32,{"add":{"$":"big","v":"8"},"rem":{"$":"big","v":"3"},"safe":true,"bigint":true}],"isolate":true,"result":{"returned":{"t":"bigint","bits":32}}},
+ {"id":"generatePrimeSync#483","fn":"generatePrimeSync","args":[32,{"add":{"$":"big","v":"8"},"rem":{"$":"big","v":"1"},"safe":true,"bigint":true}],"isolate":true,"result":{"hangs":true}},
+ {"id":"generatePrimeSync#484","fn":"generatePrimeSync","args":[32,{"add":{"$":"big","v":"12"},"rem":{"$":"big","v":"11"},"safe":true,"bigint":true}],"isolate":true,"result":{"returned":{"t":"bigint","bits":32}}},
+ {"id":"generatePrimeSync#485","fn":"generatePrimeSync","args":[32,{"add":{"$":"big","v":"7"},"rem":{"$":"big","v":"1"},"safe":true,"bigint":true}],"isolate":true,"result":{"hangs":true}},
+ {"id":"generatePrimeSync#486","fn":"generatePrimeSync","args":[3,{"add":{"$":"big","v":"7"},"bigint":true}],"isolate":true,"result":{"hangs":true}},
+ {"id":"generatePrimeSync#487","fn":"generatePrimeSync","args":[3,{"add":{"$":"big","v":"5"},"rem":{"$":"big","v":"2"},"bigint":true}],"isolate":true,"result":{"returned":{"t":"bigint","bits":3}}},
+ {"id":"generatePrimeSync#488","fn":"generatePrimeSync","args":[2,{"add":{"$":"big","v":"3"},"rem":{"$":"big","v":"0"},"bigint":true}],"isolate":true,"result":{"returned":{"t":"bigint","bits":2}}},
+ {"id":"generatePrimeSync#489","fn":"generatePrimeSync","args":[2,{"add":{"$":"big","v":"3"},"rem":{"$":"big","v":"2"},"bigint":true}],"isolate":true,"result":{"returned":{"t":"bigint","bits":3}}},
+ {"id":"generatePrime#490","fn":"generatePrime","args":[16],"isolate":true,"result":{"threw":{"t":"error","name":"TypeError","message":"The \"callback\" argument must be of type function. Received undefined","code":"ERR_INVALID_ARG_TYPE","own":["code"]}}},
+ {"id":"generatePrime#491","fn":"generatePrime","args":[16,1],"isolate":true,"result":{"threw":{"t":"error","name":"TypeError","message":"The \"callback\" argument must be of type function. Received undefined","code":"ERR_INVALID_ARG_TYPE","own":["code"]}}},
+ {"id":"generatePrime#492","fn":"generatePrime","args":[16,{}],"isolate":true,"result":{"threw":{"t":"error","name":"TypeError","message":"The \"callback\" argument must be of type function. Received undefined","code":"ERR_INVALID_ARG_TYPE","own":["code"]}}},
+ {"id":"generatePrime#493","fn":"generatePrime","args":[16,{},1],"isolate":true,"result":{"threw":{"t":"error","name":"TypeError","message":"The \"callback\" argument must be of type function. Received type number (1)","code":"ERR_INVALID_ARG_TYPE","own":["code"]}}},
+ {"id":"generatePrime#494","fn":"generatePrime","args":["x",{"$":"cb"}],"isolate":true,"result":{"threw":{"t":"error","name":"TypeError","message":"The \"size\" argument must be of type number. Received type string ('x')","code":"ERR_INVALID_ARG_TYPE","own":["code"]}}},
+ {"id":"generatePrime#495","fn":"generatePrime","args":[0,{"$":"cb"}],"isolate":true,"result":{"threw":{"t":"error","name":"RangeError","message":"The value of \"size\" is out of range. It must be >= 1 && <= 2147483647. Received 0","code":"ERR_OUT_OF_RANGE","own":["code"]}}},
+ {"id":"generatePrime#496","fn":"generatePrime","args":[16,{"$":"cb"}],"isolate":true,"result":{"returned":{"t":"undefined"},"callback":{"sync":false,"this":"Object","args":[{"t":"undefined"},{"t":"ArrayBuffer","bytes":2}]}}},
+ {"id":"generatePrime#497","fn":"generatePrime","args":[16,{},{"$":"cb"}],"isolate":true,"result":{"returned":{"t":"undefined"},"callback":{"sync":false,"this":"Object","args":[{"t":"undefined"},{"t":"ArrayBuffer","bytes":2}]}}},
+ {"id":"generatePrime#498","fn":"generatePrime","args":[16,{"$":"undefined"},{"$":"cb"}],"isolate":true,"result":{"threw":{"t":"error","name":"TypeError","message":"The \"options\" argument must be of type object. Received undefined","code":"ERR_INVALID_ARG_TYPE","own":["code"]}}},
+ {"id":"generatePrime#499","fn":"generatePrime","args":[16,null,{"$":"cb"}],"isolate":true,"result":{"threw":{"t":"error","name":"TypeError","message":"The \"options\" argument must be of type object. Received null","code":"ERR_INVALID_ARG_TYPE","own":["code"]}}},
+ {"id":"generatePrime#500","fn":"generatePrime","args":[16,{"bigint":true},{"$":"cb"}],"isolate":true,"result":{"returned":{"t":"undefined"},"callback":{"sync":false,"this":"Object","args":[{"t":"undefined"},{"t":"bigint","bits":16}]}}},
+ {"id":"generatePrime#501","fn":"generatePrime","args":[16,{"safe":1},{"$":"cb"}],"isolate":true,"result":{"threw":{"t":"error","name":"TypeError","message":"The \"options.safe\" property must be of type boolean. Received type number (1)","code":"ERR_INVALID_ARG_TYPE","own":["code"]}}},
+ {"id":"generatePrime#502","fn":"generatePrime","args":[16,{"add":{"$":"big","v":"1180591620717411303424"}},{"$":"cb"}],"isolate":true,"result":{"threw":{"t":"error","name":"RangeError","message":"invalid options.add","code":"ERR_OUT_OF_RANGE","own":["code"]}}},
+ {"id":"generatePrime#503","fn":"generatePrime","args":[1,{"$":"cb"}],"isolate":true,"result":{"returned":{"t":"undefined"},"callback":{"sync":false,"this":"Object","args":[{"t":"error","name":"Error","message":"error:01800076:bignum routines::bits too small","own":[]}]}}},
+ {"id":"generatePrime#504","fn":"generatePrime","args":[64,{"safe":true,"bigint":true},{"$":"cb"}],"isolate":true,"result":{"returned":{"t":"undefined"},"callback":{"sync":false,"this":"Object","args":[{"t":"undefined"},{"t":"bigint","bits":64}]}}},
+ {"id":"checkPrimeSync#505","fn":"checkPrimeSync","args":[],"result":{"threw":{"t":"error","name":"TypeError","message":"The \"candidate\" argument must be of type bigint or an instance of ArrayBuffer, TypedArray, Buffer, or DataView. Received undefined","code":"ERR_INVALID_ARG_TYPE","own":["code"]}}},
+ {"id":"checkPrimeSync#506","fn":"checkPrimeSync","args":[1],"result":{"threw":{"t":"error","name":"TypeError","message":"The \"candidate\" argument must be of type bigint or an instance of ArrayBuffer, TypedArray, Buffer, or DataView. Received type number (1)","code":"ERR_INVALID_ARG_TYPE","own":["code"]}}},
+ {"id":"checkPrimeSync#507","fn":"checkPrimeSync","args":["7"],"result":{"threw":{"t":"error","name":"TypeError","message":"The \"candidate\" argument must be of type bigint or an instance of ArrayBuffer, TypedArray, Buffer, or DataView. Received type string ('7')","code":"ERR_INVALID_ARG_TYPE","own":["code"]}}},
+ {"id":"checkPrimeSync#508","fn":"checkPrimeSync","args":[null],"result":{"threw":{"t":"error","name":"TypeError","message":"The \"candidate\" argument must be of type bigint or an instance of ArrayBuffer, TypedArray, Buffer, or DataView. Received null","code":"ERR_INVALID_ARG_TYPE","own":["code"]}}},
+ {"id":"checkPrimeSync#509","fn":"checkPrimeSync","args":[{"$":"big","v":"-1"}],"result":{"threw":{"t":"error","name":"RangeError","message":"The value of \"candidate\" is out of range. It must be >= 0. Received -1n","code":"ERR_OUT_OF_RANGE","own":["code"]}}},
+ {"id":"checkPrimeSync#510","fn":"checkPrimeSync","args":[{"$":"big","v":"-7"}],"result":{"threw":{"t":"error","name":"RangeError","message":"The value of \"candidate\" is out of range. It must be >= 0. Received -7n","code":"ERR_OUT_OF_RANGE","own":["code"]}}},
+ {"id":"checkPrimeSync#511","fn":"checkPrimeSync","args":[{"$":"big","v":"0"}],"result":{"returned":{"t":"boolean","v":false}}},
+ {"id":"checkPrimeSync#512","fn":"checkPrimeSync","args":[{"$":"big","v":"1"}],"result":{"returned":{"t":"boolean","v":false}}},
+ {"id":"checkPrimeSync#513","fn":"checkPrimeSync","args":[{"$":"big","v":"2"}],"result":{"returned":{"t":"boolean","v":true}}},
+ {"id":"checkPrimeSync#514","fn":"checkPrimeSync","args":[{"$":"big","v":"3"}],"result":{"returned":{"t":"boolean","v":true}}},
+ {"id":"checkPrimeSync#515","fn":"checkPrimeSync","args":[{"$":"big","v":"4"}],"result":{"returned":{"t":"boolean","v":false}}},
+ {"id":"checkPrimeSync#516","fn":"checkPrimeSync","args":[{"$":"big","v":"5"}],"result":{"returned":{"t":"boolean","v":true}}},
+ {"id":"checkPrimeSync#517","fn":"checkPrimeSync","args":[{"$":"big","v":"7"}],"result":{"returned":{"t":"boolean","v":true}}},
+ {"id":"checkPrimeSync#518","fn":"checkPrimeSync","args":[{"$":"big","v":"9"}],"result":{"returned":{"t":"boolean","v":false}}},
+ {"id":"checkPrimeSync#519","fn":"checkPrimeSync","args":[{"$":"big","v":"15"}],"result":{"returned":{"t":"boolean","v":false}}},
+ {"id":"checkPrimeSync#520","fn":"checkPrimeSync","args":[{"$":"big","v":"25"}],"result":{"returned":{"t":"boolean","v":false}}},
+ {"id":"checkPrimeSync#521","fn":"checkPrimeSync","args":[{"$":"big","v":"97"}],"result":{"returned":{"t":"boolean","v":true}}},
+ {"id":"checkPrimeSync#522","fn":"checkPrimeSync","args":[{"$":"big","v":"221"}],"result":{"returned":{"t":"boolean","v":false}}},
+ {"id":"checkPrimeSync#523","fn":"checkPrimeSync","args":[{"$":"big","v":"561"}],"result":{"returned":{"t":"boolean","v":false}}},
+ {"id":"checkPrimeSync#524","fn":"checkPrimeSync","args":[{"$":"big","v":"1105"}],"result":{"returned":{"t":"boolean","v":false}}},
+ {"id":"checkPrimeSync#525","fn":"checkPrimeSync","args":[{"$":"big","v":"1729"}],"result":{"returned":{"t":"boolean","v":false}}},
+ {"id":"checkPrimeSync#526","fn":"checkPrimeSync","args":[{"$":"big","v":"2047"}],"result":{"returned":{"t":"boolean","v":false}}},
+ {"id":"checkPrimeSync#527","fn":"checkPrimeSync","args":[{"$":"big","v":"3215031751"}],"result":{"returned":{"t":"boolean","v":false}}},
+ {"id":"checkPrimeSync#528","fn":"checkPrimeSync","args":[{"$":"big","v":"4000000"}],"result":{"returned":{"t":"boolean","v":false}}},
+ {"id":"checkPrimeSync#529","fn":"checkPrimeSync","args":[{"$":"big","v":"3999971"}],"result":{"returned":{"t":"boolean","v":true}}},
+ {"id":"checkPrimeSync#530","fn":"checkPrimeSync","args":[{"$":"big","v":"4003997"}],"result":{"returned":{"t":"boolean","v":false}}},
+ {"id":"checkPrimeSync#531","fn":"checkPrimeSync","args":[{"$":"big","v":"3996001"}],"result":{"returned":{"t":"boolean","v":false}}},
+ {"id":"checkPrimeSync#532","fn":"checkPrimeSync","args":[{"$":"big","v":"2003"}],"result":{"returned":{"t":"boolean","v":true}}},
+ {"id":"checkPrimeSync#533","fn":"checkPrimeSync","args":[{"$":"big","v":"4001"}],"result":{"returned":{"t":"boolean","v":true}}},
+ {"id":"checkPrimeSync#534","fn":"checkPrimeSync","args":[{"$":"big","v":"2147483647"}],"result":{"returned":{"t":"boolean","v":true}}},
+ {"id":"checkPrimeSync#535","fn":"checkPrimeSync","args":[{"$":"big","v":"2305843009213693951"}],"result":{"returned":{"t":"boolean","v":true}}},
+ {"id":"checkPrimeSync#536","fn":"checkPrimeSync","args":[{"$":"big","v":"170141183460469231731687303715884105727"}],"result":{"returned":{"t":"boolean","v":true}}},
+ {"id":"checkPrimeSync#537","fn":"checkPrimeSync","args":[{"$":"big","v":"170141183460469231731687303715884105729"}],"result":{"returned":{"t":"boolean","v":false}}},
+ {"id":"checkPrimeSync#538","fn":"checkPrimeSync","args":[{"$":"big","v":"170141183460469231731687303715884105725"}],"result":{"returned":{"t":"boolean","v":false}}},
+ {"id":"checkPrimeSync#539","fn":"checkPrimeSync","args":[{"$":"big","v":"6864797660130609714981900799081393217269435300143305409394463459185543183397656052122559640661454554977296311391480858037121987999716643812574028291115057151"}],"result":{"returned":{"t":"boolean","v":true}}},
+ {"id":"checkPrimeSync#540","fn":"checkPrimeSync","args":[{"$":"big","v":"1427247692705959880439315947500961989719490561"}],"result":{"returned":{"t":"boolean","v":false}}},
+ {"id":"checkPrimeSync#541","fn":"checkPrimeSync","args":[{"$":"big","v":"341550071728321"}],"result":{"returned":{"t":"boolean","v":false}}},
+ {"id":"checkPrimeSync#542","fn":"checkPrimeSync","args":[{"$":"big","v":"3825123056546413051"}],"result":{"returned":{"t":"boolean","v":false}}},
+ {"id":"checkPrimeSync#543","fn":"checkPrimeSync","args":[{"$":"big","v":"318665857834031151167461"}],"result":{"returned":{"t":"boolean","v":false}}},
+ {"id":"checkPrimeSync#544","fn":"checkPrimeSync","args":[{"$":"big","v":"18446744073709551629"}],"result":{"returned":{"t":"boolean","v":true}}},
+ {"id":"checkPrimeSync#545","fn":"checkPrimeSync","args":[{"$":"buffer","hex":"07"}],"result":{"returned":{"t":"boolean","v":true}}},
+ {"id":"checkPrimeSync#546","fn":"checkPrimeSync","args":[{"$":"buffer","hex":"0000000007"}],"result":{"returned":{"t":"boolean","v":true}}},
+ {"id":"checkPrimeSync#547","fn":"checkPrimeSync","args":[{"$":"buffer","hex":"09"}],"result":{"returned":{"t":"boolean","v":false}}},
+ {"id":"checkPrimeSync#548","fn":"checkPrimeSync","args":[{"$":"buffer","hex":""}],"result":{"returned":{"t":"boolean","v":false}}},
+ {"id":"checkPrimeSync#549","fn":"checkPrimeSync","args":[{"$":"u8","hex":"07"}],"result":{"returned":{"t":"boolean","v":true}}},
+ {"id":"checkPrimeSync#550","fn":"checkPrimeSync","args":[{"$":"u8","hex":"0000000007"}],"result":{"returned":{"t":"boolean","v":true}}},
+ {"id":"checkPrimeSync#551","fn":"checkPrimeSync","args":[{"$":"u8","hex":"09"}],"result":{"returned":{"t":"boolean","v":false}}},
+ {"id":"checkPrimeSync#552","fn":"checkPrimeSync","args":[{"$":"u8","hex":""}],"result":{"returned":{"t":"boolean","v":false}}},
+ {"id":"checkPrimeSync#553","fn":"checkPrimeSync","args":[{"$":"ab","hex":"07"}],"result":{"returned":{"t":"boolean","v":true}}},
+ {"id":"checkPrimeSync#554","fn":"checkPrimeSync","args":[{"$":"ab","hex":"0000000007"}],"result":{"returned":{"t":"boolean","v":true}}},
+ {"id":"checkPrimeSync#555","fn":"checkPrimeSync","args":[{"$":"ab","hex":"09"}],"result":{"returned":{"t":"boolean","v":false}}},
+ {"id":"checkPrimeSync#556","fn":"checkPrimeSync","args":[{"$":"ab","hex":""}],"result":{"returned":{"t":"boolean","v":false}}},
+ {"id":"checkPrimeSync#557","fn":"checkPrimeSync","args":[{"$":"dv","hex":"07"}],"result":{"returned":{"t":"boolean","v":true}}},
+ {"id":"checkPrimeSync#558","fn":"checkPrimeSync","args":[{"$":"dv","hex":"0000000007"}],"result":{"returned":{"t":"boolean","v":true}}},
+ {"id":"checkPrimeSync#559","fn":"checkPrimeSync","args":[{"$":"dv","hex":"09"}],"result":{"returned":{"t":"boolean","v":false}}},
+ {"id":"checkPrimeSync#560","fn":"checkPrimeSync","args":[{"$":"dv","hex":""}],"result":{"returned":{"t":"boolean","v":false}}},
+ {"id":"checkPrimeSync#561","fn":"checkPrimeSync","args":[{"$":"u16","hex":"0700"}],"result":{"returned":{"t":"boolean","v":false}}},
+ {"id":"checkPrimeSync#562","fn":"checkPrimeSync","args":[{"$":"u16","hex":"0007"}],"result":{"returned":{"t":"boolean","v":true}}},
+ {"id":"checkPrimeSync#563","fn":"checkPrimeSync","args":[{"$":"buffer","hex":"00"}],"result":{"returned":{"t":"boolean","v":false}}},
+ {"id":"checkPrimeSync#564","fn":"checkPrimeSync","args":[{"$":"buffer","hex":"0101"}],"result":{"returned":{"t":"boolean","v":true}}},
+ {"id":"checkPrimeSync#565","fn":"checkPrimeSync","args":[{"$":"big","v":"7"},{"checks":2147483647}],"isolate":true,"result":{"hangs":true}},
+ {"id":"checkPrimeSync#566","fn":"checkPrimeSync","args":[{"$":"big","v":"9"},{"checks":2147483647}],"isolate":true,"result":{"returned":{"t":"boolean","v":false}}},
+ {"id":"checkPrimeSync#567","fn":"checkPrimeSync","args":[{"$":"big","v":"7"},null],"result":{"threw":{"t":"error","name":"TypeError","message":"The \"options\" argument must be of type object. Received null","code":"ERR_INVALID_ARG_TYPE","own":["code"]}}},
+ {"id":"checkPrimeSync#568","fn":"checkPrimeSync","args":[{"$":"big","v":"7"},1],"result":{"threw":{"t":"error","name":"TypeError","message":"The \"options\" argument must be of type object. Received type number (1)","code":"ERR_INVALID_ARG_TYPE","own":["code"]}}},
+ {"id":"checkPrimeSync#569","fn":"checkPrimeSync","args":[{"$":"big","v":"7"},"x"],"result":{"threw":{"t":"error","name":"TypeError","message":"The \"options\" argument must be of type object. Received type string ('x')","code":"ERR_INVALID_ARG_TYPE","own":["code"]}}},
+ {"id":"checkPrimeSync#570","fn":"checkPrimeSync","args":[{"$":"big","v":"7"},[]],"result":{"threw":{"t":"error","name":"TypeError","message":"The \"options\" argument must be of type object. Received an instance of Array","code":"ERR_INVALID_ARG_TYPE","own":["code"]}}},
+ {"id":"checkPrimeSync#571","fn":"checkPrimeSync","args":[{"$":"big","v":"7"},{}],"result":{"returned":{"t":"boolean","v":true}}},
+ {"id":"checkPrimeSync#572","fn":"checkPrimeSync","args":[{"$":"big","v":"7"},{"$":"undefined"}],"result":{"returned":{"t":"boolean","v":true}}},
+ {"id":"checkPrimeSync#573","fn":"checkPrimeSync","args":[{"$":"big","v":"7"},{"checks":-1}],"result":{"threw":{"t":"error","name":"RangeError","message":"The value of \"options.checks\" is out of range. It must be >= 0 && <= 2147483647. Received -1","code":"ERR_OUT_OF_RANGE","own":["code"]}}},
+ {"id":"checkPrimeSync#574","fn":"checkPrimeSync","args":[{"$":"big","v":"7"},{"checks":"1"}],"result":{"threw":{"t":"error","name":"TypeError","message":"The \"options.checks\" property must be of type number. Received type string ('1')","code":"ERR_INVALID_ARG_TYPE","own":["code"]}}},
+ {"id":"checkPrimeSync#575","fn":"checkPrimeSync","args":[{"$":"big","v":"7"},{"checks":1.5}],"result":{"threw":{"t":"error","name":"RangeError","message":"The value of \"options.checks\" is out of range. It must be an integer. Received 1.5","code":"ERR_OUT_OF_RANGE","own":["code"]}}},
+ {"id":"checkPrimeSync#576","fn":"checkPrimeSync","args":[{"$":"big","v":"7"},{"checks":2147483648}],"result":{"threw":{"t":"error","name":"RangeError","message":"The value of \"options.checks\" is out of range. It must be >= 0 && <= 2147483647. Received 2147483648","code":"ERR_OUT_OF_RANGE","own":["code"]}}},
+ {"id":"checkPrimeSync#577","fn":"checkPrimeSync","args":[{"$":"big","v":"7"},{"checks":0}],"result":{"returned":{"t":"boolean","v":true}}},
+ {"id":"checkPrimeSync#578","fn":"checkPrimeSync","args":[{"$":"big","v":"7"},{"checks":1}],"result":{"returned":{"t":"boolean","v":true}}},
+ {"id":"checkPrimeSync#579","fn":"checkPrimeSync","args":[{"$":"big","v":"7"},{"checks":10}],"result":{"returned":{"t":"boolean","v":true}}},
+ {"id":"checkPrimeSync#580","fn":"checkPrimeSync","args":[{"$":"big","v":"7"},{"checks":null}],"result":{"threw":{"t":"error","name":"TypeError","message":"The \"options.checks\" property must be of type number. Received null","code":"ERR_INVALID_ARG_TYPE","own":["code"]}}},
+ {"id":"checkPrimeSync#581","fn":"checkPrimeSync","args":[{"$":"big","v":"7"},{"checks":{"$":"undefined"}}],"result":{"returned":{"t":"boolean","v":true}}},
+ {"id":"checkPrimeSync#582","fn":"checkPrimeSync","args":[{"$":"big","v":"561"},{"checks":1}],"result":{"returned":{"t":"boolean","v":false}}},
+ {"id":"checkPrimeSync#583","fn":"checkPrimeSync","args":[{"$":"big","v":"170141183460469231731687303715884105727"},{"checks":1}],"result":{"returned":{"t":"boolean","v":true}}},
+ {"id":"checkPrimeSync#584","fn":"checkPrimeSync","args":[{"$":"big","v":"3215031751"},{"checks":1}],"result":{"returned":{"t":"boolean","v":false}}},
+ {"id":"checkPrime#585","fn":"checkPrime","args":[{"$":"big","v":"7"}],"result":{"threw":{"t":"error","name":"TypeError","message":"The \"callback\" argument must be of type function. Received undefined","code":"ERR_INVALID_ARG_TYPE","own":["code"]}}},
+ {"id":"checkPrime#586","fn":"checkPrime","args":[{"$":"big","v":"7"},1],"result":{"threw":{"t":"error","name":"TypeError","message":"The \"callback\" argument must be of type function. Received undefined","code":"ERR_INVALID_ARG_TYPE","own":["code"]}}},
+ {"id":"checkPrime#587","fn":"checkPrime","args":[{"$":"big","v":"7"},{}],"result":{"threw":{"t":"error","name":"TypeError","message":"The \"callback\" argument must be of type function. Received undefined","code":"ERR_INVALID_ARG_TYPE","own":["code"]}}},
+ {"id":"checkPrime#588","fn":"checkPrime","args":[{"$":"big","v":"7"},{},1],"result":{"threw":{"t":"error","name":"TypeError","message":"The \"callback\" argument must be of type function. Received type number (1)","code":"ERR_INVALID_ARG_TYPE","own":["code"]}}},
+ {"id":"checkPrime#589","fn":"checkPrime","args":["x",{"$":"cb"}],"result":{"threw":{"t":"error","name":"TypeError","message":"The \"candidate\" argument must be of type bigint or an instance of ArrayBuffer, TypedArray, Buffer, or DataView. Received type string ('x')","code":"ERR_INVALID_ARG_TYPE","own":["code"]}}},
+ {"id":"checkPrime#590","fn":"checkPrime","args":[{"$":"big","v":"-1"},{"$":"cb"}],"result":{"threw":{"t":"error","name":"RangeError","message":"The value of \"candidate\" is out of range. It must be >= 0. Received -1n","code":"ERR_OUT_OF_RANGE","own":["code"]}}},
+ {"id":"checkPrime#591","fn":"checkPrime","args":[{"$":"big","v":"7"},{"$":"cb"}],"result":{"returned":{"t":"undefined"},"callback":{"sync":false,"this":"CheckPrimeJob","args":[{"t":"undefined"},{"t":"boolean","v":true}]}}},
+ {"id":"checkPrime#592","fn":"checkPrime","args":[{"$":"big","v":"9"},{"$":"cb"}],"result":{"returned":{"t":"undefined"},"callback":{"sync":false,"this":"CheckPrimeJob","args":[{"t":"undefined"},{"t":"boolean","v":false}]}}},
+ {"id":"checkPrime#593","fn":"checkPrime","args":[{"$":"big","v":"7"},{},{"$":"cb"}],"result":{"returned":{"t":"undefined"},"callback":{"sync":false,"this":"CheckPrimeJob","args":[{"t":"undefined"},{"t":"boolean","v":true}]}}},
+ {"id":"checkPrime#594","fn":"checkPrime","args":[{"$":"big","v":"7"},{"$":"undefined"},{"$":"cb"}],"result":{"returned":{"t":"undefined"},"callback":{"sync":false,"this":"CheckPrimeJob","args":[{"t":"undefined"},{"t":"boolean","v":true}]}}},
+ {"id":"checkPrime#595","fn":"checkPrime","args":[{"$":"big","v":"7"},null,{"$":"cb"}],"result":{"threw":{"t":"error","name":"TypeError","message":"The \"options\" argument must be of type object. Received null","code":"ERR_INVALID_ARG_TYPE","own":["code"]}}},
+ {"id":"checkPrime#596","fn":"checkPrime","args":[{"$":"big","v":"7"},1,{"$":"cb"}],"result":{"threw":{"t":"error","name":"TypeError","message":"The \"options\" argument must be of type object. Received type number (1)","code":"ERR_INVALID_ARG_TYPE","own":["code"]}}},
+ {"id":"checkPrime#597","fn":"checkPrime","args":[{"$":"big","v":"7"},{"checks":-1},{"$":"cb"}],"result":{"threw":{"t":"error","name":"RangeError","message":"The value of \"options.checks\" is out of range. It must be >= 0 && <= 2147483647. Received -1","code":"ERR_OUT_OF_RANGE","own":["code"]}}},
+ {"id":"checkPrime#598","fn":"checkPrime","args":[{"$":"big","v":"7"},{"checks":5},{"$":"cb"}],"result":{"returned":{"t":"undefined"},"callback":{"sync":false,"this":"CheckPrimeJob","args":[{"t":"undefined"},{"t":"boolean","v":true}]}}},
+ {"id":"checkPrime#599","fn":"checkPrime","args":[{"$":"buffer","hex":"07"},{"$":"cb"}],"result":{"returned":{"t":"undefined"},"callback":{"sync":false,"this":"CheckPrimeJob","args":[{"t":"undefined"},{"t":"boolean","v":true}]}}},
+ {"id":"checkPrime#600","fn":"checkPrime","args":[{"$":"ab","hex":""},{"$":"cb"}],"result":{"returned":{"t":"undefined"},"callback":{"sync":false,"this":"CheckPrimeJob","args":[{"t":"undefined"},{"t":"boolean","v":false}]}}},
+ {"id":"checkPrime#601","fn":"checkPrime","args":[1,1],"result":{"threw":{"t":"error","name":"TypeError","message":"The \"candidate\" argument must be of type bigint or an instance of ArrayBuffer, TypedArray, Buffer, or DataView. Received type number (1)","code":"ERR_INVALID_ARG_TYPE","own":["code"]}}},
+ {"id":"checkPrime#602","fn":"checkPrime","args":[{"$":"big","v":"170141183460469231731687303715884105727"},{"$":"cb"}],"result":{"returned":{"t":"undefined"},"callback":{"sync":false,"this":"CheckPrimeJob","args":[{"t":"undefined"},{"t":"boolean","v":true}]}}}
+ ]
+}

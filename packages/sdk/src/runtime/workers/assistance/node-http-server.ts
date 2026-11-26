@@ -1,4 +1,4 @@
-import { isEventListener } from "./node-streams.js";
+import { EventEmitter, isEventListener } from "./node-streams.js";
 import { exactKeys, record } from "../../decode.js";
 import type { AsyncContext } from "./async-context.js";
 import type { createNodeNet, NodeServer } from "./node-net.js";
@@ -30,15 +30,85 @@ type Servers = {
     (listener?: RequestListener): HttpServer;
     (options: unknown, listener?: RequestListener): HttpServer;
   };
+  /** Node's `http._connectionListener`: serves HTTP on a connected socket for the server it is called on. */
+  readonly _connectionListener: (this: unknown, socket: unknown) => void;
 };
+type Tracking = { readonly connections: Map<NodeSocket, Connection>; closing: boolean };
+// Per server, so that the listener also serves a server this module did not construct (https.Server is a tls.Server).
+const tracked = new WeakMap<object, Tracking>();
+function tracking(server: object): Tracking {
+  let state = tracked.get(server);
+  if (state === undefined) { state = { connections: new Map(), closing: false }; tracked.set(server, state); }
+  return state;
+}
+const admitted = new WeakMap<object, NodeSocket>();
+/** Lets `http._connectionListener` serve a socket that is not a `net.Socket`: the TLSSocket of an accepted TLS connection. */
+export function admitHttpSocket(socket: NodeSocket): void { admitted.set(socket, socket); }
+/** What `server.close()`, `closeIdleConnections()` and `closeAllConnections()` do to the HTTP connections of any server the listener serves. */
+export function closeHttpConnections(server: object, which: "when-idle" | "idle" | "all"): void {
+  const state = tracking(server);
+  if (which === "when-idle") { state.closing = true; for (const connection of state.connections.values()) connection.closeWhenIdle(); }
+  else if (which === "idle") for (const connection of state.connections.values()) connection.closeIdle();
+  else for (const socket of state.connections.keys()) socket.destroy();
+}
+/** A server that listens again serves its new connections normally. */
+export function reopenHttpConnections(server: object): void { tracking(server).closing = false; }
 
 /** HTTP reuses the net owner for bind, accept, connection accounting and close.
  * Only HTTP parsing, response ordering and idle retirement belong here. */
 export function createHttpServers(net: ReturnType<typeof createNodeNet>, module: WebAssembly.Module, context: AsyncContext): Servers {
   const { ServerResponse, STATUS_CODES } = createHttpResponses(context);
+  const setting = (server: object, name: string, fallback: number): number => { const value: unknown = Reflect.get(server, name); return typeof value === "number" ? value : fallback; };
+  const serve = (server: unknown, value: unknown): void => {
+    if (!(server instanceof EventEmitter)) throw new TypeError("http._connectionListener requires a server");
+    const socket = value instanceof net.Socket ? value : typeof value === "object" && value !== null ? admitted.get(value) : undefined;
+    if (socket === undefined) throw new TypeError("HTTP requires a Linux socket");
+    const state = tracking(server);
+    const connection = createHttpConnection(socket, module, context, {
+      Response: ServerResponse,
+      request: (request, response) => {
+        const expectation = request.headers["expect"];
+        if (expectation !== undefined && request.httpVersionMajor === 1 && request.httpVersionMinor === 1) {
+          if (typeof expectation === "string" && /^100-continue$/iu.test(expectation)) {
+            if (server.listenerCount("checkContinue") !== 0) { server.emit("checkContinue", request, response); return; }
+            response.writeContinue();
+          } else {
+            if (server.listenerCount("checkExpectation") !== 0) server.emit("checkExpectation", request, response);
+            else { response.statusCode = 417; response.end(); }
+            return;
+          }
+        }
+        server.emit("request", request, response);
+      },
+      upgrade: (request, socket, head) => {
+        state.connections.delete(socket);
+        return server.emit(request.method === "CONNECT" ? "connect" : "upgrade", request, socket, head);
+      },
+      clientError: error => {
+        if (server.emit("clientError", error, socket)) return true;
+        if (socket.destroyed || socket.writableEnded || !(error instanceof HttpParseError)) return false;
+        const status = error.code === "HPE_HEADER_OVERFLOW" ? "431 Request Header Fields Too Large" : "400 Bad Request";
+        socket.end(`HTTP/1.1 ${status}\r\nConnection: close\r\nContent-Length: 0\r\n\r\n`, () => socket.destroy());
+        return true;
+      },
+      timeout: () => server.emit("timeout", socket),
+      active: () => { socket.setTimeout(setting(server, "timeout", 0)); },
+      idle: () => {
+        const keepAlive = setting(server, "keepAliveTimeout", 5000), extra = setting(server, "keepAliveTimeoutBuffer", 1000);
+        const delay = Number.isFinite(keepAlive) && keepAlive > 0 ? keepAlive : 0;
+        const buffer = Number.isFinite(extra) && extra >= 0 ? extra : 0;
+        if (delay === 0) return false;
+        socket.setTimeout(Math.min(delay + buffer, 0x7fff_ffff)); return true;
+      },
+      closed: () => { state.connections.delete(socket); },
+    });
+    state.connections.set(socket, connection);
+    socket.setTimeout(setting(server, "timeout", 0));
+    if (state.closing) connection.closeWhenIdle(); else socket.resume();
+  };
+  function connectionListener(this: unknown, socket: unknown): void { serve(this, socket); }
+  Object.defineProperty(connectionListener, "name", { value: "connectionListener" });
   class Server extends net.Server {
-    readonly #connections = new Map<NodeSocket, Connection>();
-    #closing = false;
     timeout = 0;
     keepAliveTimeout = 5000;
     keepAliveTimeoutBuffer = 1000;
@@ -50,51 +120,8 @@ export function createHttpServers(net: ReturnType<typeof createNodeNet>, module:
         if (typeof listener !== "function") throw new TypeError("http.Server requires a request callback");
         this.on("request", (...args: unknown[]) => { Reflect.apply(listener, this, args); });
       }
-      this.on("listening", () => { this.#closing = false; });
-      this.on("connection", (value: unknown) => {
-        if (!(value instanceof net.Socket)) throw new TypeError("HTTP requires a Linux socket");
-        const socket = value;
-        const connection = createHttpConnection(socket, module, context, {
-          Response: ServerResponse,
-          request: (request, response) => {
-            const expectation = request.headers["expect"];
-            if (expectation !== undefined && request.httpVersionMajor === 1 && request.httpVersionMinor === 1) {
-              if (typeof expectation === "string" && /^100-continue$/iu.test(expectation)) {
-                if (this.listenerCount("checkContinue") !== 0) { this.emit("checkContinue", request, response); return; }
-                response.writeContinue();
-              } else {
-                if (this.listenerCount("checkExpectation") !== 0) this.emit("checkExpectation", request, response);
-                else { response.statusCode = 417; response.end(); }
-                return;
-              }
-            }
-            this.emit("request", request, response);
-          },
-          upgrade: (request, socket, head) => {
-            this.#connections.delete(socket);
-            return this.emit(request.method === "CONNECT" ? "connect" : "upgrade", request, socket, head);
-          },
-          clientError: error => {
-            if (this.emit("clientError", error, socket)) return true;
-            if (socket.destroyed || socket.writableEnded || !(error instanceof HttpParseError)) return false;
-            const status = error.code === "HPE_HEADER_OVERFLOW" ? "431 Request Header Fields Too Large" : "400 Bad Request";
-            socket.end(`HTTP/1.1 ${status}\r\nConnection: close\r\nContent-Length: 0\r\n\r\n`, () => socket.destroy());
-            return true;
-          },
-          timeout: () => this.emit("timeout", socket),
-          active: () => { socket.setTimeout(this.timeout); },
-          idle: () => {
-            const delay = Number.isFinite(this.keepAliveTimeout) && this.keepAliveTimeout > 0 ? this.keepAliveTimeout : 0;
-            const buffer = Number.isFinite(this.keepAliveTimeoutBuffer) && this.keepAliveTimeoutBuffer >= 0 ? this.keepAliveTimeoutBuffer : 0;
-            if (delay === 0) return false;
-            socket.setTimeout(Math.min(delay + buffer, 0x7fff_ffff)); return true;
-          },
-          closed: () => { this.#connections.delete(socket); },
-        });
-        this.#connections.set(socket, connection);
-        socket.setTimeout(this.timeout);
-        if (this.#closing) connection.closeWhenIdle(); else socket.resume();
-      });
+      this.on("listening", () => { reopenHttpConnections(this); });
+      this.on("connection", connectionListener);
     }
     setTimeout(duration: unknown, callback?: unknown): this {
       if (typeof duration !== "number" || !Number.isFinite(duration) || duration < 0) throw new RangeError("http.Server timeout must be a nonnegative finite number");
@@ -105,12 +132,11 @@ export function createHttpServers(net: ReturnType<typeof createNodeNet>, module:
       this.timeout = duration; return this;
     }
     override close(callback?: unknown): this {
-      super.close(callback); this.#closing = true;
-      for (const connection of this.#connections.values()) connection.closeWhenIdle();
+      super.close(callback); closeHttpConnections(this, "when-idle");
       return this;
     }
-    closeIdleConnections(): void { for (const connection of this.#connections.values()) connection.closeIdle(); }
-    closeAllConnections(): void { for (const socket of this.#connections.keys()) socket.destroy(); }
+    closeIdleConnections(): void { closeHttpConnections(this, "idle"); }
+    closeAllConnections(): void { closeHttpConnections(this, "all"); }
   }
-  return { Server, ServerResponse, IncomingMessage, METHODS: [...METHODS], STATUS_CODES, createServer: (options?: unknown, listener?: RequestListener) => new Server(options, listener) };
+  return { Server, _connectionListener: connectionListener, ServerResponse, IncomingMessage, METHODS: [...METHODS], STATUS_CODES, createServer: (options?: unknown, listener?: RequestListener) => new Server(options, listener) };
 }

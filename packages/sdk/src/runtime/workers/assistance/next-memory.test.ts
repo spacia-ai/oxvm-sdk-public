@@ -1,6 +1,7 @@
 import { expect, it } from "vitest";
 import { lowerScriptImports } from "./script-imports.ts";
 import { nodeV8Memory, processMemoryUsage } from "./node-memory.ts";
+import { createProcessMemory } from "./node-process-memory.ts";
 import type { LocalModuleFiles } from "./module-files.ts";
 import { VMError } from "../../errors.ts";
 
@@ -34,8 +35,11 @@ it("authenticates the dev CLI before omitting its automatic child heap override"
   expect(lowerScriptImports(source, "/workspace/dev.js", files).code).toContain("max-old-space-size");
 });
 
-it("rejects actual memory calls with the API and originating source in the structured error", () => {
-  for (const operation of [...Object.values(nodeV8Memory), processMemoryUsage, processMemoryUsage.rss]) {
+it("never answers a heap number nobody measured: v8 calls and an unported process refuse, with the API and originating source", () => {
+  const { getHeapStatistics, getHeapSpaceStatistics, getHeapCodeStatistics, getHeapSnapshot, writeHeapSnapshot, setHeapSnapshotNearHeapLimit, setFlagsFromString } = nodeV8Memory;
+  // What a running process has in every browser today: Linux's /proc, and no heap source.
+  const linuxOnly = createProcessMemory({ readProc: () => "VmRSS:\t  2048 kB\n" }).memoryUsage;
+  for (const operation of [getHeapStatistics, getHeapSpaceStatistics, getHeapCodeStatistics, getHeapSnapshot, writeHeapSnapshot, setHeapSnapshotNearHeapLimit, setFlagsFromString, processMemoryUsage, processMemoryUsage.rss, linuxOnly]) {
     try { operation(); expect.fail("memory operation returned invented statistics"); }
     catch (error) {
       expect(error).toBeInstanceOf(VMError);
@@ -45,4 +49,14 @@ it("rejects actual memory calls with the API and originating source in the struc
       expect(error.detail?.["origin"]).toContain("next-memory.test.ts");
     }
   }
+});
+
+it("answers what a real source measured and nothing else", () => {
+  // rss is the Linux task's VmRSS in every browser.
+  expect(createProcessMemory({ readProc: () => "VmRSS:\t  2048 kB\n" }).memoryUsage.rss()).toBe(2048 * 1024);
+  // An engine that measured the worker's heap would be reported as it answered; external and arrayBuffers stay 0.
+  const measured = createProcessMemory({ readProc: () => "VmRSS:\t  2048 kB\n", heap: () => ({ used: 700, total: 900 }) }).memoryUsage();
+  expect(measured).toEqual({ rss: 2048 * 1024, heapTotal: 900, heapUsed: 700, external: 0, arrayBuffers: 0 });
+  // Next's restart check reads v8.getHeapStatistics, which no source can fill: it is refused with or without a heap source.
+  expect(() => nodeV8Memory.getHeapStatistics()).toThrow(VMError);
 });

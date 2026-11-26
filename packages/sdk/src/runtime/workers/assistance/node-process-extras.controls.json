@@ -1,0 +1,939 @@
+{
+ "image": "node:24.18.1-alpine",
+ "node": "v24.18.1",
+ "versions": {
+  "node": "24.18.1",
+  "acorn": "8.16.0",
+  "ada": "3.4.4",
+  "amaro": "1.1.9",
+  "ares": "1.34.6",
+  "brotli": "1.2.0",
+  "cldr": "48.0",
+  "icu": "78.3",
+  "llhttp": "9.4.3",
+  "merve": "1.2.2",
+  "modules": "137",
+  "napi": "10",
+  "nbytes": "0.1.4",
+  "ncrypto": "0.0.1",
+  "nghttp2": "1.69.0",
+  "nghttp3": "",
+  "ngtcp2": "",
+  "openssl": "3.5.7",
+  "simdjson": "4.6.4",
+  "simdutf": "6.4.0",
+  "sqlite": "3.53.1",
+  "tz": "2026b",
+  "undici": "7.29.0",
+  "unicode": "17.0",
+  "uv": "1.52.1",
+  "uvwasi": "0.0.23",
+  "v8": "13.6.233.17-node.50",
+  "zlib": "1.3.1-e00f703",
+  "zstd": "1.5.7"
+ },
+ "release": {
+  "name": "node",
+  "lts": "Krypton",
+  "sourceUrl": "https://unofficial-builds.nodejs.org/download/release/v24.18.1/node-v24.18.1.tar.gz",
+  "headersUrl": "https://unofficial-builds.nodejs.org/download/release/v24.18.1/node-v24.18.1-headers.tar.gz"
+ },
+ "shapes": {
+  "release": {
+   "kind": "data",
+   "enumerable": true,
+   "configurable": true,
+   "writable": false
+  },
+  "title": {
+   "kind": "data",
+   "enumerable": true,
+   "configurable": true,
+   "writable": true
+  },
+  "debugPort": {
+   "kind": "data",
+   "enumerable": true,
+   "configurable": true,
+   "writable": true
+  },
+  "allowedNodeEnvironmentFlags": {
+   "kind": "data",
+   "enumerable": true,
+   "configurable": true,
+   "writable": true
+  },
+  "_exiting": {
+   "kind": "accessor",
+   "enumerable": true,
+   "configurable": true
+  },
+  "moduleLoadList": {
+   "kind": "data",
+   "enumerable": true,
+   "configurable": true,
+   "writable": false
+  },
+  "cpuUsage": {
+   "kind": "data",
+   "enumerable": true,
+   "configurable": true,
+   "writable": true,
+   "name": "cpuUsage",
+   "length": 1
+  },
+  "threadCpuUsage": {
+   "kind": "data",
+   "enumerable": true,
+   "configurable": true,
+   "writable": true,
+   "name": "threadCpuUsage",
+   "length": 1
+  },
+  "resourceUsage": {
+   "kind": "data",
+   "enumerable": true,
+   "configurable": true,
+   "writable": true,
+   "name": "resourceUsage",
+   "length": 0
+  },
+  "availableMemory": {
+   "kind": "data",
+   "enumerable": true,
+   "configurable": true,
+   "writable": true,
+   "name": "availableMemory",
+   "length": 0
+  },
+  "constrainedMemory": {
+   "kind": "data",
+   "enumerable": true,
+   "configurable": true,
+   "writable": true,
+   "name": "constrainedMemory",
+   "length": 0
+  },
+  "ref": {
+   "kind": "data",
+   "enumerable": true,
+   "configurable": true,
+   "writable": true,
+   "name": "ref",
+   "length": 1
+  },
+  "unref": {
+   "kind": "data",
+   "enumerable": true,
+   "configurable": true,
+   "writable": true,
+   "name": "unref",
+   "length": 1
+  },
+  "getActiveResourcesInfo": {
+   "kind": "data",
+   "enumerable": true,
+   "configurable": true,
+   "writable": true,
+   "name": "getActiveResourcesInfo",
+   "length": 0
+  },
+  "_getActiveHandles": {
+   "kind": "data",
+   "enumerable": true,
+   "configurable": true,
+   "writable": true,
+   "name": "_getActiveHandles",
+   "length": 0
+  },
+  "_getActiveRequests": {
+   "kind": "data",
+   "enumerable": true,
+   "configurable": true,
+   "writable": true,
+   "name": "_getActiveRequests",
+   "length": 0
+  },
+  "setUncaughtExceptionCaptureCallback": {
+   "kind": "data",
+   "enumerable": true,
+   "configurable": true,
+   "writable": true,
+   "name": "setUncaughtExceptionCaptureCallback",
+   "length": 1
+  },
+  "hasUncaughtExceptionCaptureCallback": {
+   "kind": "data",
+   "enumerable": true,
+   "configurable": true,
+   "writable": true,
+   "name": "hasUncaughtExceptionCaptureCallback",
+   "length": 0
+  },
+  "openStdin": {
+   "kind": "data",
+   "enumerable": true,
+   "configurable": true,
+   "writable": true,
+   "name": "",
+   "length": 0
+  },
+  "loadEnvFile": {
+   "kind": "data",
+   "enumerable": true,
+   "configurable": true,
+   "writable": true,
+   "name": "loadEnvFile",
+   "length": 0
+  },
+  "finalization": {
+   "kind": "accessor",
+   "enumerable": true,
+   "configurable": true
+  },
+  "_rawDebug": {
+   "kind": "data",
+   "enumerable": true,
+   "configurable": true,
+   "writable": true,
+   "name": "_rawDebug",
+   "length": 0
+  },
+  "_tickCallback": {
+   "kind": "data",
+   "enumerable": true,
+   "configurable": true,
+   "writable": true,
+   "name": "runNextTicks",
+   "length": 0
+  },
+  "_fatalException": {
+   "kind": "data",
+   "enumerable": true,
+   "configurable": true,
+   "writable": true,
+   "name": "",
+   "length": 2
+  },
+  "_kill": {
+   "kind": "data",
+   "enumerable": true,
+   "configurable": true,
+   "writable": true,
+   "name": "_kill",
+   "length": 0
+  },
+  "getgroups": {
+   "kind": "data",
+   "enumerable": true,
+   "configurable": true,
+   "writable": true,
+   "name": "getgroups",
+   "length": 0
+  }
+ },
+ "finalizationShape": {
+  "register": {
+   "kind": "data",
+   "enumerable": true,
+   "configurable": true,
+   "writable": true,
+   "name": "register",
+   "length": 2
+  },
+  "registerBeforeExit": {
+   "kind": "data",
+   "enumerable": true,
+   "configurable": true,
+   "writable": true,
+   "name": "registerBeforeExit",
+   "length": 2
+  },
+  "unregister": {
+   "kind": "data",
+   "enumerable": true,
+   "configurable": true,
+   "writable": true,
+   "name": "unregister",
+   "length": 1
+  }
+ },
+ "resourceUsageKeys": [
+  "userCPUTime",
+  "systemCPUTime",
+  "maxRSS",
+  "sharedMemorySize",
+  "unsharedDataSize",
+  "unsharedStackSize",
+  "minorPageFault",
+  "majorPageFault",
+  "swappedOut",
+  "fsRead",
+  "fsWrite",
+  "ipcSent",
+  "ipcReceived",
+  "signalsCount",
+  "voluntaryContextSwitches",
+  "involuntaryContextSwitches"
+ ],
+ "flags": [
+  "--tls-max-v1.3",
+  "--no-tls-max-v1.3",
+  "--test-skip-pattern",
+  "--use-env-proxy",
+  "--no-use-env-proxy",
+  "--experimental-report",
+  "--experimental-modules",
+  "--experimental-addon-modules",
+  "--no-experimental-addon-modules",
+  "--test-coverage-functions",
+  "--heapsnapshot-signal",
+  "--test-coverage-exclude",
+  "--trace-env",
+  "--no-trace-env",
+  "--test-rerun-failures",
+  "--experimental-detect-module",
+  "--no-experimental-detect-module",
+  "--allow-addons",
+  "--no-allow-addons",
+  "--experimental-abortcontroller",
+  "--trace-promises",
+  "--no-trace-promises",
+  "--force-context-aware",
+  "--no-force-context-aware",
+  "--max-semi-space-size",
+  "--perf-prof-unwinding-info",
+  "--http-parser",
+  "--experimental-fetch",
+  "--experimental-quic",
+  "--disable-sigusr1",
+  "--no-disable-sigusr1",
+  "--allow-wasi",
+  "--no-allow-wasi",
+  "--experimental-loader",
+  "--trace-tls",
+  "--no-trace-tls",
+  "--permission",
+  "--no-permission",
+  "--expose-gc",
+  "--diagnostic-dir",
+  "--force-async-hooks-checks",
+  "--no-force-async-hooks-checks",
+  "--strip-types",
+  "--no-strip-types",
+  "--experimental-sqlite",
+  "--no-experimental-sqlite",
+  "--require-module",
+  "--no-require-module",
+  "--allow-inspector",
+  "--no-allow-inspector",
+  "--allow-fs-read",
+  "--preserve-symlinks-main",
+  "--no-preserve-symlinks-main",
+  "--allow-fs-write",
+  "--allow-child-process",
+  "--no-allow-child-process",
+  "--allow-worker",
+  "--no-allow-worker",
+  "--experimental-vm-modules",
+  "--no-experimental-vm-modules",
+  "--experimental-wasi-unstable-preview1",
+  "--inspect-publish-uid",
+  "--inspect-brk",
+  "--no-inspect-brk",
+  "--inspect-port",
+  "--experimental-top-level-await",
+  "--report-on-signal",
+  "--no-report-on-signal",
+  "--cpu-prof-dir",
+  "--experimental-json-modules",
+  "--enable-etw-stack-walking",
+  "--max-old-space-size",
+  "--perf-basic-prof",
+  "--inspect-wait",
+  "--no-inspect-wait",
+  "--experimental-transform-types",
+  "--no-experimental-transform-types",
+  "--perf-prof",
+  "--track-heap-objects",
+  "--no-track-heap-objects",
+  "--max-heap-size",
+  "--jitless",
+  "--input-type",
+  "--enable-source-maps",
+  "--no-enable-source-maps",
+  "--max-old-space-size-percentage",
+  "--test-only",
+  "--no-test-only",
+  "--dns-result-order",
+  "--network-family-autoselection",
+  "--no-network-family-autoselection",
+  "--report-signal",
+  "--abort-on-uncaught-exception",
+  "--deprecation",
+  "--no-deprecation",
+  "--tls-min-v1.0",
+  "--no-tls-min-v1.0",
+  "--test-coverage-lines",
+  "--test-randomize",
+  "--no-test-randomize",
+  "--trace-env-native-stack",
+  "--no-trace-env-native-stack",
+  "--report-exclude-network",
+  "--no-report-exclude-network",
+  "--throw-deprecation",
+  "--no-throw-deprecation",
+  "--trace-deprecation",
+  "--no-trace-deprecation",
+  "--heap-prof-dir",
+  "--disable-wasm-trap-handler",
+  "--no-disable-wasm-trap-handler",
+  "--snapshot-blob",
+  "--unhandled-rejections",
+  "--watch",
+  "--no-watch",
+  "--test-isolation",
+  "--entry-url",
+  "--no-entry-url",
+  "--openssl-shared-config",
+  "--no-openssl-shared-config",
+  "--conditions",
+  "--heap-prof-interval",
+  "--cpu-prof-interval",
+  "--disable-proto",
+  "--test-coverage-include",
+  "--localstorage-file",
+  "--trace-sigint",
+  "--no-trace-sigint",
+  "--import",
+  "--cpu-prof",
+  "--no-cpu-prof",
+  "--zero-fill-buffers",
+  "--no-zero-fill-buffers",
+  "--experimental-webstorage",
+  "--no-experimental-webstorage",
+  "--openssl-legacy-provider",
+  "--no-openssl-legacy-provider",
+  "--v8-pool-size",
+  "--force-fips",
+  "--no-force-fips",
+  "--experimental-shadow-realm",
+  "--no-experimental-shadow-realm",
+  "--async-context-frame",
+  "--no-async-context-frame",
+  "--preserve-symlinks",
+  "--no-preserve-symlinks",
+  "--experimental-global-webcrypto",
+  "--test-reporter-destination",
+  "--trace-env-js-stack",
+  "--no-trace-env-js-stack",
+  "--trace-event-file-pattern",
+  "--secure-heap-min",
+  "--trace-event-categories",
+  "--addons",
+  "--no-addons",
+  "--node-memory-debug",
+  "--experimental-specifier-resolution",
+  "--network-family-autoselection-attempt-timeout",
+  "--report-dir",
+  "--global-search-paths",
+  "--no-global-search-paths",
+  "--experimental-global-customevent",
+  "--trace-sync-io",
+  "--no-trace-sync-io",
+  "--debug-arraybuffer-allocations",
+  "--no-debug-arraybuffer-allocations",
+  "--report-compact",
+  "--no-report-compact",
+  "--experimental-repl-await",
+  "--no-experimental-repl-await",
+  "--tls-min-v1.3",
+  "--no-tls-min-v1.3",
+  "--experimental-websocket",
+  "--no-experimental-websocket",
+  "--enable-fips",
+  "--no-enable-fips",
+  "--test-global-setup",
+  "--report-on-fatalerror",
+  "--no-report-on-fatalerror",
+  "--trace-uncaught",
+  "--no-trace-uncaught",
+  "--openssl-config",
+  "--report-filename",
+  "--interpreted-frames-native-stack",
+  "--tls-cipher-list",
+  "--watch-path",
+  "--trace-require-module",
+  "--experimental-import-meta-resolve",
+  "--no-experimental-import-meta-resolve",
+  "--perf-basic-prof-only-functions",
+  "--experimental-print-required-tla",
+  "--no-experimental-print-required-tla",
+  "--experimental-worker",
+  "--use-bundled-ca",
+  "--no-use-bundled-ca",
+  "--test-shard",
+  "--experimental-global-navigator",
+  "--no-experimental-global-navigator",
+  "--tls-min-v1.1",
+  "--no-tls-min-v1.1",
+  "--use-system-ca",
+  "--no-use-system-ca",
+  "--warnings",
+  "--no-warnings",
+  "--test-name-pattern",
+  "--verify-base-objects",
+  "--no-verify-base-objects",
+  "--use-largepages",
+  "--experimental-eventsource",
+  "--no-experimental-eventsource",
+  "--test-reporter",
+  "--secure-heap",
+  "--trace-warnings",
+  "--no-trace-warnings",
+  "--watch-kill-signal",
+  "--test-coverage-branches",
+  "--test-random-seed",
+  "--redirect-warnings",
+  "--max-http-header-size",
+  "--experimental-require-module",
+  "--no-experimental-require-module",
+  "--inspect",
+  "--no-inspect",
+  "--use-openssl-ca",
+  "--no-use-openssl-ca",
+  "--experimental-wasm-modules",
+  "--heap-prof",
+  "--no-heap-prof",
+  "--trace-exit",
+  "--no-trace-exit",
+  "--node-snapshot",
+  "--no-node-snapshot",
+  "--icu-data-dir",
+  "--heap-prof-name",
+  "--frozen-intrinsics",
+  "--no-frozen-intrinsics",
+  "--report-exclude-env",
+  "--no-report-exclude-env",
+  "--force-node-api-uncaught-exceptions-policy",
+  "--no-force-node-api-uncaught-exceptions-policy",
+  "--watch-preserve-output",
+  "--no-watch-preserve-output",
+  "--insecure-http-parser",
+  "--no-insecure-http-parser",
+  "--require",
+  "--napi-modules",
+  "--tls-max-v1.2",
+  "--no-tls-max-v1.2",
+  "--stack-trace-limit",
+  "--extra-info-on-fatal-exception",
+  "--no-extra-info-on-fatal-exception",
+  "--disable-warning",
+  "--heapsnapshot-near-heap-limit",
+  "--title",
+  "--disallow-code-generation-from-strings",
+  "--tls-keylog",
+  "--tls-min-v1.2",
+  "--no-tls-min-v1.2",
+  "--pending-deprecation",
+  "--no-pending-deprecation",
+  "--cpu-prof-name",
+  "--report-uncaught-exception",
+  "--no-report-uncaught-exception",
+  "--experimental-test-isolation",
+  "--prof-process",
+  "--enable-network-family-autoselection",
+  "--inspect-wait",
+  "--inspect-brk",
+  "--inspect",
+  "--loader",
+  "--debug-port",
+  "--trace-events-enabled",
+  "--es-module-specifier-resolution",
+  "--report-directory",
+  "-r",
+  "--experimental-strip-types",
+  "-C"
+ ],
+ "flagsUnique": 274,
+ "flagProbes": [
+  [
+   "--max-old-space-size",
+   true
+  ],
+  [
+   "--max-old-space-size=5",
+   true
+  ],
+  [
+   "--max_old_space_size",
+   true
+  ],
+  [
+   "max-old-space-size",
+   true
+  ],
+  [
+   "max_old_space_size=4",
+   false
+  ],
+  [
+   "-max-old-space-size",
+   false
+  ],
+  [
+   "zz",
+   false
+  ],
+  [
+   "--inspect-brk",
+   true
+  ],
+  [
+   "--inspect_brk",
+   true
+  ],
+  [
+   "--no-inspect-brk",
+   true
+  ],
+  [
+   "--no-warnings",
+   true
+  ],
+  [
+   "--warnings",
+   true
+  ],
+  [
+   "-r",
+   true
+  ],
+  [
+   "r",
+   true
+  ],
+  [
+   "--r",
+   false
+  ],
+  [
+   "---r",
+   false
+  ],
+  [
+   "--require",
+   true
+  ],
+  [
+   "--require=x",
+   true
+  ],
+  [
+   "--perf_basic_prof",
+   true
+  ],
+  [
+   "--perf-basic-prof",
+   true
+  ],
+  [
+   "--stack-trace-limit",
+   true
+  ],
+  [
+   "--no-stack-trace-limit",
+   false
+  ],
+  [
+   "NODE_OPTIONS",
+   false
+  ],
+  [
+   "",
+   false
+  ],
+  [
+   "-",
+   false
+  ],
+  [
+   "--",
+   false
+  ],
+  [
+   "--eval",
+   false
+  ],
+  [
+   "-e",
+   false
+  ],
+  [
+   "--version",
+   false
+  ],
+  [
+   "--title",
+   true
+  ],
+  [
+   "--loader",
+   true
+  ],
+  [
+   "--import",
+   true
+  ],
+  [
+   "-C",
+   true
+  ],
+  [
+   "--conditions",
+   true
+  ],
+  [
+   "--es-module-specifier-resolution",
+   true
+  ],
+  [
+   "--inspect-brk-node",
+   false
+  ],
+  [
+   "--debug-port",
+   true
+  ],
+  [
+   "--prof-process",
+   true
+  ]
+ ],
+ "cpuUsageErrors": {
+  "str": {
+   "name": "TypeError",
+   "code": "ERR_INVALID_ARG_TYPE",
+   "message": "The \"prevValue\" argument must be of type object. Received type string ('x')"
+  },
+  "num": {
+   "name": "TypeError",
+   "code": "ERR_INVALID_ARG_TYPE",
+   "message": "The \"prevValue\" argument must be of type object. Received type number (1)"
+  },
+  "arr": {
+   "name": "TypeError",
+   "code": "ERR_INVALID_ARG_TYPE",
+   "message": "The \"prevValue\" argument must be of type object. Received an instance of Array"
+  },
+  "empty": {
+   "name": "TypeError",
+   "code": "ERR_INVALID_ARG_TYPE",
+   "message": "The \"prevValue.user\" property must be of type number. Received undefined"
+  },
+  "userstr": {
+   "name": "TypeError",
+   "code": "ERR_INVALID_ARG_TYPE",
+   "message": "The \"prevValue.user\" property must be of type number. Received type string ('1')"
+  },
+  "sysstr": {
+   "name": "TypeError",
+   "code": "ERR_INVALID_ARG_TYPE",
+   "message": "The \"prevValue.system\" property must be of type number. Received type string ('1')"
+  },
+  "sysmissing": {
+   "name": "TypeError",
+   "code": "ERR_INVALID_ARG_TYPE",
+   "message": "The \"prevValue.system\" property must be of type number. Received undefined"
+  },
+  "neg": {
+   "name": "RangeError",
+   "code": "ERR_INVALID_ARG_VALUE",
+   "message": "The property 'prevValue.user' is invalid. Received -1"
+  },
+  "negs": {
+   "name": "RangeError",
+   "code": "ERR_INVALID_ARG_VALUE",
+   "message": "The property 'prevValue.system' is invalid. Received -1"
+  },
+  "inf": {
+   "name": "RangeError",
+   "code": "ERR_INVALID_ARG_VALUE",
+   "message": "The property 'prevValue.user' is invalid. Received Infinity"
+  },
+  "nan": {
+   "name": "RangeError",
+   "code": "ERR_INVALID_ARG_VALUE",
+   "message": "The property 'prevValue.user' is invalid. Received NaN"
+  },
+  "big": {
+   "name": "RangeError",
+   "code": "ERR_INVALID_ARG_VALUE",
+   "message": "The property 'prevValue.user' is invalid. Received 9007199254740992"
+  },
+  "fn": {
+   "name": "TypeError",
+   "code": "ERR_INVALID_ARG_TYPE",
+   "message": "The \"prevValue\" argument must be of type object. Received function fn"
+  },
+  "true": {
+   "name": "TypeError",
+   "code": "ERR_INVALID_ARG_TYPE",
+   "message": "The \"prevValue\" argument must be of type object. Received type boolean (true)"
+  }
+ },
+ "threadCpuUsageErrors": {
+  "str": {
+   "name": "TypeError",
+   "code": "ERR_INVALID_ARG_TYPE",
+   "message": "The \"prevValue\" argument must be of type object. Received type string ('x')"
+  },
+  "num": {
+   "name": "TypeError",
+   "code": "ERR_INVALID_ARG_TYPE",
+   "message": "The \"prevValue\" argument must be of type object. Received type number (1)"
+  },
+  "arr": {
+   "name": "TypeError",
+   "code": "ERR_INVALID_ARG_TYPE",
+   "message": "The \"prevValue\" argument must be of type object. Received an instance of Array"
+  },
+  "empty": {
+   "name": "TypeError",
+   "code": "ERR_INVALID_ARG_TYPE",
+   "message": "The \"prevValue.user\" property must be of type number. Received undefined"
+  },
+  "userstr": {
+   "name": "TypeError",
+   "code": "ERR_INVALID_ARG_TYPE",
+   "message": "The \"prevValue.user\" property must be of type number. Received type string ('1')"
+  },
+  "sysstr": {
+   "name": "TypeError",
+   "code": "ERR_INVALID_ARG_TYPE",
+   "message": "The \"prevValue.system\" property must be of type number. Received type string ('1')"
+  },
+  "sysmissing": {
+   "name": "TypeError",
+   "code": "ERR_INVALID_ARG_TYPE",
+   "message": "The \"prevValue.system\" property must be of type number. Received undefined"
+  },
+  "neg": {
+   "name": "RangeError",
+   "code": "ERR_INVALID_ARG_VALUE",
+   "message": "The property 'prevValue.user' is invalid. Received -1"
+  },
+  "negs": {
+   "name": "RangeError",
+   "code": "ERR_INVALID_ARG_VALUE",
+   "message": "The property 'prevValue.system' is invalid. Received -1"
+  },
+  "inf": {
+   "name": "RangeError",
+   "code": "ERR_INVALID_ARG_VALUE",
+   "message": "The property 'prevValue.user' is invalid. Received Infinity"
+  },
+  "nan": {
+   "name": "RangeError",
+   "code": "ERR_INVALID_ARG_VALUE",
+   "message": "The property 'prevValue.user' is invalid. Received NaN"
+  },
+  "big": {
+   "name": "RangeError",
+   "code": "ERR_INVALID_ARG_VALUE",
+   "message": "The property 'prevValue.user' is invalid. Received 9007199254740992"
+  },
+  "fn": {
+   "name": "TypeError",
+   "code": "ERR_INVALID_ARG_TYPE",
+   "message": "The \"prevValue\" argument must be of type object. Received function fn"
+  },
+  "true": {
+   "name": "TypeError",
+   "code": "ERR_INVALID_ARG_TYPE",
+   "message": "The \"prevValue\" argument must be of type object. Received type boolean (true)"
+  }
+ },
+ "errors": {
+  "debugPortLow": {
+   "name": "RangeError",
+   "code": "ERR_OUT_OF_RANGE",
+   "message": "process.debugPort must be 0 or in range 1024 to 65535"
+  },
+  "debugPortHigh": {
+   "name": "RangeError",
+   "code": "ERR_OUT_OF_RANGE",
+   "message": "process.debugPort must be 0 or in range 1024 to 65535"
+  },
+  "debugPortNegative": {
+   "name": "RangeError",
+   "code": "ERR_OUT_OF_RANGE",
+   "message": "process.debugPort must be 0 or in range 1024 to 65535"
+  },
+  "captureUndefined": {
+   "name": "TypeError",
+   "code": "ERR_INVALID_ARG_TYPE",
+   "message": "The \"fn\" argument must be of type function or null. Received undefined"
+  },
+  "captureNumber": {
+   "name": "TypeError",
+   "code": "ERR_INVALID_ARG_TYPE",
+   "message": "The \"fn\" argument must be of type function or null. Received type number (1)"
+  },
+  "captureObject": {
+   "name": "TypeError",
+   "code": "ERR_INVALID_ARG_TYPE",
+   "message": "The \"fn\" argument must be of type function or null. Received an instance of Object"
+  },
+  "captureTwice": {
+   "name": "Error",
+   "code": "ERR_UNCAUGHT_EXCEPTION_CAPTURE_ALREADY_SET",
+   "message": "`process.setupUncaughtExceptionCapture()` was called while a capture callback was already active"
+  },
+  "loadEnvNumber": {
+   "name": "TypeError",
+   "code": "ERR_INVALID_ARG_TYPE",
+   "message": "The \"path\" argument must be of type string or an instance of Buffer or URL. Received type number (1)"
+  },
+  "loadEnvObject": {
+   "name": "TypeError",
+   "code": "ERR_INVALID_ARG_TYPE",
+   "message": "The \"path\" argument must be of type string or an instance of Buffer or URL. Received an instance of Object"
+  },
+  "loadEnvNul": {
+   "name": "TypeError",
+   "code": "ERR_INVALID_ARG_VALUE",
+   "message": "The argument 'path' must be a string, Uint8Array, or URL without null bytes. Received 'a\\x00b'"
+  },
+  "loadEnvScheme": {
+   "name": "TypeError",
+   "code": "ERR_INVALID_URL_SCHEME",
+   "message": "The URL must be of scheme file"
+  },
+  "loadEnvDirectory": {
+   "name": "TypeError",
+   "code": "ERR_INVALID_ARG_TYPE",
+   "message": "Contents of '/tmp' should be a valid string."
+  },
+  "registerUndefined": {
+   "name": "TypeError",
+   "code": "ERR_INVALID_ARG_TYPE",
+   "message": "The \"obj\" argument must be of type object. Received undefined"
+  },
+  "registerNumber": {
+   "name": "TypeError",
+   "code": "ERR_INVALID_ARG_TYPE",
+   "message": "The \"obj\" argument must be of type object. Received type number (1)"
+  },
+  "registerNull": {
+   "name": "TypeError",
+   "code": "ERR_INVALID_ARG_TYPE",
+   "message": "The \"obj\" argument must be of type object. Received null"
+  },
+  "registerArray": {
+   "name": "TypeError",
+   "code": "ERR_INVALID_ARG_TYPE",
+   "message": "The \"obj\" argument must be of type object. Received an instance of Array"
+  }
+ }
+}

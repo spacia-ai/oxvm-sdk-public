@@ -39,10 +39,8 @@ const refuse = (name: string): ((...args: unknown[]) => never) => () => {
   throw new VMError("FEATURE_NOT_AVAILABLE", `crypto.${name} is not supported in the assisted process`, { builtin: "crypto", export: name });
 };
 
-/** Real random integers and fills from platform entropy; key material and
- * certificate parsing have no synchronous platform equivalent and refuse. */
+/** Real random integers and fills from platform entropy. Certificate parsing is not provided and refuses. */
 export const cryptoExtras = Object.freeze({
   randomInt, randomFillSync,
-  X509Certificate: refuse("X509Certificate"), createPrivateKey: refuse("createPrivateKey"), createPublicKey: refuse("createPublicKey"),
-  generateKeyPairSync: refuse("generateKeyPairSync"), generateKeySync: refuse("generateKeySync"), generatePrimeSync: refuse("generatePrimeSync"),
+  X509Certificate: refuse("X509Certificate"),
 });

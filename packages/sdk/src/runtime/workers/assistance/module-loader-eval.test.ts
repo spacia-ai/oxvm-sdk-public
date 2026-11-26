@@ -21,7 +21,7 @@ async function fixture() {
     },
   }, {}, "/workspace");
   const restore: (() => void)[] = [];
-  restore.push(installExecutableStacks(loader.sources, globalThis));
+  restore.push(installExecutableStacks(loader.sources, globalThis).restore);
   return {
     reads,
     evaluate: (source: string) => loader.evaluateScript(source, (name, value) => {

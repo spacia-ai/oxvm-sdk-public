@@ -1,4 +1,7 @@
 import { EventEmitter } from "./node-streams.ts";
+import { createReadlineCallbacks, createReadlineTransaction, type NextTick, type ReadlineCallbacks, type ReadlineTransaction } from "./node-readline-callbacks.ts";
+import { createEmitKeypressEvents, type KeypressTimers } from "./node-readline-keys.ts";
+import { named, validateAbortSignal } from "./node-util-validators.ts";
 
 interface ReadableLike { on(event: string, listener: (...args: unknown[]) => void): unknown; pause?(): unknown; resume?(): unknown }
 interface WritableLike { write(chunk: unknown): unknown }
@@ -17,31 +20,68 @@ function text(value: unknown): string {
  * split at `\n`, `\r\n` and `\r`; `line`, `close`, `pause` and `resume` events,
  * `question`, `prompt`, `setPrompt`, `write` and `close` follow Node. The
  * interface is never a terminal in the assisted process. */
-/** The public shape of a readline interface: the runtime's EventEmitter plus
- * Node's methods. Declared explicitly so the exported factory's class keeps
- * its private state out of the emitted declarations. */
-export type ReadlineInterface = InstanceType<typeof EventEmitter> & {
+/** The members both readline interfaces share: the runtime's EventEmitter plus
+ * Node's methods. Declared explicitly so the exported factory's classes keep
+ * their private state out of the emitted declarations. */
+interface ReadlineInterfaceMembers {
   readonly terminal: boolean;
   line: string;
   readonly closed: boolean;
   setPrompt(prompt: unknown): void;
   getPrompt(): string;
   prompt(): void;
-  question(query: unknown, options?: unknown, callback?: unknown): void;
   write(data: unknown): void;
-  pause(): ReadlineInterface;
-  resume(): ReadlineInterface;
+  pause(): this;
+  resume(): this;
   close(): void;
   [Symbol.asyncIterator](): AsyncIterator<string, undefined>;
-};
-export interface NodeReadline {
-  readonly Interface: new (options: unknown) => ReadlineInterface;
-  readonly createInterface: (options: unknown) => ReadlineInterface;
-  readonly promises: { readonly createInterface: (options: unknown) => ReadlineInterface };
+}
+type ReadlineInterfaceBase = InstanceType<typeof EventEmitter> & ReadlineInterfaceMembers;
+/** `readline.Interface`: `question` answers through a callback. */
+export type ReadlineInterface = ReadlineInterfaceBase & { question(query: unknown, options?: unknown, callback?: unknown): void };
+/** `readline/promises.Interface`: `question` answers through a promise, rejected with an AbortError when `options.signal` aborts. */
+export type ReadlinePromisesInterface = ReadlineInterfaceBase & { question(query: unknown, options?: unknown): Promise<string> };
+/** The `readline/promises` module, also `readline.promises`. */
+export interface NodeReadlinePromises {
+  readonly Interface: new (input?: unknown, output?: unknown, completer?: unknown, terminal?: unknown) => ReadlinePromisesInterface;
+  readonly Readline: new (stream: unknown, ...rest: unknown[]) => ReadlineTransaction;
+  readonly createInterface: (input: unknown, output?: unknown, completer?: unknown, terminal?: unknown) => ReadlinePromisesInterface;
+}
+export interface NodeReadline extends ReadlineCallbacks {
+  readonly Interface: new (input: unknown, output?: unknown, completer?: unknown, terminal?: unknown) => ReadlineInterface;
+  readonly createInterface: (input: unknown, output?: unknown, completer?: unknown, terminal?: unknown) => ReadlineInterface;
+  readonly emitKeypressEvents: (stream: unknown, iface?: unknown) => void;
+  readonly promises: NodeReadlinePromises;
+}
+/** What the process owner lends the module. Without it, callbacks wait a microtask and the escape timeout uses the
+ * global timers as they are when a key arrives. */
+export interface NodeReadlineDependencies {
+  readonly nextTick?: NextTick;
+  readonly timers?: KeypressTimers;
 }
 
-export function createNodeReadline(): NodeReadline {
-  class Interface extends EventEmitter {
+function globalTimers(): KeypressTimers {
+  return { setTimeout: (callback, delay) => globalThis.setTimeout(callback, delay), clearTimeout: handle => { if (typeof handle === "number" || handle === undefined) globalThis.clearTimeout(handle); else Reflect.apply(globalThis.clearTimeout, globalThis, [handle]); } };
+}
+function abortError(cause: unknown): Error {
+  return Object.assign(new Error("The operation was aborted", { cause }), { name: "AbortError", code: "ABORT_ERR" });
+}
+
+export function createNodeReadline(dependencies: NodeReadlineDependencies = {}): NodeReadline {
+  const nextTick: NextTick = dependencies.nextTick ?? (callback => { queueMicrotask(callback); });
+  const timers = dependencies.timers;
+  let ask: (rl: InterfaceBase, query: unknown, answer: (line: string) => void) => void;
+  let cancel: (rl: InterfaceBase) => void;
+  class InterfaceBase extends EventEmitter {
+    static {
+      ask = (rl, query, answer) => {
+        if (rl.#closed) throw Object.assign(new Error("readline was closed"), { code: "ERR_USE_AFTER_CLOSE" });
+        rl.#output?.write(text(query));
+        rl.#question = answer;
+      };
+      // Node drops the pending question and ends the prompt line.
+      cancel = rl => { if (rl.#question === undefined) return; rl.#question = undefined; rl.#output?.write("\r\n"); };
+    }
     readonly terminal = false;
     #buffer = "";
     #prompt: string;
@@ -51,19 +91,22 @@ export function createNodeReadline(): NodeReadline {
     #paused = false;
     #question: ((answer: string) => void) | undefined;
     line = "";
-    constructor(options: unknown) {
+    constructor(input: unknown, output?: unknown, completer?: unknown, terminal?: unknown) {
       super();
-      const record = typeof options === "object" && options !== null ? options : {};
-      const input: unknown = Reflect.get(record, "input");
-      if (!isReadable(input)) throw Object.assign(new TypeError("The \"input\" argument must be a readable stream"), { code: "ERR_INVALID_ARG_TYPE" });
-      this.#input = input;
-      const output: unknown = Reflect.get(record, "output");
-      this.#output = isWritable(output) ? output : undefined;
+      void completer; void terminal;
+      // Node takes either one options object or the legacy positional arguments.
+      const options = typeof input === "object" && input !== null && Boolean(Reflect.get(input, "input"));
+      const record = options ? input : { input, output };
+      const source: unknown = Reflect.get(record, "input");
+      if (!isReadable(source)) throw Object.assign(new TypeError("The \"input\" argument must be a readable stream"), { code: "ERR_INVALID_ARG_TYPE" });
+      this.#input = source;
+      const sink: unknown = Reflect.get(record, "output");
+      this.#output = isWritable(sink) ? sink : undefined;
       const prompt: unknown = Reflect.get(record, "prompt");
       this.#prompt = typeof prompt === "string" ? prompt : "> ";
-      input.on("data", (chunk: unknown) => { this.#feed(text(chunk)); });
-      input.on("end", () => { if (this.#buffer !== "") { const last = this.#buffer; this.#buffer = ""; this.#emitLine(last); } this.close(); });
-      input.on("error", (error: unknown) => { this.emit("error", error); });
+      source.on("data", (chunk: unknown) => { this.#feed(text(chunk)); });
+      source.on("end", () => { if (this.#buffer !== "") { const last = this.#buffer; this.#buffer = ""; this.#emitLine(last); } this.close(); });
+      source.on("error", (error: unknown) => { this.emit("error", error); });
     }
     #feed(text: string): void {
       this.#buffer += text;
@@ -84,14 +127,6 @@ export function createNodeReadline(): NodeReadline {
     setPrompt(prompt: unknown): void { this.#prompt = text(prompt); }
     getPrompt(): string { return this.#prompt; }
     prompt(): void { this.#output?.write(this.#prompt); }
-    question(query: unknown, options?: unknown, callback?: unknown): void {
-      if (typeof options === "function") callback = options;
-      if (typeof callback !== "function") throw Object.assign(new TypeError("The \"callback\" argument must be of type function"), { code: "ERR_INVALID_ARG_TYPE" });
-      if (this.#closed) throw Object.assign(new Error("readline was closed"), { code: "ERR_USE_AFTER_CLOSE" });
-      this.#output?.write(text(query));
-      const answer = callback;
-      this.#question = value => { Reflect.apply(answer, undefined, [value]); };
-    }
     write(data: unknown): void { this.#feed(text(data)); }
     pause(): this { if (!this.#paused) { this.#paused = true; this.#input.pause?.(); this.emit("pause"); } return this; }
     resume(): this { if (this.#paused) { this.#paused = false; this.#input.resume?.(); this.emit("resume"); } return this; }
@@ -110,5 +145,39 @@ export function createNodeReadline(): NodeReadline {
       } };
     }
   }
-  return Object.freeze({ Interface, createInterface: (options: unknown): ReadlineInterface => new Interface(options), promises: Object.freeze({ createInterface: (options: unknown): ReadlineInterface => new Interface(options) }) });
+  class Interface extends InterfaceBase {
+    // Declared so `Interface.length` is 4, as Node's legacy positional constructor has it.
+    // eslint-disable-next-line @typescript-eslint/no-useless-constructor
+    constructor(input: unknown, output?: unknown, completer?: unknown, terminal?: unknown) { super(input, output, completer, terminal); }
+    question(query: unknown, options?: unknown, callback?: unknown): void {
+      if (typeof options === "function") callback = options;
+      if (typeof callback !== "function") throw Object.assign(new TypeError("The \"callback\" argument must be of type function"), { code: "ERR_INVALID_ARG_TYPE" });
+      const answer = callback;
+      ask(this, query, value => { Reflect.apply(answer, undefined, [value]); });
+    }
+  }
+  class PromisesInterface extends InterfaceBase {
+    question(query: unknown, options: unknown = {}): Promise<string> {
+      return new Promise((resolve, reject) => {
+        const signal: unknown = typeof options === "object" && options !== null || typeof options === "function" ? Reflect.get(options, "signal") : undefined;
+        const hasSignal = Boolean(signal);
+        if (!hasSignal) { ask(this, query, resolve); return; }
+        validateAbortSignal(signal, "options.signal");
+        if (signal.aborted) { reject(abortError(signal.reason)); return; }
+        const onAbort = (): void => { cancel(this); reject(abortError(signal.reason)); };
+        signal.addEventListener("abort", onAbort, { once: true });
+        ask(this, query, answer => { signal.removeEventListener("abort", onAbort); resolve(answer); });
+      });
+    }
+  }
+  named(Interface, "Interface");
+  named(PromisesInterface, "Interface");
+  const createInterface = (input: unknown, output?: unknown, completer?: unknown, terminal?: unknown): ReadlineInterface => new Interface(input, output, completer, terminal);
+  const createPromisesInterface = (input: unknown, output?: unknown, completer?: unknown, terminal?: unknown): ReadlinePromisesInterface => new PromisesInterface(input, output, completer, terminal);
+  const promises: NodeReadlinePromises = Object.freeze({ Interface: PromisesInterface, Readline: createReadlineTransaction(nextTick), createInterface: named(createPromisesInterface, "createInterface") });
+  return Object.freeze({ Interface, createInterface: named(createInterface, "createInterface"), ...createReadlineCallbacks(nextTick),
+    emitKeypressEvents: createEmitKeypressEvents(() => timers ?? globalTimers()), promises });
 }
+
+/** The `readline/promises` module of a process: the very object its `readline.promises` is, as in Node. */
+export function createNodeReadlinePromises(readline: NodeReadline): NodeReadlinePromises { return readline.promises; }

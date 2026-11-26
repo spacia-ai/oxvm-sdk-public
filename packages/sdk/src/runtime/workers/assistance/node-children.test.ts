@@ -31,6 +31,32 @@ it("keeps inherited stdio in Rust and supports Node child references", async () 
   expect(() => runtime.spawn("/bin/true", [], { windowsHide: "yes" })).toThrow();
 });
 
+it("ends a failed spawn's output streams as Node does, with no stream error", async () => {
+  // Recorded from Node.js v24.18.1 for spawn("/nonexistent/bin", ["a"]): 'error', then both outputs end and close
+  // before the child's 'close'; no stream reports an error, so a reader of stdout sees an empty stream, not a failure.
+  const runtime = createNativeChildren({ setChildEvents() {},
+    callSync: () => ({ kind: "error", errno: 2, code: "ENOENT", syscall: "spawn", path: "/missing", destination: null }),
+    call: () => Promise.resolve({ kind: "unit" }),
+  }, createAsyncContext(), {});
+  const child = runtime.spawn("/missing", ["a"]);
+  const events: string[] = [];
+  for (const [name, stream] of [["stdout", child.stdout], ["stderr", child.stderr], ["stdin", child.stdin]] as const) {
+    for (const event of ["end", "close", "error"]) stream?.on(event, () => { events.push(`${name}:${event}`); });
+  }
+  child.stdout?.on("data", () => undefined); child.stderr?.on("data", () => undefined);
+  child.on("error", () => { events.push("child:error"); });
+  const closed = Promise.withResolvers<undefined>();
+  child.on("close", () => { events.push("child:close"); closed.resolve(undefined); });
+  await closed.promise;
+  await new Promise(resolve => { setTimeout(resolve, 10); });
+  expect(events.filter(event => event.endsWith(":error"))).toEqual(["child:error"]);
+  expect(events[0]).toBe("child:error");
+  expect(events).toEqual(expect.arrayContaining(["stdout:end", "stderr:end", "stdout:close", "stderr:close", "stdin:close"]));
+  expect(events.indexOf("stdout:end")).toBeLessThan(events.indexOf("child:close"));
+  expect(events.indexOf("stderr:end")).toBeLessThan(events.indexOf("child:close"));
+  expect([child.stdout?.destroyed, child.stdin?.destroyed, child.exitCode, child.killed]).toEqual([true, true, -2, false]);
+});
+
 it("reports native spawn errno and arguments before asynchronous close without emitting exit", async () => {
   const runtime = createNativeChildren({ setChildEvents() {},
     callSync: () => ({ kind: "error", errno: 2, code: "ENOENT", syscall: "spawn", path: "/missing", destination: null }),
@@ -49,6 +75,8 @@ it("reports native spawn errno and arguments before asynchronous close without e
   child.on("close", (code, signal) => { order.push("close"); closed.resolve([code, signal]); });
   expect(await closed.promise).toEqual([-2, null]);
   expect(failure).toMatchObject({ code: "ENOENT", errno: -2, syscall: "spawn /missing", path: "/missing", spawnargs: ["one"] });
+  // Node words a failed spawn as "<syscall> <code>", not as a file system error.
+  expect(Reflect.get(Object(failure), "message")).toBe("spawn /missing ENOENT");
   expect(order).toEqual(["error", "microtask", "close"]);
   await runtime.idle();
   expect(runtime.hasPending).toBe(false);

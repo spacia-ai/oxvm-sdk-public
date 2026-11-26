@@ -31,6 +31,10 @@ import { invalidArgType } from "./node-arg-type.ts";
 import { parseDotenv } from "./node-dotenv.ts";
 import type { NodeProcess } from "./node-process.ts";
 import { unavailableNodeApi } from "./node-capability.js";
+import { createSystemErrors } from "./node-util-system.ts";
+import { MIMEParams, MIMEType } from "./node-util-mime.ts";
+import { diff } from "./node-util-diff.ts";
+import { convertProcessSignalToExitCode, extend, getCallSites, setTraceSigInt, transferableAbortController, transferableAbortSignal } from "./node-util-extras.ts";
 
 // Dependency declarations contain permissive parameter types. Quarantine the
 // namespace and expose only validated functions used by the admitted graph.
@@ -194,10 +198,15 @@ export function createNodeUtil(process: Pick<NodeProcess, "noDeprecation" | "emi
       if (hasPrototype) Reflect.set(deprecated, "prototype", prototype);
       Object.defineProperty(deprecated, "length", { ...Object.getOwnPropertyDescriptor(fn, "length") });
     }
+    // Node's wrapper is always called `deprecated`; minification must not rename it.
+    Object.defineProperty(deprecated, "name", { value: "deprecated", configurable: true });
     return deprecated;
   }
   return { ...nodeUtil, types: exactPromiseQueries ? exactPromiseUtilTypes : nodeUtilTypes, deprecate, debuglog, debug: debuglog, callbackify,
     aborted: () => unavailableNodeApi("util.aborted"),
+    ...createSystemErrors(), MIMEType, MIMEParams, diff, getCallSites, convertProcessSignalToExitCode, transferableAbortController, transferableAbortSignal, setTraceSigInt,
+    _extend: deprecate(extend, "The `util._extend` API is deprecated. Please use Object.assign() instead.", "DEP0060"),
+    isArray: deprecate(Array.isArray, "The `util.isArray` API is deprecated. Please use `Array.isArray()` instead.", "DEP0044"),
     styleText: createStyleText(() => Reflect.get(nodeUtil.inspect, "colors"), process, value => nodeUtil.inspect(value)),
     toUSVString: (value: unknown): string => String(value).toWellFormed(),
     parseEnv: function parseEnv(content: unknown): Record<string, string> {

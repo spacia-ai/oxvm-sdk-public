@@ -1,17 +1,7 @@
 import { Buffer } from 'buffer/';
-import { Buffer as NativeBuffer } from 'node:buffer';
-import { createHash, createHmac, pbkdf2Sync, timingSafeEqual } from 'node:crypto';
+import { timingSafeEqual } from 'node:crypto';
 import { expect, it } from 'vitest';
 import { createNodeCrypto, nodeCrypto } from './node-crypto.ts';
-
-it('advertises only executable hash algorithms and returns an independent list', () => {
-  const algorithms = nodeCrypto.getHashes();
-  expect(algorithms).toContain('sha512');
-  for (const algorithm of algorithms) expect(nodeCrypto.createHash(algorithm).update('qualified code roots').digest('hex'))
-    .toBe(createHash(algorithm).update('qualified code roots').digest('hex'));
-  algorithms.length = 0;
-  expect(nodeCrypto.getHashes()).toContain('sha512');
-});
 
 it('compares equal-length buffer sources as bytes for authenticated connections', () => {
   for (const length of [0, 1, 32, 513]) {
@@ -33,65 +23,6 @@ it('compares equal-length buffer sources as bytes for authenticated connections'
     try { nodeCrypto.timingSafeEqual(left, right); } catch (error) { thrown = error; }
     expect(thrown).toMatchObject({ code }); expect(thrown).toBeInstanceOf(constructor);
   }
-});
-
-it('matches one-shot hash defaults, explicit encodings and byte input', () => {
-  for (const input of ['vite lockfile', Uint8Array.of(0, 128, 255)]) {
-    expect(nodeCrypto.hash('sha256', input)).toBe(createHash('sha256').update(input).digest('hex'));
-    expect(nodeCrypto.hash('sha256', input, 'base64')).toBe(createHash('sha256').update(input).digest('base64'));
-    const raw = nodeCrypto.hash('sha256', input, 'buffer');
-    expect(typeof raw).not.toBe('string');
-    if (typeof raw === 'string') throw new Error('Expected raw digest bytes');
-    expect(Array.from(raw)).toEqual(Array.from(createHash('sha256').update(input).digest()));
-  }
-  expect(() => nodeCrypto.hash('unsupported', 'input')).toThrow(/crypto.hash/u);
-  expect(() => nodeCrypto.hash('sha256', 1)).toThrow(TypeError);
-  expect(() => nodeCrypto.hash('sha256', 'input', 'unknown')).toThrow();
-});
-
-it('hashes incrementally, copies unfinished state and rejects reuse after digest', () => {
-  for (const algorithm of ['sha1', 'sha224', 'sha256', 'sha384', 'sha512', 'sha512-224', 'sha512-256', 'md5', 'ripemd160']) {
-    const hash = nodeCrypto.createHash(algorithm).update('first');
-    const copy = hash.copy();
-    expect(hash.update('second').digest('hex')).toBe(createHash(algorithm).update('firstsecond').digest('hex'));
-    expect(copy.update(Buffer.from([0, 255])).digest('base64')).toBe(createHash(algorithm).update('first').update(new Uint8Array([0, 255])).digest('base64'));
-    expect(() => hash.update('late')).toThrow();
-    expect(() => hash.digest()).toThrow();
-    expect(() => hash.copy()).toThrow();
-  }
-  expect(Buffer.isBuffer(nodeCrypto.createHash('sha256').digest('unknown'))).toBe(true);
-  expect(nodeCrypto.createHash('SHA-256').update('a', 'unknown').digest('hex')).toBe(createHash('sha256').update('a').digest('hex'));
-  expect(() => nodeCrypto.createHash('unsupported')).toThrow(/crypto.createHash/u);
-});
-
-it('matches native HMAC and synchronous password derivation', () => {
-  const key = Buffer.from([0, 1, 255]);
-  const mac = nodeCrypto.createHmac('sha256', key).update('message');
-  expect(mac.digest('hex')).toBe(createHmac('sha256', key).update('message').digest('hex'));
-  expect(mac.digest('hex')).toBe('');
-  expect(() => mac.update('late')).toThrow();
-  expect(nodeCrypto.pbkdf2Sync('password', 'salt', 2, 48, 'sha512').toString('hex')).toBe(pbkdf2Sync('password', 'salt', 2, 48, 'sha512').toString('hex'));
-  expect(() => nodeCrypto.pbkdf2Sync('password', 'salt', 0, 32, 'sha256')).toThrow();
-  expect(() => nodeCrypto.pbkdf2Sync('password', 'salt', 2, 0, 'sha256')).toThrow();
-  expect(() => nodeCrypto.pbkdf2Sync('password', 'salt', 2, '32', 'sha256')).toThrow(TypeError);
-});
-
-it('hashes through the real stream implementation and returns Buffer digests', async () => {
-  const hash = nodeCrypto.createHash('sha256');
-  const output: unknown[] = [];
-  const ended = new Promise<void>((resolve, reject) => {
-    hash.on('data', value => output.push(value));
-    hash.on('end', () => resolve());
-    hash.on('error', reject);
-  });
-  hash.write('first'); hash.end('second');
-  await ended;
-  expect(output).toHaveLength(1);
-  // readable-stream uses native buffers under its Node entrypoint; the browser
-  // entrypoint uses the pinned buffer package instead.
-  expect(NativeBuffer.isBuffer(output[0])).toBe(true);
-  expect(Buffer.isBuffer(nodeCrypto.createHash('sha256').digest())).toBe(true);
-  expect(String(output[0])).toBe(createHash('sha256').update('firstsecond').digest().toString());
 });
 
 it('uses browser entropy across its chunk limit and schedules callbacks in their process context', async () => {

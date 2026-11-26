@@ -2,7 +2,9 @@ import * as compilerNamespace from "@swc/wasm-web";
 import { exactKeys, record } from "../../decode.js";
 import { serializeUnknownError, VMError } from "../../errors.js";
 import { decodeJSIdentity, descriptor, JS_PROCESS_PROTOCOL_VERSION, protocol } from "../../js-process/codec.js";
-import { syncFiles } from "../../js-process/files.js";
+import { asyncFiles, syncFiles } from "../../js-process/files.js";
+import { processSockets } from "../../../wasm/runner/net-ports.js";
+import { datagramSockets } from "../../js-process/sockets.js";
 import { atFiles } from "../../js-process/at-operations.js";
 import { clockHost, randomHost } from "../../js-process/clock-random.js";
 import { fileSystemStats } from "../../js-process/filesystem-stat.js";
@@ -123,6 +125,9 @@ async function run(input: unknown): Promise<void> {
       modulePathInfo: path => nativeModulePathInfo(client, path),
       wasiHost: { fs: files, at: atFiles(client), clock: clockHost(client), random: randomHost(client) },
       fileSystems: fileSystemStats(client),
+      dnsSockets: processSockets(client, asyncFiles(client)),
+      dgramSockets: datagramSockets(client),
+      ownership: { callSync: operation => { client.sync(operation); }, call: operation => client.call(operation) },
       workerThreads: (context, scheduler, process) => {
         bridge.values.bindAsyncContext(context); bridge.values.bindNativeImmediate(run => { scheduler.nativeImmediate(run); });
         return workers = new NativeWorkers({ client, bridge, identity, control: threadControl, thread, metadata: thread === null ? null : threadData, ...(autoSelectFamily === undefined ? {} : { autoSelectFamily }) }, context, scheduler, process);

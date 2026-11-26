@@ -6,6 +6,7 @@ import { fileURLToPath } from "./node-url.ts";
 import { resolvePackageTarget } from "./package-target.ts";
 import { isNodeBuiltin } from "./commonjs.ts";
 import { lateFailureError } from "../../js-process/late-failure.ts";
+import { ModuleLookup, type FoundModulePath, type LocatedModulePath } from "./node-module-paths.ts";
 
 interface GuestModuleFiles {
   readFileSync(path: string, encoding: "utf8"): unknown;
@@ -21,7 +22,7 @@ function frozenEntry(name: string): boolean {
 /** Linux owns lookups. Rust publishes the frozen roots (ADR 0026); only metadata inside their
  * frozen entries survives a call, and installed code outside every root is refused. */
 export function createGuestModules(files: GuestModuleFiles, selected?: ModuleDependencyIdentity, loadNative?: (path: string) => unknown, pathInfo?: (path: string) => ModulePathInfo,
-  conditions: readonly string[] = []): LocalModuleFiles {
+  conditions: readonly string[] = []): LocalModuleFiles & { readonly lookup: ModuleLookup } {
   const dependencies = selected === undefined ? undefined : Object.freeze({ ...selected });
   const roots = dependencies !== undefined && "profile" in dependencies ? dependencies.roots : undefined;
   const node = dependencies === undefined || !("profile" in dependencies) || dependencies.runtime === "node";
@@ -126,8 +127,8 @@ export function createGuestModules(files: GuestModuleFiles, selected?: ModuleDep
     }
     return undefined;
   }
-  function commonjs(path: string): string | undefined {
-    const direct = file(path);
+  function commonjs(path: string, directoryOnly = false): string | undefined {
+    const direct = directoryOnly ? undefined : file(path);
     if (direct !== undefined) return direct;
     if (stat(path)?.isDirectory() !== true) return undefined;
     const main = metadata(`${path}/package.json`)?.["main"];
@@ -235,7 +236,36 @@ export function createGuestModules(files: GuestModuleFiles, selected?: ModuleDep
       code: kind === "require" ? "MODULE_NOT_FOUND" : "ERR_MODULE_NOT_FOUND",
     });
   }
+  /** `Module._findPath` for one search directory: the steps `resolve` takes for a `require`, without its walk. */
+  function findPath(request: string, directory: string, directoryOnly: boolean): FoundModulePath | undefined {
+    const named = directory === "" ? null : /^((?:@[^/\\%]+\/)?[^./\\%][^/\\%]*)(\/.*)?$/u.exec(request);
+    if (named !== null && named[1] !== undefined) {
+      const root = paths.join(directory, named[1]);
+      const info = metadata(paths.join(root, "package.json"));
+      if (info?.["exports"] !== undefined && info["exports"] !== null) {
+        packagePath(root);
+        const subpath = `.${named[2] ?? ""}`;
+        try {
+          const found = mapped(root, info["exports"], subpath, "require", false, 0);
+          return found === undefined ? undefined : { path: found, exports: true };
+        } catch (error) {
+          // Node's wording, which a caller of `Module._findPath` reads.
+          if (error instanceof Error && "code" in error && error.code === "ERR_PACKAGE_PATH_NOT_EXPORTED") error.message = `Package subpath '${subpath}' is not defined by "exports" in ${root}/package.json`;
+          throw error;
+        }
+      }
+    }
+    const found = commonjs(paths.resolve(directory === "" ? "/" : directory, request), directoryOnly);
+    return found === undefined ? undefined : { path: found, exports: false };
+  }
+  function locate(path: string): LocatedModulePath | undefined {
+    const info = stat(path);
+    if (info?.isDirectory() === true) return { kind: "directory", path };
+    if (info?.isFile() !== true) return undefined;
+    return { kind: "file", path: "canonical" in info ? info.canonical : files.realpathSync(path) };
+  }
   return {
+    lookup: new ModuleLookup(findPath, locate),
     ...(loadNative === undefined ? {} : { loadNative }),
     ...(dependencies === undefined ? {} : { dependencies }),
     resolve,

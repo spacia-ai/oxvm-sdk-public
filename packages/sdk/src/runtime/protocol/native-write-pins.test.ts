@@ -4,7 +4,7 @@ import { PROTOCOL_VERSION } from "./common.js";
 import { decodeNativeGraphVersion, NATIVE_LOGICAL_CHECKPOINT_VERSION, supportsNativeCheckpointVersion } from "./native-capture.js";
 
 it("retains historical owners, ordered urgent notifications and host attention", () => {
-  expect(USERSPACE_API_VERSION).toBe(153);
+  expect(USERSPACE_API_VERSION).toBe(154);
   expect(PROTOCOL_VERSION).toBe(187);
   expect(supportsNativeCheckpointVersion(622)).toBe(true);
   expect(supportsNativeCheckpointVersion(180)).toBe(true);

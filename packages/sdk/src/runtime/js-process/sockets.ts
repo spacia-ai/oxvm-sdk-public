@@ -53,6 +53,15 @@ export const streamSocket = {
   shutdown: (fd: number, direction: "read" | "write" | "both"): LinuxOperation<void> => operation(48, new Writer().u64(fd).u8(direction === "read" ? 0 : direction === "write" ? 1 : 2), noValue),
 } as const;
 
+/** OXJR 51 getsockname(fd), or 52 getpeername(fd): 128 bytes of address room, then the u32 length Linux wrote. */
+function socketName(fd: number, peer: boolean): LinuxOperation<LinuxSocketAddress> {
+  return operation(peer ? 52 : 51, new Writer().u64(fd), result => {
+    if (result.value !== 0n || result.bytes.byteLength !== 132) protocol("Invalid Linux socket name result");
+    const length = new DataView(result.bytes.buffer, result.bytes.byteOffset, result.bytes.byteLength).getUint32(128, true);
+    if (length > 128) protocol("Oversized Linux socket address"); return decodeAddress(result.bytes.subarray(0, length));
+  });
+}
+
 export function sockets(client: LinuxClient, files: LinuxFiles): LinuxSockets {
   return {
     socket: family => client.call(streamSocket.socket(family)),
@@ -60,11 +69,7 @@ export function sockets(client: LinuxClient, files: LinuxFiles): LinuxSockets {
     bind: (fd, address) => client.call(operation(49, new Writer().u64(fd).blob(encodeAddress(address)), noValue)),
     listen: (fd, backlog = 128) => client.call(operation(50, new Writer().u64(fd).u32(backlog), noValue)),
     accept: (fd, options) => client.call(operation(43, new Writer().u64(fd), result => descriptor(value(result))), options?.signal),
-    address: (fd, peer = false) => client.call(operation(peer ? 52 : 51, new Writer().u64(fd), result => {
-      if (result.value !== 0n || result.bytes.byteLength !== 132) protocol("Invalid Linux socket name result");
-      const length = new DataView(result.bytes.buffer, result.bytes.byteOffset, result.bytes.byteLength).getUint32(128, true);
-      if (length > 128) protocol("Oversized Linux socket address"); return decodeAddress(result.bytes.subarray(0, length));
-    })),
+    address: (fd, peer = false) => client.call(socketName(fd, peer)),
     shutdown: (fd, direction) => client.call(streamSocket.shutdown(fd, direction)),
     read: files.read.bind(files), write: files.write.bind(files), close: files.close.bind(files),
   };
@@ -98,3 +103,56 @@ export const datagram = {
       return { bytes: bytes.slice(), source: length === 0 ? null : decodeAddress(source) };
     }),
 } as const;
+
+/**
+ * The operations of a program's own UDP socket (`node:dgram`), each on its Linux number and answered by the socket owner
+ * that serves a guest's: bind 49, connect 42 (an AF_UNSPEC address dissolves the association), getsockname 51 and
+ * getpeername 52, setsockopt 54 with a four-byte integer value, and sendto 44 with or without a destination.
+ */
+export const datagramSocket = {
+  bind: (fd: number, address: LinuxSocketAddress): LinuxOperation<void> => operation(49, new Writer().u64(fd).blob(encodeAddress(address)), noValue),
+  connect: streamSocket.connect,
+  /** connect(fd, { sa_family: AF_UNSPEC }): the socket has no peer again. */
+  disconnect: (fd: number): LinuxOperation<void> => operation(42, new Writer().u64(fd).blob(new Uint8Array(16)), noValue),
+  name: socketName,
+  /** setsockopt(fd, level, option, &value, 4): the value is one 32-bit integer, so an option that takes a structure has no form here. */
+  setOption: (fd: number, level: number, option: number, value: number): LinuxOperation<void> =>
+    operation(54, new Writer().u64(fd).u32(level).u32(option).u32(value >>> 0), noValue),
+  /** sendto(fd, bytes, MSG_NOSIGNAL [| MSG_DONTWAIT], destination): without a destination, to the connected peer. */
+  send: (fd: number, bytes: Uint8Array, destination: LinuxSocketAddress | null, dontWait: boolean): LinuxOperation<number> => {
+    const payload = new Writer().u64(fd).blob(bytes).u64(MSG_NOSIGNAL | (dontWait ? MSG_DONTWAIT : 0));
+    return operation(44, destination === null ? payload : payload.blob(encodeAddress(destination)), result => {
+      const count = value(result); if (count > bytes.byteLength) protocol("Invalid datagram send result"); return count;
+    });
+  },
+} as const;
+
+/** A process's UDP sockets in both call styles: what must answer at once is synchronous, what may wait is not. */
+export interface DatagramSockets {
+  open(family: "ipv4" | "ipv6"): number;
+  bind(fd: number, address: LinuxSocketAddress): void;
+  connect(fd: number, address: LinuxSocketAddress): void;
+  disconnect(fd: number): void;
+  name(fd: number, peer: boolean): LinuxSocketAddress;
+  setOption(fd: number, level: number, option: number, value: number): void;
+  /** sendto with MSG_DONTWAIT: the bytes sent, or EAGAIN when the datagram would have to wait. */
+  sendNow(fd: number, bytes: Uint8Array, destination: LinuxSocketAddress | null): number;
+  send(fd: number, bytes: Uint8Array, destination: LinuxSocketAddress | null): Promise<number>;
+  /** Waits for one datagram; aborting the signal cancels the wait. */
+  receive(fd: number, max: number, signal: AbortSignal): Promise<ReceivedDatagram>;
+  close(fd: number): Promise<void>;
+}
+export function datagramSockets(client: Pick<LinuxClient, "sync" | "call">): DatagramSockets {
+  return {
+    open: family => client.sync(datagram.socket(family)),
+    bind: (fd, address) => { client.sync(datagramSocket.bind(fd, address)); },
+    connect: (fd, address) => { client.sync(datagramSocket.connect(fd, address)); },
+    disconnect: fd => { client.sync(datagramSocket.disconnect(fd)); },
+    name: (fd, peer) => client.sync(datagramSocket.name(fd, peer)),
+    setOption: (fd, level, option, value) => { client.sync(datagramSocket.setOption(fd, level, option, value)); },
+    sendNow: (fd, bytes, destination) => client.sync(datagramSocket.send(fd, bytes, destination, true)),
+    send: (fd, bytes, destination) => client.call(datagramSocket.send(fd, bytes, destination, false)),
+    receive: (fd, max, signal) => client.call(datagram.receiveFrom(fd, max), signal),
+    close: fd => client.call(operation(3, new Writer().u64(fd), noValue)),
+  };
+}

@@ -3,18 +3,18 @@
 // verifies: engineReleaseId is the SHA-256 of release.json's exact bytes, which are
 // JSON.stringify(engineRelease, null, 2) followed by one newline. engineLicense identifies the
 // release's LICENSE, which release.json does not cover.
-export const engineReleaseId = "c93ce8b562e00762d507cb5f97c22cf568402cba37420e9a6aa121231eda85ec";
+export const engineReleaseId = "d90e35b9b32031839270ca4dca1f85bfa5f03de59a89cb44aba92eeac9212d81";
 export const engineRelease = {
   "schemaVersion": 5,
   "engineSource": {
-    "commit": "2ff397a9228890ffea07b34fbe005a8a1ab92c01",
+    "commit": "7fa6fed7e7bae5d393b61e227174d8e5b571810a",
     "dirty": false,
-    "nativeInputsSHA256": "bbdcd6115ad633bb4f76e5d3a31badc14339e1f07b42f903785e3d3881245354"
+    "nativeInputsSHA256": "32524f5d5f8ed0e59185f28733f60e886d9ba1257dd34f0bd16e52be248523d3"
   },
   "identities": {
     "coreApi": 19,
     "jitAbi": 96,
-    "userspaceApi": 153,
+    "userspaceApi": 154,
     "netstackApi": 2,
     "tlsApi": 2
   },
@@ -45,8 +45,8 @@ export const engineRelease = {
     {
       "name": "oxidevm_userspace.wasm",
       "mode": "userspace",
-      "bytes": 31742512,
-      "sha256": "e2f67f3417f713fbf00932bb923c9b4618c7e0e25e3614eadc9746ccd8caf82f"
+      "bytes": 31743298,
+      "sha256": "d3aa60b075fb2c1d24673f33484c9c646415b5fabc59decb5194f107b585d7ad"
     },
     {
       "name": "oxidevm_tls.wasm",
@@ -61,20 +61,12 @@ export const engineLicense = {
   "sha256": "a1285f18dda39e23495b2c61247b47245e075f29112ff412a4c7300615528c9a"
 } as const;
 export const engineDownload = {
-  "kind": "github-release-assets",
-  "release": "engine-c93ce8b562e00762d507cb5f97c22cf568402cba37420e9a6aa121231eda85ec",
-  "assets": {
-    "release.json": "https://api.github.com/repos/spacia-ai/oxvm-sdk/releases/assets/792265433",
-    "LICENSE": "https://api.github.com/repos/spacia-ai/oxvm-sdk/releases/assets/792265534",
-    "oxidevm_core.wasm": "https://api.github.com/repos/spacia-ai/oxvm-sdk/releases/assets/792265624",
-    "oxidevm_core_shared.wasm": "https://api.github.com/repos/spacia-ai/oxvm-sdk/releases/assets/792265759",
-    "oxidevm_netstack.wasm": "https://api.github.com/repos/spacia-ai/oxvm-sdk/releases/assets/792265868",
-    "oxidevm_userspace.wasm": "https://api.github.com/repos/spacia-ai/oxvm-sdk/releases/assets/792265950",
-    "oxidevm_tls.wasm": "https://api.github.com/repos/spacia-ai/oxvm-sdk/releases/assets/792266160"
-  }
+  "kind": "cdn",
+  "release": "engine-d90e35b9b32031839270ca4dca1f85bfa5f03de59a89cb44aba92eeac9212d81",
+  "baseUrl": "https://cdn.oxvm.dev/engine/d90e35b9b32031839270ca4dca1f85bfa5f03de59a89cb44aba92eeac9212d81/"
 } as const;
 export const engineCompliance: unknown = {
-  "url": "https://cdn.oxvm.dev/engine/c93ce8b562e00762d507cb5f97c22cf568402cba37420e9a6aa121231eda85ec/compliance/4a356e42942d8d0a7abc1690d670de9e63d826e1b3a94c2fc7531a8774f26261/compliance.json",
+  "url": "https://cdn.oxvm.dev/engine/d90e35b9b32031839270ca4dca1f85bfa5f03de59a89cb44aba92eeac9212d81/compliance/af80db1693287c45bf9467d0a66e73fa67b48949b934e0d478bce5db603e01cb/compliance.json",
   "bytes": 746,
-  "sha256": "4a356e42942d8d0a7abc1690d670de9e63d826e1b3a94c2fc7531a8774f26261"
+  "sha256": "af80db1693287c45bf9467d0a66e73fa67b48949b934e0d478bce5db603e01cb"
 };

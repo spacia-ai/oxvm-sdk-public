@@ -1,0 +1,2437 @@
+{
+ "//": "Recorded from Node.js v24.18.1 with docker run --rm -v $PWD:/w node:24.18.1-alpine node /w/<script> (the scripts under \"recorder\"; rec-dep.cjs ran once more with --pending-deprecation). Each transcript drives a real REPL through PassThrough streams with terminal: false: a step is [line written, output it produced].",
+ "recorder": {
+  "rec-repl.cjs": "const repl = require('repl'); const { PassThrough } = require('stream'); const fs = require('fs'); const util = require('util');\nfunction shape(target) { return Object.fromEntries(Reflect.ownKeys(target).map(key => { const d = Object.getOwnPropertyDescriptor(target, key), v = d.value; return [String(key), [typeof v, typeof v === 'function' ? v.name : null, typeof v === 'function' ? v.length : null, d.enumerable, d.writable ?? null, d.configurable, typeof d.get, typeof d.set]]; })); }\nfunction outcome(run) { try { const v = run(); return { ok: v === undefined ? '$undefined' : v }; } catch (e) { return { error: { name: e.name, code: e.code, message: e.message, ctor: e.constructor.name } }; } }\nconst tick = () => new Promise(r => setTimeout(r, 15));\nasync function transcript(options, lines, setup) {\n  const input = new PassThrough(), output = new PassThrough(); let text = ''; output.on('data', d => { text += d; });\n  const events = [];\n  const server = repl.start({ input, output, terminal: false, ...options });\n  server.on('exit', () => events.push('exit')); server.on('reset', () => events.push('reset')); server.on('close', () => events.push('close'));\n  if (setup) setup(server, output);\n  await tick(); const steps = [['', text]]; text = '';\n  for (const line of lines) { input.write(line + '\\n'); await tick(); steps.push([line, text]); text = ''; }\n  if (!server.closed) { input.end(); await tick(); steps.push(['$end', text]); }\n  return { steps, events };\n}\n(async () => {\n  const out = { node: process.version };\n  out.keys = Object.keys(repl); out.shape = shape(repl);\n  out.symbols = { sloppy: String(repl.REPL_MODE_SLOPPY), strict: String(repl.REPL_MODE_STRICT) };\n  out.builtinModules = repl.builtinModules; out.sameList = repl.builtinModules === repl._builtinLibs;\n  out.moduleBuiltins = require('module').builtinModules;\n  out.writer = { name: repl.writer.name, length: repl.writer.length, optionsKeys: Object.keys(repl.writer.options), options: repl.writer.options, defaults: util.inspect.defaultOptions, sample: repl.writer({ a: [1, { b: new Map([[1, 2]]) }] }) };\n  out.Recoverable = { name: repl.Recoverable.name, length: repl.Recoverable.length, proto: Object.getPrototypeOf(repl.Recoverable) === SyntaxError, protoShape: shape(repl.Recoverable.prototype),\n    instance: (() => { const inner = new SyntaxError('inner'); const r = new repl.Recoverable(inner); return { isSyntax: r instanceof SyntaxError, isError: r instanceof Error, own: Reflect.ownKeys(r), errSame: r.err === inner, name: r.name, message: r.message, stack: typeof r.stack, tag: Object.prototype.toString.call(r), isNative: util.types.isNativeError(r) }; })(),\n    call: outcome(() => repl.Recoverable(1)) };\n  out.REPLServer = { name: repl.REPLServer.name, length: repl.REPLServer.length, protoIsInterface: Object.getPrototypeOf(repl.REPLServer) === require('readline').Interface, protoShape: shape(repl.REPLServer.prototype) };\n  out.start = { name: repl.start.name, length: repl.start.length };\n  out.isValidSyntax = ['1+', 'a b', '{a:1}', 'await 1', 'x =', ''].map(s => [s, repl.isValidSyntax(s)]);\n  // instance\n  {\n    const input = new PassThrough(), output = new PassThrough(); output.resume();\n    const s = repl.start({ input, output, terminal: false, useGlobal: true });\n    out.instance = { ownKeys: Reflect.ownKeys(s).map(String).filter(k => !k.startsWith('_events') ), shapeSubset: Object.fromEntries(['useColors', 'useGlobal', 'ignoreUndefined', 'replMode', 'underscoreAssigned', 'last', 'underscoreErrAssigned', 'lastError', 'breakEvalOnSigint', 'editorMode', 'allowBlockingCompletions', 'terminal', 'lines', 'commands', 'writer', 'eval', 'context', '_initialPrompt', 'inputStream', 'outputStream', 'input', 'output', 'completer', 'line', 'history'].map(k => { const d = Object.getOwnPropertyDescriptor(s, k); return [k, d ? [typeof d.value, d.enumerable, d.writable ?? null, d.configurable, typeof d.get] : null]; })),\n      commands: Object.keys(s.commands), commandsProto: Object.getPrototypeOf(s.commands), commandShape: Object.fromEntries(Object.entries(s.commands).map(([k, v]) => [k, [Object.keys(v), v.help, v.action.name, v.action.length]])),\n      contextIsGlobal: s.context === globalThis, writerIsDefault: s.writer === repl.writer, replMode: String(s.replMode), evalName: s.eval.name, evalLength: s.eval.length, prompt: s.getPrompt(), initialPrompt: s._initialPrompt, lines: s.lines, linesLevel: s.lines.level,\n      underscoreDesc: (() => { const d = Object.getOwnPropertyDescriptor(globalThis, '_'); return [typeof d.get, typeof d.set, d.enumerable, d.configurable]; })(),\n      requireGlobal: typeof globalThis.require, moduleGlobal: typeof globalThis.module, fsDesc: (() => { const d = Object.getOwnPropertyDescriptor(globalThis, 'fs'); return d ? [typeof d.get, typeof d.set, d.enumerable, d.configurable] : null; })(),\n      defineCommand: { bad: outcome(() => s.defineCommand('x', {})), badNull: outcome(() => s.defineCommand('x', null)), fn: outcome(() => { s.defineCommand('y', function yy() {}); return Object.keys(s.commands.y); }), ret: outcome(() => s.defineCommand('z', { help: 'h', action() {} })) },\n      displayPromptRet: outcome(() => s.displayPrompt()), clearRet: outcome(() => s.clearBufferedCommand()), setPromptRet: outcome(() => s.setPrompt('>> ')), afterSetPrompt: [s.getPrompt(), s._initialPrompt],\n    };\n    s.close(); await tick();\n  }\n  out.startErrors = {\n    sigintEval: outcome(() => repl.start({ input: new PassThrough(), output: new PassThrough(), breakEvalOnSigint: true, eval() {} })),\n  };\n  const T = {};\n  console.error(\"basics\"); T.basics = await transcript({ useGlobal: true }, ['1 + 1', \"'a'\", 'undefined', 'null', '{a: 1}', '{a: 1};', '[1, 2, 3]', 'var x = 5', 'x', 'let y = 2', 'y', 'const z = 3', 'z', 'function f() { return 7 }', 'f()', 'class K { m() {} }', 'new K()', '', '   ', '.5', 'x = 6', 'typeof _', \"Symbol('s')\", '(function named() {})', '({}).toString()', '// just a comment', '1; 2; 3']);\n  console.error(\"multiline\"); T.multiline = await transcript({ useGlobal: true }, ['function g() {', '  return 41 + 1', '}', 'g()', 'var o = {', 'a: 1,', 'b: [', '2] }', 'o', '`line1', 'line2`', '/* open', 'still */ 9', \"'ab\\\\\", \"cd'\", '[1,', '.break', '1 +', '.clear', 'if (true) {', '}', '(', ')', 'try {', '} catch {}', 'do', '8', 'while (false)', '\"unterminated', 'x.', 'y', 'var', 'q1 = 3', '1 +', '', '2']);\n  console.error(\"underscore\"); T.underscore = await transcript({ useGlobal: true }, ['10', '_ + 1', '_', 'undefined', '_', '_ = 5', '99', '_', \"throw new Error('boom')\", '_error.message', '_error = 1', \"throw new Error('again')\", '_error']);\n  console.error(\"errors\"); T.errors = await transcript({ useGlobal: true }, [\"throw new Error('x')\", 'function thrower() { throw new TypeError(\"deep\") }', 'thrower()', 'function outer() { thrower() }', 'outer()', 'throw 1', \"throw 'str'\", 'throw { a: 1 }', 'throw null', 'throw undefined', 'null.x', 'nope_not_defined', \"new Error('value')\", \"throw Object.assign(new Error('with code'), { code: 'E_X' })\", 'class MyErr extends Error {}; throw new MyErr(\"mine\")', \"throw new RangeError('multi\\\\nline')\", \"var e2 = new Error('nostack'); e2.stack = undefined; throw e2\", \"throw Object.assign(new Error('named'), { name: 'Custom' })\", \"[1].map(() => { throw new Error('in cb') })\", 'JSON.parse(\"{\")', \"throw new SyntaxError('manual')\"]);\n  console.error(\"syntax\"); T.syntax = await transcript({ useGlobal: true }, ['1 +* 2', 'var 1', ')', 'let let = 1', 'a b', 'function () {}', '1 2', \"x = 'abc\", 'foo(1,, 2)', '}', '2e', 'import x from \"y\"', 'class { }', 'return 1', 'let dup1 = 1', 'let dup1 = 2', 'const c9 = 1', 'c9 = 2', 'var var1 = 1; var var1 = 2']);\n  const tmp = '/w/scratch'; fs.rmSync(tmp, { recursive: true, force: true }); fs.mkdirSync(tmp); fs.writeFileSync(tmp + '/load.js', 'var loaded = 40\\nfunction lf() {\\n  return loaded + 2\\n}\\nlf()\\n'); fs.mkdirSync(tmp + '/dir');\n  console.error(\"commands\"); T.commands = await transcript({ useGlobal: true }, ['.help', '.nope', '.nope arg', 'var s1 = 1', 's1 + 1', 'function ff() {', 'return 1', '}', `.save ${tmp}/saved.js`, '.save', `.save ${tmp}/missing/dir/x.js`, `.load ${tmp}/load.js`, 'loaded', '.load', `.load ${tmp}/nofile.js`, `.load ${tmp}/dir`, '.editor', '.hello World', '..x', '.1 + 1', '. help', '.help extra', '.break', '.exit', '5']);\n  console.error(\"commandsSaved\"); T.commandsSaved = fs.readFileSync(tmp + '/saved.js', 'utf8');\n  console.error(\"customCommand\"); T.customCommand = await transcript({ useGlobal: true }, ['.hello World', '.help', '.bare', 'function h() {', '.hello mid', '}', '.exit now'], s => { s.defineCommand('hello', { help: 'Say hello', action(name) { this.clearBufferedCommand(); this.output.write(`Hello, ${name}!\\n`); this.displayPrompt(); } }); s.defineCommand('bare', function () { this.output.write('bare\\n'); this.displayPrompt(); }); });\n  console.error(\"await\"); T.await = await transcript({ useGlobal: true }, ['await 1', 'await Promise.resolve(5)', 'const r1 = await Promise.resolve(3)', 'r1', 'var r2 = await 2, r3 = 4', 'r2 + r3', \"await Promise.reject(new Error('rej'))\", 'let [d1, { d2 }] = await [1, { d2: 2 }]', 'd1 + d2', 'async function af() { return 9 }', 'await af()', 'function fa() { return 1 }; await fa()', 'fa()', 'class CA { }; await 0', 'typeof CA', 'await', '(await 1) + (await 2)', 'await 1; 2', 'await (async () => { throw 7 })()', 'for await (const v of [1, 2]) v', 'if (await true) { 3 }', 'const obj2 = { p: await Promise.resolve({ value: 1 }) }; obj2', \"await new Promise(r => setTimeout(() => r('late'), 5))\", '_', 'await 1 +', '2', 'awaitx', 'var await1 = 1', 'return await 1', 'let await', 'await undefined']);\n  console.error(\"strict\"); T.strict = await transcript({ useGlobal: true, replMode: repl.REPL_MODE_STRICT }, ['undeclared1 = 5', 'var sv = 1', 'sv', \"'use strict'\", 'function sf() { return this }', 'sf()', \"throw new Error('strict')\", 'function st() { throw new Error(\"st\") }', 'st()', 'with ({}) {}', '', 'delete sv']);\n  console.error(\"options\"); T.options = await transcript({ useGlobal: true, prompt: '$ ', ignoreUndefined: true, writer: v => `<<${typeof v}:${String(v)}>>` }, ['1', 'undefined', 'var u', \"'s'\", \"throw new Error('w')\", 'throw 5', 'function mm() {', '}']);\n  console.error(\"customEval\"); T.customEval = await transcript({ eval(cmd, context, filename, cb) { if (cmd.trim() === 'more') return cb(new repl.Recoverable(new SyntaxError('need more'))); if (cmd.trim() === 'fail') return cb(new Error('custom failure')); if (cmd.trim() === 'none') return cb(null); if (cmd.trim() === 'async') return setTimeout(() => cb(null, 'later'), 2); cb(null, [cmd, typeof context, /^REPL\\d+$/.test(filename), context === globalThis]); } }, ['hello', 'more', 'x', 'fail', 'none', 'async', '', '.break', 'npm install x', 'after']);\n  console.error(\"npm\"); T.npm = await transcript({ useGlobal: true }, ['npm install foo', 'npm', 'var npm = 1', 'npm install']);\n  console.error(\"localContext\"); T.localContext = await transcript({}, ['var lc = 1', 'lc', 'typeof globalThis.lc', '_', '.clear', 'typeof lc', '.help']);\n  console.error(\"endMidline\"); T.endMidline = await transcript({ useGlobal: true }, ['function z() {']);\n  console.error(\"closeApi\"); T.closeApi = await (async () => { const input = new PassThrough(), output = new PassThrough(); let text = ''; output.on('data', d => { text += d; }); const ev = []; const s = repl.start({ input, output, terminal: false, useGlobal: true }); s.on('exit', () => ev.push('exit')); s.on('close', () => ev.push('close')); await tick(); const ret = s.close(); const sync = [...ev], closedSync = s.closed; await tick(); return { ret: ret === undefined, sync, closedSync, after: ev, closed: s.closed, text }; })();\n  console.error(\"done\"); out.transcripts = T;\n  console.log(JSON.stringify(out));\n})();\n",
+  "rec-history.cjs": "const repl = require('repl'); const { PassThrough } = require('stream'); const fs = require('fs');\nconst tick = (ms = 40) => new Promise(r => setTimeout(r, ms));\nfunction outcome(run) { try { const v = run(); return { ok: v === undefined ? '$undefined' : v }; } catch (e) { return { error: { name: e.name, code: e.code, message: e.message } }; } }\n(async () => {\n  const dir = '/w/hist'; fs.rmSync(dir, { recursive: true, force: true }); fs.mkdirSync(dir); fs.mkdirSync(dir + '/adir');\n  fs.writeFileSync(dir + '/h1', 'third\\nsecond\\r\\n\\n\\nfirst\\n'); fs.writeFileSync(dir + '/h3', 'e\\nd\\nc\\nb\\na');\n  const out = {};\n  async function run(name, arg, useCb, lines = []) {\n    const input = new PassThrough(), output = new PassThrough(); let text = ''; output.on('data', d => { text += d; });\n    const s = repl.start({ input, output, terminal: false, useGlobal: true }); const ev = []; s.on('pause', () => ev.push('pause')); s.on('resume', () => ev.push('resume')); s.on('flushHistory', () => ev.push('flushHistory')); s.on('history', () => ev.push('history'));\n    let cbArgs = null; let ret; const call = outcome(() => { ret = useCb ? s.setupHistory(arg, (...a) => { cbArgs = [a.length, a[0] === null ? null : String(a[0]), a[1] === s]; }) : s.setupHistory(arg); return ret; });\n    const syncCb = cbArgs !== null; await tick();\n    for (const l of lines) { input.write(l + '\\n'); await tick(5); } await tick(60);\n    const history = Array.isArray(s.history) ? [...s.history] : typeof s.history; const size = s.historySize;\n    s.close(); await tick();\n    out[name] = { call, syncCb, cbArgs, ev, text, history, size, file: typeof arg === 'string' ? (arg && fs.existsSync(arg) && fs.statSync(arg).isFile() ? [fs.readFileSync(arg, 'utf8'), (fs.statSync(arg).mode & 0o777).toString(8)] : null) : (arg && arg.filePath && fs.existsSync(arg.filePath) && fs.statSync(arg.filePath).isFile() ? [fs.readFileSync(arg.filePath, 'utf8'), (fs.statSync(arg.filePath).mode & 0o777).toString(8)] : null) };\n  }\n  await run('existing', dir + '/h1', true, ['1 + 1', '2']);\n  await run('missing', dir + '/h2', true, ['3']);\n  await run('directory', dir + '/adir', true);\n  await run('noParent', dir + '/no/such/h', true);\n  await run('empty', '', true);\n  await run('objectForm', { filePath: dir + '/h3', size: 3 }, true);\n  await run('objectCb', { filePath: dir + '/h3', onHistoryFileLoaded: () => { out.objectCbCalled = true; } }, false);\n  await run('noCb', dir + '/h1', false);\n  await run('noArgs', undefined, false);\n  await run('badPath', { filePath: 5 }, true);\n  await run('badSize', { filePath: dir + '/h1', size: -1 }, true);\n  await run('badSizeType', { filePath: dir + '/h1', size: 'x' }, true);\n  await run('badDup', { filePath: dir + '/h1', removeHistoryDuplicates: 1 }, true);\n  await run('badCb', { filePath: dir + '/h1', onHistoryFileLoaded: 1 }, false);\n  await run('nullArg', null, true);\n  out.setupShape = [repl.REPLServer.prototype.setupHistory.name, repl.REPLServer.prototype.setupHistory.length];\n  console.log(JSON.stringify(out)); process.exit(0);\n})();\n",
+  "rec-dep.cjs": "const warnings = []; process.on('warning', w => warnings.push({ name: w.name, code: w.code, message: w.message }));\nconst repl = require('repl'); const { PassThrough } = require('stream');\nconst out = { pending: process.execArgv.includes('--pending-deprecation') };\nconst a = repl.builtinModules, b = repl._builtinLibs; void repl.builtinModules; out.same = a === b;\nout.settable = (() => { const saved = repl.builtinModules; repl.builtinModules = ['x']; const r = [repl.builtinModules, repl._builtinLibs]; repl._builtinLibs = saved; return [r, repl.builtinModules === saved]; })();\nout.getterNames = ['builtinModules', '_builtinLibs'].map(k => { const d = Object.getOwnPropertyDescriptor(repl, k); return [d.get.name, d.get.length, d.set.name, d.set.length]; });\nconst s = repl.REPLServer({ input: new PassThrough(), output: new PassThrough(), terminal: false });\nout.noNew = [s instanceof repl.REPLServer, s.constructor === repl.REPLServer];\nout.streams = [s.inputStream === s.input, s.outputStream === s.output];\nclass Sub extends repl.REPLServer { constructor(o) { super(o); this.sub = true; } }\nconst sub = new Sub({ input: new PassThrough(), output: new PassThrough(), terminal: false }); out.sub = [sub instanceof Sub, sub instanceof repl.REPLServer, sub instanceof require('readline').Interface, sub.sub];\nconst legacy = repl.start('L> ', new (require('stream').Duplex)({ read() {}, write(c, e, cb) { out.legacyWrote = String(c); cb(); } }), undefined, true, true);\nout.legacy = [legacy.getPrompt(), legacy.useGlobal, legacy.ignoreUndefined, legacy.input === legacy.output];\nconst st = repl.start({ stream: new PassThrough(), terminal: false }); out.streamOpt = st.input === st.output;\nout.badInput = (() => { try { repl.start({ input: 5, output: new PassThrough() }); return 'ok'; } catch (e) { return [e.name, e.code, e.message]; } })();\nsetTimeout(() => { out.warnings = warnings; console.log(JSON.stringify(out)); process.exit(0); }, 30);\n"
+ },
+ "node": "v24.18.1",
+ "keys": [
+  "start",
+  "writer",
+  "REPLServer",
+  "REPL_MODE_SLOPPY",
+  "REPL_MODE_STRICT",
+  "Recoverable",
+  "isValidSyntax"
+ ],
+ "shape": {
+  "start": [
+   "function",
+   "start",
+   6,
+   true,
+   true,
+   true,
+   "undefined",
+   "undefined"
+  ],
+  "writer": [
+   "function",
+   "writer",
+   1,
+   true,
+   true,
+   true,
+   "undefined",
+   "undefined"
+  ],
+  "REPLServer": [
+   "function",
+   "REPLServer",
+   6,
+   true,
+   true,
+   true,
+   "undefined",
+   "undefined"
+  ],
+  "REPL_MODE_SLOPPY": [
+   "symbol",
+   null,
+   null,
+   true,
+   true,
+   true,
+   "undefined",
+   "undefined"
+  ],
+  "REPL_MODE_STRICT": [
+   "symbol",
+   null,
+   null,
+   true,
+   true,
+   true,
+   "undefined",
+   "undefined"
+  ],
+  "Recoverable": [
+   "function",
+   "Recoverable",
+   1,
+   true,
+   true,
+   true,
+   "undefined",
+   "undefined"
+  ],
+  "isValidSyntax": [
+   "function",
+   "isValidSyntax",
+   1,
+   true,
+   true,
+   true,
+   "undefined",
+   "undefined"
+  ],
+  "builtinModules": [
+   "undefined",
+   null,
+   null,
+   false,
+   null,
+   true,
+   "function",
+   "function"
+  ],
+  "_builtinLibs": [
+   "undefined",
+   null,
+   null,
+   false,
+   null,
+   true,
+   "function",
+   "function"
+  ]
+ },
+ "symbols": {
+  "sloppy": "Symbol(repl-sloppy)",
+  "strict": "Symbol(repl-strict)"
+ },
+ "builtinModules": [
+  "assert",
+  "assert/strict",
+  "async_hooks",
+  "buffer",
+  "child_process",
+  "cluster",
+  "console",
+  "constants",
+  "crypto",
+  "dgram",
+  "diagnostics_channel",
+  "dns",
+  "dns/promises",
+  "domain",
+  "events",
+  "fs",
+  "fs/promises",
+  "http",
+  "http2",
+  "https",
+  "inspector",
+  "inspector/promises",
+  "module",
+  "net",
+  "os",
+  "path",
+  "path/posix",
+  "path/win32",
+  "perf_hooks",
+  "process",
+  "punycode",
+  "querystring",
+  "readline",
+  "readline/promises",
+  "repl",
+  "stream",
+  "stream/consumers",
+  "stream/promises",
+  "stream/web",
+  "string_decoder",
+  "sys",
+  "timers",
+  "timers/promises",
+  "tls",
+  "trace_events",
+  "tty",
+  "url",
+  "util",
+  "util/types",
+  "v8",
+  "vm",
+  "wasi",
+  "worker_threads",
+  "zlib"
+ ],
+ "sameList": true,
+ "moduleBuiltins": [
+  "_http_agent",
+  "_http_client",
+  "_http_common",
+  "_http_incoming",
+  "_http_outgoing",
+  "_http_server",
+  "_stream_duplex",
+  "_stream_passthrough",
+  "_stream_readable",
+  "_stream_transform",
+  "_stream_wrap",
+  "_stream_writable",
+  "_tls_common",
+  "_tls_wrap",
+  "assert",
+  "assert/strict",
+  "async_hooks",
+  "buffer",
+  "child_process",
+  "cluster",
+  "console",
+  "constants",
+  "crypto",
+  "dgram",
+  "diagnostics_channel",
+  "dns",
+  "dns/promises",
+  "domain",
+  "events",
+  "fs",
+  "fs/promises",
+  "http",
+  "http2",
+  "https",
+  "inspector",
+  "inspector/promises",
+  "module",
+  "net",
+  "os",
+  "path",
+  "path/posix",
+  "path/win32",
+  "perf_hooks",
+  "process",
+  "punycode",
+  "querystring",
+  "readline",
+  "readline/promises",
+  "repl",
+  "stream",
+  "stream/consumers",
+  "stream/promises",
+  "stream/web",
+  "string_decoder",
+  "sys",
+  "timers",
+  "timers/promises",
+  "tls",
+  "trace_events",
+  "tty",
+  "url",
+  "util",
+  "util/types",
+  "v8",
+  "vm",
+  "wasi",
+  "worker_threads",
+  "zlib",
+  "node:sea",
+  "node:sqlite",
+  "node:test",
+  "node:test/reporters"
+ ],
+ "writer": {
+  "name": "writer",
+  "length": 1,
+  "optionsKeys": [
+   "showHidden",
+   "depth",
+   "colors",
+   "customInspect",
+   "showProxy",
+   "maxArrayLength",
+   "maxStringLength",
+   "breakLength",
+   "compact",
+   "sorted",
+   "getters",
+   "numericSeparator"
+  ],
+  "options": {
+   "showHidden": false,
+   "depth": 2,
+   "colors": false,
+   "customInspect": true,
+   "showProxy": true,
+   "maxArrayLength": 100,
+   "maxStringLength": 10000,
+   "breakLength": 80,
+   "compact": 3,
+   "sorted": false,
+   "getters": false,
+   "numericSeparator": false
+  },
+  "defaults": {
+   "showHidden": false,
+   "depth": 2,
+   "colors": false,
+   "customInspect": true,
+   "showProxy": false,
+   "maxArrayLength": 100,
+   "maxStringLength": 10000,
+   "breakLength": 80,
+   "compact": 3,
+   "sorted": false,
+   "getters": false,
+   "numericSeparator": false
+  },
+  "sample": "{ a: [ 1, { b: [Map] } ] }"
+ },
+ "Recoverable": {
+  "name": "Recoverable",
+  "length": 1,
+  "proto": true,
+  "protoShape": {
+   "constructor": [
+    "function",
+    "Recoverable",
+    1,
+    false,
+    true,
+    true,
+    "undefined",
+    "undefined"
+   ]
+  },
+  "instance": {
+   "isSyntax": true,
+   "isError": true,
+   "own": [
+    "err"
+   ],
+   "errSame": true,
+   "name": "SyntaxError",
+   "message": "",
+   "stack": "undefined",
+   "tag": "[object Object]",
+   "isNative": false
+  },
+  "call": {
+   "ok": "$undefined"
+  }
+ },
+ "REPLServer": {
+  "name": "REPLServer",
+  "length": 6,
+  "protoIsInterface": true,
+  "protoShape": {
+   "constructor": [
+    "function",
+    "REPLServer",
+    6,
+    false,
+    true,
+    true,
+    "undefined",
+    "undefined"
+   ],
+   "setupHistory": [
+    "function",
+    "setupHistory",
+    0,
+    true,
+    true,
+    true,
+    "undefined",
+    "undefined"
+   ],
+   "clearBufferedCommand": [
+    "function",
+    "clearBufferedCommand",
+    0,
+    true,
+    true,
+    true,
+    "undefined",
+    "undefined"
+   ],
+   "close": [
+    "function",
+    "close",
+    0,
+    true,
+    true,
+    true,
+    "undefined",
+    "undefined"
+   ],
+   "createContext": [
+    "function",
+    "",
+    0,
+    true,
+    true,
+    true,
+    "undefined",
+    "undefined"
+   ],
+   "resetContext": [
+    "function",
+    "",
+    0,
+    true,
+    true,
+    true,
+    "undefined",
+    "undefined"
+   ],
+   "displayPrompt": [
+    "function",
+    "",
+    1,
+    true,
+    true,
+    true,
+    "undefined",
+    "undefined"
+   ],
+   "setPrompt": [
+    "function",
+    "setPrompt",
+    1,
+    true,
+    true,
+    true,
+    "undefined",
+    "undefined"
+   ],
+   "complete": [
+    "function",
+    "",
+    0,
+    true,
+    true,
+    true,
+    "undefined",
+    "undefined"
+   ],
+   "completeOnEditorMode": [
+    "function",
+    "",
+    1,
+    true,
+    true,
+    true,
+    "undefined",
+    "undefined"
+   ],
+   "defineCommand": [
+    "function",
+    "",
+    2,
+    true,
+    true,
+    true,
+    "undefined",
+    "undefined"
+   ]
+  }
+ },
+ "start": {
+  "name": "start",
+  "length": 6
+ },
+ "isValidSyntax": [
+  [
+   "1+",
+   false
+  ],
+  [
+   "a b",
+   false
+  ],
+  [
+   "{a:1}",
+   true
+  ],
+  [
+   "await 1",
+   true
+  ],
+  [
+   "x =",
+   false
+  ],
+  [
+   "",
+   true
+  ]
+ ],
+ "instance": {
+  "ownKeys": [
+   "inputStream",
+   "outputStream",
+   "allowBlockingCompletions",
+   "useColors",
+   "_domain",
+   "useGlobal",
+   "ignoreUndefined",
+   "replMode",
+   "underscoreAssigned",
+   "last",
+   "underscoreErrAssigned",
+   "lastError",
+   "breakEvalOnSigint",
+   "editorMode",
+   "eval",
+   "isCompletionEnabled",
+   "escapeCodeTimeout",
+   "tabSize",
+   "domain",
+   "_maxListeners",
+   "historyManager",
+   "history",
+   "historyIndex",
+   "historySize",
+   "isFlushing",
+   "line",
+   "output",
+   "input",
+   "crlfDelay",
+   "completer",
+   "_initialPrompt",
+   "terminal",
+   "context",
+   "lines",
+   "commands",
+   "writer",
+   "_ttyWrite",
+   "Symbol(contextId)",
+   "Symbol(_lastCommandErrored)",
+   "Symbol(bufferedCommand)",
+   "Symbol(_sawReturnAt)",
+   "Symbol(_sawKeyPress)",
+   "Symbol(_previousKey)",
+   "Symbol(shapeMode)",
+   "Symbol(kCapture)",
+   "Symbol(_isMultiline)",
+   "Symbol(kSubstringSearch)",
+   "Symbol(_undoStack)",
+   "Symbol(_redoStack)",
+   "Symbol(_previousCursorCols)",
+   "Symbol(_killRing)",
+   "Symbol(_killRingCursor)",
+   "Symbol(_prompt)",
+   "Symbol(line object stream)",
+   "Symbol(_decoder)"
+  ],
+  "shapeSubset": {
+   "useColors": [
+    "boolean",
+    true,
+    true,
+    true,
+    "undefined"
+   ],
+   "useGlobal": [
+    "boolean",
+    true,
+    true,
+    true,
+    "undefined"
+   ],
+   "ignoreUndefined": [
+    "boolean",
+    true,
+    true,
+    true,
+    "undefined"
+   ],
+   "replMode": [
+    "symbol",
+    true,
+    true,
+    true,
+    "undefined"
+   ],
+   "underscoreAssigned": [
+    "boolean",
+    true,
+    true,
+    true,
+    "undefined"
+   ],
+   "last": [
+    "undefined",
+    true,
+    true,
+    true,
+    "undefined"
+   ],
+   "underscoreErrAssigned": [
+    "boolean",
+    true,
+    true,
+    true,
+    "undefined"
+   ],
+   "lastError": [
+    "undefined",
+    true,
+    true,
+    true,
+    "undefined"
+   ],
+   "breakEvalOnSigint": [
+    "boolean",
+    true,
+    true,
+    true,
+    "undefined"
+   ],
+   "editorMode": [
+    "boolean",
+    true,
+    true,
+    true,
+    "undefined"
+   ],
+   "allowBlockingCompletions": [
+    "boolean",
+    true,
+    true,
+    true,
+    "undefined"
+   ],
+   "terminal": [
+    "boolean",
+    true,
+    true,
+    true,
+    "undefined"
+   ],
+   "lines": [
+    "object",
+    true,
+    true,
+    true,
+    "undefined"
+   ],
+   "commands": [
+    "object",
+    true,
+    true,
+    true,
+    "undefined"
+   ],
+   "writer": [
+    "function",
+    true,
+    true,
+    true,
+    "undefined"
+   ],
+   "eval": [
+    "function",
+    true,
+    true,
+    true,
+    "undefined"
+   ],
+   "context": [
+    "object",
+    true,
+    true,
+    true,
+    "undefined"
+   ],
+   "_initialPrompt": [
+    "string",
+    true,
+    true,
+    true,
+    "undefined"
+   ],
+   "inputStream": [
+    "undefined",
+    false,
+    null,
+    true,
+    "function"
+   ],
+   "outputStream": [
+    "undefined",
+    false,
+    null,
+    true,
+    "function"
+   ],
+   "input": [
+    "object",
+    true,
+    true,
+    true,
+    "undefined"
+   ],
+   "output": [
+    "object",
+    true,
+    true,
+    true,
+    "undefined"
+   ],
+   "completer": [
+    "function",
+    true,
+    true,
+    true,
+    "undefined"
+   ],
+   "line": [
+    "string",
+    true,
+    true,
+    true,
+    "undefined"
+   ],
+   "history": [
+    "undefined",
+    true,
+    null,
+    true,
+    "function"
+   ]
+  },
+  "commands": [
+   "break",
+   "clear",
+   "exit",
+   "help",
+   "save",
+   "load"
+  ],
+  "commandsProto": null,
+  "commandShape": {
+   "break": [
+    [
+     "help",
+     "action"
+    ],
+    "Sometimes you get stuck, this gets you out",
+    "action",
+    0
+   ],
+   "clear": [
+    [
+     "help",
+     "action"
+    ],
+    "Alias for .break",
+    "action",
+    0
+   ],
+   "exit": [
+    [
+     "help",
+     "action"
+    ],
+    "Exit the REPL",
+    "action",
+    0
+   ],
+   "help": [
+    [
+     "help",
+     "action"
+    ],
+    "Print this help message",
+    "action",
+    0
+   ],
+   "save": [
+    [
+     "help",
+     "action"
+    ],
+    "Save all evaluated commands in this REPL session to a file",
+    "action",
+    1
+   ],
+   "load": [
+    [
+     "help",
+     "action"
+    ],
+    "Load JS from a file into the REPL session",
+    "action",
+    1
+   ]
+  },
+  "contextIsGlobal": true,
+  "writerIsDefault": true,
+  "replMode": "Symbol(repl-sloppy)",
+  "evalName": "runBound",
+  "evalLength": 0,
+  "prompt": "> ",
+  "initialPrompt": "> ",
+  "lines": [],
+  "linesLevel": [],
+  "underscoreDesc": [
+   "function",
+   "function",
+   false,
+   true
+  ],
+  "requireGlobal": "function",
+  "moduleGlobal": "object",
+  "fsDesc": [
+   "function",
+   "function",
+   false,
+   true
+  ],
+  "defineCommand": {
+   "bad": {
+    "error": {
+     "name": "TypeError",
+     "code": "ERR_INVALID_ARG_TYPE",
+     "message": "The \"cmd.action\" property must be of type function. Received undefined",
+     "ctor": "TypeError"
+    }
+   },
+   "badNull": {
+    "error": {
+     "name": "TypeError",
+     "message": "Cannot read properties of null (reading 'action')",
+     "ctor": "TypeError"
+    }
+   },
+   "fn": {
+    "ok": [
+     "action"
+    ]
+   },
+   "ret": {
+    "ok": "$undefined"
+   }
+  },
+  "displayPromptRet": {
+   "ok": "$undefined"
+  },
+  "clearRet": {
+   "ok": "$undefined"
+  },
+  "setPromptRet": {
+   "ok": "$undefined"
+  },
+  "afterSetPrompt": [
+   ">> ",
+   ">> "
+  ]
+ },
+ "startErrors": {
+  "sigintEval": {
+   "error": {
+    "name": "TypeError",
+    "code": "ERR_INVALID_REPL_EVAL_CONFIG",
+    "message": "Cannot specify both \"breakEvalOnSigint\" and \"eval\" for REPL",
+    "ctor": "TypeError"
+   }
+  }
+ },
+ "transcripts": {
+  "basics": {
+   "steps": [
+    [
+     "",
+     "> "
+    ],
+    [
+     "1 + 1",
+     "2\n> "
+    ],
+    [
+     "'a'",
+     "'a'\n> "
+    ],
+    [
+     "undefined",
+     "undefined\n> "
+    ],
+    [
+     "null",
+     "null\n> "
+    ],
+    [
+     "{a: 1}",
+     "{ a: 1 }\n> "
+    ],
+    [
+     "{a: 1};",
+     "1\n> "
+    ],
+    [
+     "[1, 2, 3]",
+     "[ 1, 2, 3 ]\n> "
+    ],
+    [
+     "var x = 5",
+     "undefined\n> "
+    ],
+    [
+     "x",
+     "5\n> "
+    ],
+    [
+     "let y = 2",
+     "undefined\n> "
+    ],
+    [
+     "y",
+     "2\n> "
+    ],
+    [
+     "const z = 3",
+     "undefined\n> "
+    ],
+    [
+     "z",
+     "3\n> "
+    ],
+    [
+     "function f() { return 7 }",
+     "undefined\n> "
+    ],
+    [
+     "f()",
+     "7\n> "
+    ],
+    [
+     "class K { m() {} }",
+     "undefined\n> "
+    ],
+    [
+     "new K()",
+     "K {}\n> "
+    ],
+    [
+     "",
+     "> "
+    ],
+    [
+     "   ",
+     "undefined\n> "
+    ],
+    [
+     ".5",
+     "0.5\n> "
+    ],
+    [
+     "x = 6",
+     "6\n> "
+    ],
+    [
+     "typeof _",
+     "'number'\n> "
+    ],
+    [
+     "Symbol('s')",
+     "Symbol(s)\n> "
+    ],
+    [
+     "(function named() {})",
+     "[Function: named]\n> "
+    ],
+    [
+     "({}).toString()",
+     "'[object Object]'\n> "
+    ],
+    [
+     "// just a comment",
+     "undefined\n> "
+    ],
+    [
+     "1; 2; 3",
+     "3\n> "
+    ],
+    [
+     "$end",
+     ""
+    ]
+   ],
+   "events": [
+    "exit",
+    "close"
+   ]
+  },
+  "multiline": {
+   "steps": [
+    [
+     "",
+     "> "
+    ],
+    [
+     "function g() {",
+     "| "
+    ],
+    [
+     "  return 41 + 1",
+     "| "
+    ],
+    [
+     "}",
+     "undefined\n> "
+    ],
+    [
+     "g()",
+     "42\n> "
+    ],
+    [
+     "var o = {",
+     "| "
+    ],
+    [
+     "a: 1,",
+     "| "
+    ],
+    [
+     "b: [",
+     "| "
+    ],
+    [
+     "2] }",
+     "undefined\n> "
+    ],
+    [
+     "o",
+     "{ a: 1, b: [ 2 ] }\n> "
+    ],
+    [
+     "`line1",
+     "| "
+    ],
+    [
+     "line2`",
+     "'line1\\nline2'\n> "
+    ],
+    [
+     "/* open",
+     "| "
+    ],
+    [
+     "still */ 9",
+     "9\n> "
+    ],
+    [
+     "'ab\\",
+     "| "
+    ],
+    [
+     "cd'",
+     "'abcd'\n> "
+    ],
+    [
+     "[1,",
+     "| "
+    ],
+    [
+     ".break",
+     "> "
+    ],
+    [
+     "1 +",
+     "| "
+    ],
+    [
+     ".clear",
+     "> "
+    ],
+    [
+     "if (true) {",
+     "| "
+    ],
+    [
+     "}",
+     "undefined\n> "
+    ],
+    [
+     "(",
+     "| "
+    ],
+    [
+     ")",
+     "| "
+    ],
+    [
+     "try {",
+     ")\n^\n\nUncaught SyntaxError: Unexpected token ')'\n> "
+    ],
+    [
+     "} catch {}",
+     "} catch {}\n^\n\nUncaught SyntaxError: Unexpected token '}'\n> "
+    ],
+    [
+     "do",
+     "| "
+    ],
+    [
+     "8",
+     "| "
+    ],
+    [
+     "while (false)",
+     "8\n> "
+    ],
+    [
+     "\"unterminated",
+     "\"unterminated\n^^^^^^^^^^^^^\n\nUncaught SyntaxError: Invalid or unexpected token\n> "
+    ],
+    [
+     "x.",
+     "| "
+    ],
+    [
+     "y",
+     "undefined\n> "
+    ],
+    [
+     "var",
+     "| "
+    ],
+    [
+     "q1 = 3",
+     "undefined\n> "
+    ],
+    [
+     "1 +",
+     "| "
+    ],
+    [
+     "",
+     "| "
+    ],
+    [
+     "2",
+     "3\n> "
+    ],
+    [
+     "$end",
+     ""
+    ]
+   ],
+   "events": [
+    "exit",
+    "close"
+   ]
+  },
+  "underscore": {
+   "steps": [
+    [
+     "",
+     "> "
+    ],
+    [
+     "10",
+     "10\n> "
+    ],
+    [
+     "_ + 1",
+     "11\n> "
+    ],
+    [
+     "_",
+     "11\n> "
+    ],
+    [
+     "undefined",
+     "undefined\n> "
+    ],
+    [
+     "_",
+     "undefined\n> "
+    ],
+    [
+     "_ = 5",
+     "Expression assignment to _ now disabled.\n5\n> "
+    ],
+    [
+     "99",
+     "99\n> "
+    ],
+    [
+     "_",
+     "5\n> "
+    ],
+    [
+     "throw new Error('boom')",
+     "Uncaught Error: boom\n> "
+    ],
+    [
+     "_error.message",
+     "'boom'\n> "
+    ],
+    [
+     "_error = 1",
+     "Expression assignment to _error now disabled.\n1\n> "
+    ],
+    [
+     "throw new Error('again')",
+     "Uncaught Error: again\n> "
+    ],
+    [
+     "_error",
+     "1\n> "
+    ],
+    [
+     "$end",
+     ""
+    ]
+   ],
+   "events": [
+    "exit",
+    "close"
+   ]
+  },
+  "errors": {
+   "steps": [
+    [
+     "",
+     "> "
+    ],
+    [
+     "throw new Error('x')",
+     "Uncaught Error: x\n> "
+    ],
+    [
+     "function thrower() { throw new TypeError(\"deep\") }",
+     "undefined\n> "
+    ],
+    [
+     "thrower()",
+     "Uncaught TypeError: deep\n    at thrower (REPL76:1:28)\n> "
+    ],
+    [
+     "function outer() { thrower() }",
+     "undefined\n> "
+    ],
+    [
+     "outer()",
+     "Uncaught TypeError: deep\n    at thrower (REPL76:1:28)\n    at outer (REPL78:1:20)\n> "
+    ],
+    [
+     "throw 1",
+     "Uncaught 1\n> "
+    ],
+    [
+     "throw 'str'",
+     "Uncaught 'str'\n> "
+    ],
+    [
+     "throw { a: 1 }",
+     "Uncaught { a: 1 }\n> "
+    ],
+    [
+     "throw null",
+     "Uncaught null\n> "
+    ],
+    [
+     "throw undefined",
+     "Uncaught undefined\n> "
+    ],
+    [
+     "null.x",
+     "Uncaught TypeError: Cannot read properties of null (reading 'x')\n> "
+    ],
+    [
+     "nope_not_defined",
+     "Uncaught ReferenceError: nope_not_defined is not defined\n> "
+    ],
+    [
+     "new Error('value')",
+     "Error: value\n    at REPL87:1:1\n    at ContextifyScript.runInThisContext (node:vm:137:12)\n    at REPLServer.defaultEval (node:repl:565:22)\n    at bound (node:domain:433:15)\n    at REPLServer.runBound [as eval] (node:domain:444:12)\n    at REPLServer.onLine (node:repl:900:10)\n    at REPLServer.emit (node:events:509:28)\n    at REPLServer.emit (node:domain:489:12)\n    at [_onLine] [as _onLine] (node:internal/readline/interface:465:12)\n    at [_normalWrite] [as _normalWrite] (node:internal/readline/interface:647:22)\n> "
+    ],
+    [
+     "throw Object.assign(new Error('with code'), { code: 'E_X' })",
+     "Uncaught [Error: with code] { code: 'E_X' }\n> "
+    ],
+    [
+     "class MyErr extends Error {}; throw new MyErr(\"mine\")",
+     "Uncaught MyErr [Error]: mine\n> "
+    ],
+    [
+     "throw new RangeError('multi\\nline')",
+     "Uncaught RangeError: multi\nline\n> "
+    ],
+    [
+     "var e2 = new Error('nostack'); e2.stack = undefined; throw e2",
+     "Uncaught Error: nostack\n> "
+    ],
+    [
+     "throw Object.assign(new Error('named'), { name: 'Custom' })",
+     "Uncaught Custom: named\n> "
+    ],
+    [
+     "[1].map(() => { throw new Error('in cb') })",
+     "Uncaught Error: in cb\n    at REPL93:1:23\n    at Array.map (<anonymous>)\n> "
+    ],
+    [
+     "JSON.parse(\"{\")",
+     "Uncaught:\nSyntaxError: Expected property name or '}' in JSON at position 1 (line 1 column 2)\n> "
+    ],
+    [
+     "throw new SyntaxError('manual')",
+     "Uncaught SyntaxError: manual\n> "
+    ],
+    [
+     "$end",
+     ""
+    ]
+   ],
+   "events": [
+    "exit",
+    "close"
+   ]
+  },
+  "syntax": {
+   "steps": [
+    [
+     "",
+     "> "
+    ],
+    [
+     "1 +* 2",
+     "1 +* 2\n   ^\n\nUncaught SyntaxError: Unexpected token '*'\n> "
+    ],
+    [
+     "var 1",
+     "var 1\n    ^\n\nUncaught SyntaxError: Unexpected number\n> "
+    ],
+    [
+     ")",
+     ")\n^\n\nUncaught SyntaxError: Unexpected token ')'\n> "
+    ],
+    [
+     "let let = 1",
+     "let let = 1\n    ^^^\n\nUncaught SyntaxError: let is disallowed as a lexically bound name\n> "
+    ],
+    [
+     "a b",
+     "a b\n  ^\n\nUncaught SyntaxError: Unexpected identifier 'b'\n> "
+    ],
+    [
+     "function () {}",
+     "function () {}\n^^^^^^^^\n\nUncaught SyntaxError: Function statements require a function name\n> "
+    ],
+    [
+     "1 2",
+     "1 2\n  ^\n\nUncaught SyntaxError: Unexpected number\n> "
+    ],
+    [
+     "x = 'abc",
+     "x = 'abc\n    ^^^^\n\nUncaught SyntaxError: Invalid or unexpected token\n> "
+    ],
+    [
+     "foo(1,, 2)",
+     "foo(1,, 2)\n      ^\n\nUncaught SyntaxError: Unexpected token ','\n> "
+    ],
+    [
+     "}",
+     "}\n^\n\nUncaught SyntaxError: Unexpected token '}'\n> "
+    ],
+    [
+     "2e",
+     "2e\n^^\n\nUncaught SyntaxError: Invalid or unexpected token\n> "
+    ],
+    [
+     "import x from \"y\"",
+     "import x from \"y\"\n^^^^^^\n\nUncaught:\nSyntaxError: Cannot use import statement inside the Node.js REPL, alternatively use dynamic import: const { default: x } = await import(\"y\");\n> "
+    ],
+    [
+     "class { }",
+     "class { }\n      ^\n\nUncaught SyntaxError: Unexpected token '{'\n> "
+    ],
+    [
+     "return 1",
+     "return 1\n^^^^^^\n\nUncaught SyntaxError: Illegal return statement\n> "
+    ],
+    [
+     "let dup1 = 1",
+     "undefined\n> "
+    ],
+    [
+     "let dup1 = 2",
+     "Uncaught SyntaxError: Identifier 'dup1' has already been declared\n> "
+    ],
+    [
+     "const c9 = 1",
+     "undefined\n> "
+    ],
+    [
+     "c9 = 2",
+     "Uncaught TypeError: Assignment to constant variable.\n> "
+    ],
+    [
+     "var var1 = 1; var var1 = 2",
+     "undefined\n> "
+    ],
+    [
+     "$end",
+     ""
+    ]
+   ],
+   "events": [
+    "exit",
+    "close"
+   ]
+  },
+  "commands": {
+   "steps": [
+    [
+     "",
+     "> "
+    ],
+    [
+     ".help",
+     ".break   Sometimes you get stuck, this gets you out\n.clear   Alias for .break\n.exit    Exit the REPL\n.help    Print this help message\n.load    Load JS from a file into the REPL session\n.save    Save all evaluated commands in this REPL session to a file\n\nPress Ctrl+C to abort current expression, Ctrl+D to exit the REPL\n> "
+    ],
+    [
+     ".nope",
+     "Invalid REPL keyword\n> "
+    ],
+    [
+     ".nope arg",
+     "Invalid REPL keyword\n> "
+    ],
+    [
+     "var s1 = 1",
+     "undefined\n> "
+    ],
+    [
+     "s1 + 1",
+     "2\n> "
+    ],
+    [
+     "function ff() {",
+     "| "
+    ],
+    [
+     "return 1",
+     "| "
+    ],
+    [
+     "}",
+     "undefined\n> "
+    ],
+    [
+     ".save /w/scratch/saved.js",
+     "Session saved to: /w/scratch/saved.js\n> "
+    ],
+    [
+     ".save",
+     "The \"file\" argument must be specified\n> "
+    ],
+    [
+     ".save /w/scratch/missing/dir/x.js",
+     "Failed to save: /w/scratch/missing/dir/x.js\n> "
+    ],
+    [
+     ".load /w/scratch/load.js",
+     "42\n> > "
+    ],
+    [
+     "loaded",
+     "40\n> "
+    ],
+    [
+     ".load",
+     "The \"file\" argument must be specified\n> "
+    ],
+    [
+     ".load /w/scratch/nofile.js",
+     "Failed to load: /w/scratch/nofile.js\n> "
+    ],
+    [
+     ".load /w/scratch/dir",
+     "Failed to load: /w/scratch/dir is not a valid file\n> "
+    ],
+    [
+     ".editor",
+     "Invalid REPL keyword\n> "
+    ],
+    [
+     ".hello World",
+     "Invalid REPL keyword\n> "
+    ],
+    [
+     "..x",
+     "..x\n^\n\nUncaught SyntaxError: Unexpected token '.'\n> "
+    ],
+    [
+     ".1 + 1",
+     "1.1\n> "
+    ],
+    [
+     ". help",
+     "Invalid REPL keyword\n> "
+    ],
+    [
+     ".help extra",
+     ".break   Sometimes you get stuck, this gets you out\n.clear   Alias for .break\n.exit    Exit the REPL\n.help    Print this help message\n.load    Load JS from a file into the REPL session\n.save    Save all evaluated commands in this REPL session to a file\n\nPress Ctrl+C to abort current expression, Ctrl+D to exit the REPL\n> "
+    ],
+    [
+     ".break",
+     "> "
+    ],
+    [
+     ".exit",
+     ""
+    ],
+    [
+     "5",
+     ""
+    ]
+   ],
+   "events": [
+    "exit",
+    "close"
+   ]
+  },
+  "commandsSaved": ".nope\n.nope arg\nvar s1 = 1\ns1 + 1\nfunction ff() {\nreturn 1\n}",
+  "customCommand": {
+   "steps": [
+    [
+     "",
+     "> "
+    ],
+    [
+     ".hello World",
+     "Hello, World!\n> "
+    ],
+    [
+     ".help",
+     ".bare\n.break   Sometimes you get stuck, this gets you out\n.clear   Alias for .break\n.exit    Exit the REPL\n.hello   Say hello\n.help    Print this help message\n.load    Load JS from a file into the REPL session\n.save    Save all evaluated commands in this REPL session to a file\n\nPress Ctrl+C to abort current expression, Ctrl+D to exit the REPL\n> "
+    ],
+    [
+     ".bare",
+     "bare\n> "
+    ],
+    [
+     "function h() {",
+     "| "
+    ],
+    [
+     ".hello mid",
+     "Hello, mid!\n> "
+    ],
+    [
+     "}",
+     "}\n^\n\nUncaught SyntaxError: Unexpected token '}'\n> "
+    ],
+    [
+     ".exit now",
+     ""
+    ]
+   ],
+   "events": [
+    "exit",
+    "close"
+   ]
+  },
+  "await": {
+   "steps": [
+    [
+     "",
+     "> "
+    ],
+    [
+     "await 1",
+     "1\n> "
+    ],
+    [
+     "await Promise.resolve(5)",
+     "5\n> "
+    ],
+    [
+     "const r1 = await Promise.resolve(3)",
+     "undefined\n> "
+    ],
+    [
+     "r1",
+     "3\n> "
+    ],
+    [
+     "var r2 = await 2, r3 = 4",
+     "undefined\n> "
+    ],
+    [
+     "r2 + r3",
+     "6\n> "
+    ],
+    [
+     "await Promise.reject(new Error('rej'))",
+     "Uncaught Error: rej\n    at REPL132:1:54\n> "
+    ],
+    [
+     "let [d1, { d2 }] = await [1, { d2: 2 }]",
+     "undefined\n> "
+    ],
+    [
+     "d1 + d2",
+     "3\n> "
+    ],
+    [
+     "async function af() { return 9 }",
+     "undefined\n> "
+    ],
+    [
+     "await af()",
+     "9\n> "
+    ],
+    [
+     "function fa() { return 1 }; await fa()",
+     "1\n> "
+    ],
+    [
+     "fa()",
+     "1\n> "
+    ],
+    [
+     "class CA { }; await 0",
+     "0\n> "
+    ],
+    [
+     "typeof CA",
+     "'function'\n> "
+    ],
+    [
+     "await",
+     "Uncaught ReferenceError: await is not defined\n> "
+    ],
+    [
+     "(await 1) + (await 2)",
+     "3\n> "
+    ],
+    [
+     "await 1; 2",
+     "2\n> "
+    ],
+    [
+     "await (async () => { throw 7 })()",
+     "Uncaught 7\n> "
+    ],
+    [
+     "for await (const v of [1, 2]) v",
+     "undefined\n> "
+    ],
+    [
+     "if (await true) { 3 }",
+     "undefined\n> "
+    ],
+    [
+     "const obj2 = { p: await Promise.resolve({ value: 1 }) }; obj2",
+     "{ p: { value: 1 } }\n> "
+    ],
+    [
+     "await new Promise(r => setTimeout(() => r('late'), 5))",
+     "'late'\n> "
+    ],
+    [
+     "_",
+     "'late'\n> "
+    ],
+    [
+     "await 1 +",
+     "| "
+    ],
+    [
+     "2",
+     "3\n> "
+    ],
+    [
+     "awaitx",
+     "Uncaught ReferenceError: awaitx is not defined\n> "
+    ],
+    [
+     "var await1 = 1",
+     "undefined\n> "
+    ],
+    [
+     "return await 1",
+     "return await 1\n^^^^^^\n\nUncaught SyntaxError: Illegal return statement\n> "
+    ],
+    [
+     "let await",
+     "Uncaught SyntaxError: \nlet await\n    ^\n\nCannot use 'await' as identifier inside an async function\n> "
+    ],
+    [
+     "await undefined",
+     "undefined\n> "
+    ],
+    [
+     "$end",
+     ""
+    ]
+   ],
+   "events": [
+    "exit",
+    "close"
+   ]
+  },
+  "strict": {
+   "steps": [
+    [
+     "",
+     "> "
+    ],
+    [
+     "undeclared1 = 5",
+     "Uncaught ReferenceError: undeclared1 is not defined\n> "
+    ],
+    [
+     "var sv = 1",
+     "undefined\n> "
+    ],
+    [
+     "sv",
+     "1\n> "
+    ],
+    [
+     "'use strict'",
+     "'use strict'\n> "
+    ],
+    [
+     "function sf() { return this }",
+     "undefined\n> "
+    ],
+    [
+     "sf()",
+     "undefined\n> "
+    ],
+    [
+     "throw new Error('strict')",
+     "Uncaught Error: strict\n> "
+    ],
+    [
+     "function st() { throw new Error(\"st\") }",
+     "undefined\n> "
+    ],
+    [
+     "st()",
+     "Uncaught Error: st\n    at st (REPL164:2:23)\n> "
+    ],
+    [
+     "with ({}) {}",
+     "with ({}) {}\n^^^^\n\nUncaught SyntaxError: Strict mode code may not include a with statement\n> "
+    ],
+    [
+     "",
+     "> "
+    ],
+    [
+     "delete sv",
+     "| "
+    ],
+    [
+     "$end",
+     ""
+    ]
+   ],
+   "events": [
+    "exit",
+    "close"
+   ]
+  },
+  "options": {
+   "steps": [
+    [
+     "",
+     "$ "
+    ],
+    [
+     "1",
+     "<<number:1>>\n$ "
+    ],
+    [
+     "undefined",
+     "$ "
+    ],
+    [
+     "var u",
+     "$ "
+    ],
+    [
+     "'s'",
+     "<<string:s>>\n$ "
+    ],
+    [
+     "throw new Error('w')",
+     "Uncaught <<object:Error: w>>\n$ "
+    ],
+    [
+     "throw 5",
+     "Uncaught <<number:5>>\n$ "
+    ],
+    [
+     "function mm() {",
+     "| "
+    ],
+    [
+     "}",
+     "$ "
+    ],
+    [
+     "$end",
+     ""
+    ]
+   ],
+   "events": [
+    "exit",
+    "close"
+   ]
+  },
+  "customEval": {
+   "steps": [
+    [
+     "",
+     "> "
+    ],
+    [
+     "hello",
+     "[ 'hello\\n', 'object', true, false ]\n> "
+    ],
+    [
+     "more",
+     "| "
+    ],
+    [
+     "x",
+     "[ 'more\\nx\\n', 'object', true, false ]\n> "
+    ],
+    [
+     "fail",
+     "Uncaught Error: custom failure\n    at REPLServer.eval (/w/rec-repl.cjs:59:228)\n    at bound (node:domain:433:15)\n    at REPLServer.runBound [as eval] (node:domain:444:12)\n    at REPLServer.onLine (node:repl:900:10)\n    at REPLServer.emit (node:events:509:28)\n    at REPLServer.emit (node:domain:489:12)\n    at [_onLine] [as _onLine] (node:internal/readline/interface:465:12)\n    at [_normalWrite] [as _normalWrite] (node:internal/readline/interface:647:22)\n    at PassThrough.ondata (node:internal/readline/interface:263:23)\n> "
+    ],
+    [
+     "none",
+     "> "
+    ],
+    [
+     "async",
+     "'later'\n> "
+    ],
+    [
+     "",
+     "[ '\\n', 'object', true, false ]\n> "
+    ],
+    [
+     ".break",
+     "> "
+    ],
+    [
+     "npm install x",
+     "[ 'npm install x\\n', 'object', true, false ]\n> "
+    ],
+    [
+     "after",
+     "[ 'after\\n', 'object', true, false ]\n> "
+    ],
+    [
+     "$end",
+     ""
+    ]
+   ],
+   "events": [
+    "exit",
+    "close"
+   ]
+  },
+  "npm": {
+   "steps": [
+    [
+     "",
+     "> "
+    ],
+    [
+     "npm install foo",
+     "npm should be run outside of the Node.js REPL, in your normal shell.\n(Press Ctrl+D to exit.)\n> "
+    ],
+    [
+     "npm",
+     "Uncaught ReferenceError: npm is not defined\n> "
+    ],
+    [
+     "var npm = 1",
+     "undefined\n> "
+    ],
+    [
+     "npm install",
+     "npm should be run outside of the Node.js REPL, in your normal shell.\n(Press Ctrl+D to exit.)\n> "
+    ],
+    [
+     "$end",
+     ""
+    ]
+   ],
+   "events": [
+    "exit",
+    "close"
+   ]
+  },
+  "localContext": {
+   "steps": [
+    [
+     "",
+     "> "
+    ],
+    [
+     "var lc = 1",
+     "undefined\n> "
+    ],
+    [
+     "lc",
+     "1\n> "
+    ],
+    [
+     "typeof globalThis.lc",
+     "'number'\n> "
+    ],
+    [
+     "_",
+     "'number'\n> "
+    ],
+    [
+     ".clear",
+     "Clearing context...\n> "
+    ],
+    [
+     "typeof lc",
+     "'undefined'\n> "
+    ],
+    [
+     ".help",
+     ".break   Sometimes you get stuck, this gets you out\n.clear   Break, and also clear the local context\n.exit    Exit the REPL\n.help    Print this help message\n.load    Load JS from a file into the REPL session\n.save    Save all evaluated commands in this REPL session to a file\n\nPress Ctrl+C to abort current expression, Ctrl+D to exit the REPL\n> "
+    ],
+    [
+     "$end",
+     ""
+    ]
+   ],
+   "events": [
+    "reset",
+    "exit",
+    "close"
+   ]
+  },
+  "endMidline": {
+   "steps": [
+    [
+     "",
+     "> "
+    ],
+    [
+     "function z() {",
+     "| "
+    ],
+    [
+     "$end",
+     ""
+    ]
+   ],
+   "events": [
+    "exit",
+    "close"
+   ]
+  },
+  "closeApi": {
+   "ret": true,
+   "sync": [],
+   "after": [
+    "exit",
+    "close"
+   ],
+   "closed": true,
+   "text": "> "
+  }
+ },
+ "history": {
+  "existing": {
+   "call": {
+    "ok": "$undefined"
+   },
+   "syncCb": false,
+   "cbArgs": [
+    2,
+    null,
+    true
+   ],
+   "ev": [
+    "pause",
+    "flushHistory",
+    "resume",
+    "flushHistory",
+    "pause"
+   ],
+   "text": "> 2\n> 2\n> ",
+   "history": [
+    "third",
+    "second",
+    "first",
+    ""
+   ],
+   "size": 30,
+   "file": [
+    "third\nsecond\nfirst\n",
+    "644"
+   ]
+  },
+  "missing": {
+   "call": {
+    "ok": "$undefined"
+   },
+   "syncCb": false,
+   "cbArgs": [
+    2,
+    null,
+    true
+   ],
+   "ev": [
+    "pause",
+    "flushHistory",
+    "resume",
+    "flushHistory",
+    "pause"
+   ],
+   "text": "> 3\n> ",
+   "history": [],
+   "size": 30,
+   "file": [
+    "",
+    "600"
+   ]
+  },
+  "directory": {
+   "call": {
+    "ok": "$undefined"
+   },
+   "syncCb": false,
+   "cbArgs": [
+    2,
+    null,
+    true
+   ],
+   "ev": [
+    "pause",
+    "resume",
+    "pause"
+   ],
+   "text": "> \nError: Could not open history file.\nREPL session history will not be persisted.\n\u001b[1G\u001b[0J> \u001b[3G",
+   "history": [],
+   "size": 30,
+   "file": null
+  },
+  "noParent": {
+   "call": {
+    "ok": "$undefined"
+   },
+   "syncCb": false,
+   "cbArgs": [
+    2,
+    null,
+    true
+   ],
+   "ev": [
+    "pause",
+    "resume",
+    "pause"
+   ],
+   "text": "> \nError: Could not open history file.\nREPL session history will not be persisted.\n\u001b[1G\u001b[0J> \u001b[3G",
+   "history": [],
+   "size": 30,
+   "file": null
+  },
+  "empty": {
+   "call": {
+    "ok": "$undefined"
+   },
+   "syncCb": true,
+   "cbArgs": [
+    2,
+    null,
+    true
+   ],
+   "ev": [
+    "pause"
+   ],
+   "text": "> ",
+   "history": [],
+   "size": 30,
+   "file": null
+  },
+  "objectForm": {
+   "call": {
+    "ok": "$undefined"
+   },
+   "syncCb": false,
+   "cbArgs": [
+    2,
+    null,
+    true
+   ],
+   "ev": [
+    "pause",
+    "flushHistory",
+    "resume",
+    "pause"
+   ],
+   "text": "> ",
+   "history": [
+    "e",
+    "d",
+    "c"
+   ],
+   "size": 3,
+   "file": [
+    "e\nd\nc",
+    "644"
+   ]
+  },
+  "objectCbCalled": true,
+  "objectCb": {
+   "call": {
+    "ok": "$undefined"
+   },
+   "syncCb": false,
+   "cbArgs": null,
+   "ev": [
+    "pause",
+    "flushHistory",
+    "resume",
+    "pause"
+   ],
+   "text": "> ",
+   "history": [
+    "e",
+    "d",
+    "c"
+   ],
+   "size": 30,
+   "file": [
+    "e\nd\nc",
+    "644"
+   ]
+  },
+  "noCb": {
+   "call": {
+    "ok": "$undefined"
+   },
+   "syncCb": false,
+   "cbArgs": null,
+   "ev": [
+    "pause"
+   ],
+   "text": "> ",
+   "history": [],
+   "size": 30,
+   "file": [
+    "third\nsecond\nfirst\n",
+    "644"
+   ]
+  },
+  "noArgs": {
+   "call": {
+    "ok": "$undefined"
+   },
+   "syncCb": false,
+   "cbArgs": null,
+   "ev": [
+    "pause"
+   ],
+   "text": "> ",
+   "history": [],
+   "size": 30,
+   "file": null
+  },
+  "badPath": {
+   "call": {
+    "ok": "$undefined"
+   },
+   "syncCb": false,
+   "cbArgs": [
+    2,
+    null,
+    true
+   ],
+   "ev": [
+    "pause",
+    "resume",
+    "pause"
+   ],
+   "text": "> \nError: Could not open history file.\nREPL session history will not be persisted.\n\u001b[1G\u001b[0J> \u001b[3G",
+   "history": [],
+   "size": 30,
+   "file": null
+  },
+  "badSize": {
+   "call": {
+    "error": {
+     "name": "RangeError",
+     "code": "ERR_OUT_OF_RANGE",
+     "message": "The value of \"size\" is out of range. It must be >= 0. Received -1"
+    }
+   },
+   "syncCb": false,
+   "cbArgs": null,
+   "ev": [
+    "pause"
+   ],
+   "text": "> ",
+   "history": [],
+   "size": 30,
+   "file": [
+    "third\nsecond\nfirst\n",
+    "644"
+   ]
+  },
+  "badSizeType": {
+   "call": {
+    "error": {
+     "name": "TypeError",
+     "code": "ERR_INVALID_ARG_TYPE",
+     "message": "The \"size\" argument must be of type number. Received type string ('x')"
+    }
+   },
+   "syncCb": false,
+   "cbArgs": null,
+   "ev": [
+    "pause"
+   ],
+   "text": "> ",
+   "history": [],
+   "size": 30,
+   "file": [
+    "third\nsecond\nfirst\n",
+    "644"
+   ]
+  },
+  "badDup": {
+   "call": {
+    "ok": "$undefined"
+   },
+   "syncCb": false,
+   "cbArgs": [
+    2,
+    null,
+    true
+   ],
+   "ev": [
+    "pause",
+    "flushHistory",
+    "resume",
+    "pause"
+   ],
+   "text": "> ",
+   "history": [
+    "third",
+    "second",
+    "first",
+    ""
+   ],
+   "size": 30,
+   "file": [
+    "third\nsecond\nfirst\n",
+    "644"
+   ]
+  },
+  "badCb": {
+   "call": {
+    "ok": "$undefined"
+   },
+   "syncCb": false,
+   "cbArgs": null,
+   "ev": [
+    "pause",
+    "flushHistory",
+    "resume",
+    "pause"
+   ],
+   "text": "> ",
+   "history": [
+    "third",
+    "second",
+    "first",
+    ""
+   ],
+   "size": 30,
+   "file": [
+    "third\nsecond\nfirst\n",
+    "644"
+   ]
+  },
+  "nullArg": {
+   "call": {
+    "error": {
+     "name": "TypeError",
+     "message": "Cannot set properties of null (setting 'onHistoryFileLoaded')"
+    }
+   },
+   "syncCb": false,
+   "cbArgs": null,
+   "ev": [
+    "pause"
+   ],
+   "text": "> ",
+   "history": [],
+   "size": 30,
+   "file": null
+  },
+  "setupShape": [
+   "setupHistory",
+   0
+  ]
+ },
+ "deprecations": {
+  "default": {
+   "pending": false,
+   "same": true,
+   "settable": [
+    [
+     [
+      "x"
+     ],
+     [
+      "x"
+     ]
+    ],
+    true
+   ],
+   "getterNames": [
+    [
+     "",
+     0,
+     "",
+     1
+    ],
+    [
+     "",
+     0,
+     "",
+     1
+    ]
+   ],
+   "noNew": [
+    true,
+    true
+   ],
+   "streams": [
+    true,
+    true
+   ],
+   "sub": [
+    true,
+    true,
+    true,
+    true
+   ],
+   "legacyWrote": "L> ",
+   "legacy": [
+    "L> ",
+    true,
+    true,
+    true
+   ],
+   "streamOpt": true,
+   "badInput": [
+    "TypeError",
+    null,
+    "Cannot create property 'size' on number '5'"
+   ],
+   "warnings": [
+    {
+     "name": "DeprecationWarning",
+     "code": "DEP0185",
+     "message": "Instantiating REPLServer without the 'new' keyword has been deprecated."
+    }
+   ]
+  },
+  "pending": {
+   "pending": true,
+   "same": true,
+   "settable": [
+    [
+     [
+      "x"
+     ],
+     [
+      "x"
+     ]
+    ],
+    true
+   ],
+   "getterNames": [
+    [
+     "deprecated",
+     0,
+     "deprecated",
+     1
+    ],
+    [
+     "deprecated",
+     0,
+     "deprecated",
+     1
+    ]
+   ],
+   "noNew": [
+    true,
+    true
+   ],
+   "streams": [
+    true,
+    true
+   ],
+   "sub": [
+    true,
+    true,
+    true,
+    true
+   ],
+   "legacyWrote": "L> ",
+   "legacy": [
+    "L> ",
+    true,
+    true,
+    true
+   ],
+   "streamOpt": true,
+   "badInput": [
+    "TypeError",
+    null,
+    "Cannot create property 'size' on number '5'"
+   ],
+   "warnings": [
+    {
+     "name": "DeprecationWarning",
+     "code": "DEP0191",
+     "message": "repl.builtinModules is deprecated. Check module.builtinModules instead"
+    },
+    {
+     "name": "DeprecationWarning",
+     "code": "DEP0142",
+     "message": "repl._builtinLibs is deprecated. Check module.builtinModules instead"
+    },
+    {
+     "name": "DeprecationWarning",
+     "code": "DEP0185",
+     "message": "Instantiating REPLServer without the 'new' keyword has been deprecated."
+    },
+    {
+     "name": "DeprecationWarning",
+     "code": "DEP0141",
+     "message": "repl.inputStream and repl.outputStream are deprecated. Use repl.input and repl.output instead"
+    }
+   ]
+  }
+ }
+}

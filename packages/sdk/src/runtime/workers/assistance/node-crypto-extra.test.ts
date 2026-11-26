@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import { cryptoExtras } from "./node-crypto-extra.js";
 
 describe("crypto extras", () => {
-  it("draws uniform random integers and fills typed arrays from platform entropy, and refuses key material generation", () => {
+  it("draws uniform random integers and fills typed arrays from platform entropy, and refuses certificate parsing", () => {
     for (let i = 0; i < 200; i += 1) {
       const value = cryptoExtras.randomInt(10);
       expect(value).toBeGreaterThanOrEqual(0); expect(value).toBeLessThan(10);
@@ -16,7 +16,7 @@ describe("crypto extras", () => {
     const slice = new Uint8Array(16);
     cryptoExtras.randomFillSync(slice, 4, 8);
     expect([...slice.subarray(0, 4), ...slice.subarray(12)].every(byte => byte === 0)).toBe(true);
-    for (const name of ["X509Certificate", "createPrivateKey", "createPublicKey", "generateKeyPairSync", "generateKeySync", "generatePrimeSync"] as const) {
+    for (const name of ["X509Certificate"] as const) {
       const refused = cryptoExtras[name];
       expect(() => { Reflect.apply(refused, undefined, []); }).toThrow(new RegExp(name, "u"));
     }

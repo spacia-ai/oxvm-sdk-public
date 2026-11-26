@@ -1,0 +1,139 @@
+{
+ "//": "Recorded from Node.js v24.18.1: docker run --rm -v $PWD:/w:ro node:24.18.1-alpine node /w/rec-memory.cjs. Shapes only: the numbers themselves differ on every run. heapStatistics is recorded to document why v8.getHeapStatistics stays refused (14 fields, and total_available_size is not heap_size_limit - used_heap_size).",
+ "recorder": "const v8 = require(\"node:v8\");\nconst fn = f => [typeof f, f.name, f.length];\nconst desc = (o, k) => { const d = Object.getOwnPropertyDescriptor(o, k); return d === undefined ? null : [typeof d.value, d.enumerable, d.writable, d.configurable]; };\nconst types = o => Object.fromEntries(Object.entries(o).map(([k, v]) => [k, typeof v]));\nconst usage = process.memoryUsage(), stats = v8.getHeapStatistics();\nconst status = require(\"node:fs\").readFileSync(\"/proc/self/status\", \"utf8\");\nconst out = {\n  node: process.version,\n  memoryUsage: {\n    fn: fn(process.memoryUsage), descriptor: desc(process, \"memoryUsage\"), ownKeys: Reflect.ownKeys(process.memoryUsage).map(String),\n    rssFn: fn(process.memoryUsage.rss), rssDescriptor: desc(process.memoryUsage, \"rss\"),\n    keys: Object.keys(usage), types: types(usage), proto: Object.getPrototypeOf(usage) === Object.prototype, fresh: process.memoryUsage() !== process.memoryUsage(),\n    integers: Object.values(usage).every(Number.isSafeInteger), rssType: typeof process.memoryUsage.rss(),\n    ignoresArguments: [Object.keys(process.memoryUsage(1, \"x\")), typeof process.memoryUsage.rss({}), Object.keys(process.memoryUsage.call(null))],\n    rssIsVmRSS: Math.abs(process.memoryUsage.rss() - Number(/^VmRSS:\\s+(\\d+) kB$/m.exec(status)[1]) * 1024) < 4 * 1024 * 1024,\n    statusLines: status.split(\"\\n\").filter(l => /^Vm(RSS|HWM|Size):/.test(l)).map(l => l.replace(/\\d+/, \"N\")),\n  },\n  heapStatistics: {\n    fn: fn(v8.getHeapStatistics), keys: Object.keys(stats), types: types(stats), proto: Object.getPrototypeOf(stats) === Object.prototype,\n    fresh: v8.getHeapStatistics() !== v8.getHeapStatistics(), ignoresArguments: Object.keys(v8.getHeapStatistics(1)).length,\n    availableIsLimitMinusUsed: stats.total_available_size === stats.heap_size_limit - stats.used_heap_size,\n    availableBelowLimit: stats.total_available_size <= stats.heap_size_limit, usedBelowTotal: stats.used_heap_size <= stats.total_heap_size,\n    sameAsMemoryUsage: [Math.abs(usage.heapTotal - stats.total_heap_size) < 1 << 20, Math.abs(usage.heapUsed - stats.used_heap_size) < 1 << 20],\n  },\n  heapSpaceStatistics: { fn: fn(v8.getHeapSpaceStatistics) }, heapCodeStatistics: { fn: fn(v8.getHeapCodeStatistics) },\n};\nconsole.log(JSON.stringify(out, null, 1));\n",
+ "node": "v24.18.1",
+ "memoryUsage": {
+  "fn": [
+   "function",
+   "memoryUsage",
+   0
+  ],
+  "descriptor": [
+   "function",
+   true,
+   true,
+   true
+  ],
+  "ownKeys": [
+   "length",
+   "name",
+   "prototype",
+   "rss"
+  ],
+  "rssFn": [
+   "function",
+   "rss",
+   0
+  ],
+  "rssDescriptor": [
+   "function",
+   true,
+   true,
+   true
+  ],
+  "keys": [
+   "rss",
+   "heapTotal",
+   "heapUsed",
+   "external",
+   "arrayBuffers"
+  ],
+  "types": {
+   "rss": "number",
+   "heapTotal": "number",
+   "heapUsed": "number",
+   "external": "number",
+   "arrayBuffers": "number"
+  },
+  "proto": true,
+  "fresh": true,
+  "integers": true,
+  "rssType": "number",
+  "ignoresArguments": [
+   [
+    "rss",
+    "heapTotal",
+    "heapUsed",
+    "external",
+    "arrayBuffers"
+   ],
+   "number",
+   [
+    "rss",
+    "heapTotal",
+    "heapUsed",
+    "external",
+    "arrayBuffers"
+   ]
+  ],
+  "rssIsVmRSS": true,
+  "statusLines": [
+   "VmSize:\t N kB",
+   "VmHWM:\t   N kB",
+   "VmRSS:\t   N kB"
+  ]
+ },
+ "heapStatistics": {
+  "fn": [
+   "function",
+   "getHeapStatistics",
+   0
+  ],
+  "keys": [
+   "total_heap_size",
+   "total_heap_size_executable",
+   "total_physical_size",
+   "total_available_size",
+   "used_heap_size",
+   "heap_size_limit",
+   "malloced_memory",
+   "peak_malloced_memory",
+   "does_zap_garbage",
+   "number_of_native_contexts",
+   "number_of_detached_contexts",
+   "total_global_handles_size",
+   "used_global_handles_size",
+   "external_memory"
+  ],
+  "types": {
+   "total_heap_size": "number",
+   "total_heap_size_executable": "number",
+   "total_physical_size": "number",
+   "total_available_size": "number",
+   "used_heap_size": "number",
+   "heap_size_limit": "number",
+   "malloced_memory": "number",
+   "peak_malloced_memory": "number",
+   "does_zap_garbage": "number",
+   "number_of_native_contexts": "number",
+   "number_of_detached_contexts": "number",
+   "total_global_handles_size": "number",
+   "used_global_handles_size": "number",
+   "external_memory": "number"
+  },
+  "proto": true,
+  "fresh": true,
+  "ignoresArguments": 14,
+  "availableIsLimitMinusUsed": false,
+  "availableBelowLimit": true,
+  "usedBelowTotal": true,
+  "sameAsMemoryUsage": [
+   true,
+   true
+  ]
+ },
+ "heapSpaceStatistics": {
+  "fn": [
+   "function",
+   "getHeapSpaceStatistics",
+   0
+  ]
+ },
+ "heapCodeStatistics": {
+  "fn": [
+   "function",
+   "getHeapCodeStatistics",
+   0
+  ]
+ }
+}

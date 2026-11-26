@@ -1,0 +1,4145 @@
+{
+ "schemaVersion": 1,
+ "node": {
+  "version": "v24.18.1",
+  "image": "node:24.18.1-alpine"
+ },
+ "recorder": "\"use strict\";\nconst util = require(\"util\");\nconst U = { $: \"undefined\" }, enc = v => v === undefined ? U : typeof v === \"number\" && Number.isNaN(v) ? { $: \"NaN\" } : v === Infinity ? { $: \"Infinity\" } : typeof v === \"bigint\" ? { $: \"bigint\", v: String(v) } : typeof v === \"symbol\" ? { $: \"symbol\" } : typeof v === \"function\" ? { $: \"fn\" } : v;\nconst dec = v => v && typeof v === \"object\" && !Array.isArray(v) && \"$\" in v ? (v.$ === \"undefined\" ? undefined : v.$ === \"NaN\" ? NaN : v.$ === \"Infinity\" ? Infinity : v.$ === \"bigint\" ? BigInt(v.v) : v.$ === \"symbol\" ? Symbol(\"s\") : v.$ === \"fn\" ? function fn() {} : v.$ === \"signal\" ? new AbortController().signal : v) : v;\nconst err = e => ({ name: e.name, code: enc(e.code), message: e.message, ctor: e.constructor.name });\nconst run = (f) => { try { return { value: enc(f()) }; } catch (e) { return { error: err(e) }; } };\nconst out = { node: process.version };\nconst fns = [\"getSystemErrorName\", \"getSystemErrorMap\", \"getSystemErrorMessage\", \"_errnoException\", \"_exceptionWithHostPort\", \"_extend\", \"isArray\", \"MIMEType\", \"MIMEParams\", \"getCallSites\", \"diff\", \"convertProcessSignalToExitCode\", \"transferableAbortController\", \"transferableAbortSignal\", \"setTraceSigInt\"];\nout.functions = fns.map(n => ({ name: n, fname: util[n].name, length: util[n].length }));\nconst errnoArgs = [-2, -1, -13, -4095, -9999, -123456789, 0, 1, -1.5, { $: \"NaN\" }, { $: \"Infinity\" }, \"x\", null, U, {}, [], true, { $: \"bigint\", v: \"-2\" }, -9007199254740993, -4294967297];\nout.systemErrorName = errnoArgs.map(a => ({ arg: a, ...run(() => util.getSystemErrorName(dec(a))) }));\nout.systemErrorMessage = errnoArgs.map(a => ({ arg: a, ...run(() => util.getSystemErrorMessage(dec(a))) }));\nout.systemErrorMap = [...util.getSystemErrorMap()];\nout.systemErrorMapFresh = util.getSystemErrorMap() === util.getSystemErrorMap();\nconst exc = e => ({ name: e.name, message: e.message, keys: Object.keys(e), props: Object.fromEntries(Object.keys(e).map(k => [k, enc(e[k])])), ctorIsError: e.constructor === Error, isError: e instanceof Error, stackHead: String(e.stack).split(\"\\n\")[0] });\nconst errnoCases = [[-2, \"open\"], [-2, \"open\", \"extra detail\"], [-13, \"connect\", \"\"], [-98, \"listen\", \"addr\"], [-9999, \"x\"], [-2], [-2, U, \"o\"], [-2, 5, 7], [0, \"open\"], [\"x\", \"open\"], [U, \"open\"], [-2, \"open\", 0]];\nout.errnoException = errnoCases.map(a => ({ args: a, ...(() => { try { return { result: exc(util._errnoException(...a.map(dec))) }; } catch (e) { return { error: err(e) }; } })() }));\nconst hpCases = [[-111, \"connect\", \"127.0.0.1\", 80], [-111, \"connect\", \"127.0.0.1\", 80, \"- Local (0.0.0.0:0)\"], [-98, \"listen\", \"::\", 3000], [-2, \"connect\", \"/tmp/sock\"], [-2, \"connect\", \"/tmp/sock\", -1], [-2, \"connect\", \"/tmp/sock\", 0], [-111, \"connect\", U, 80], [-111, \"connect\", \"h\", \"80\"], [-9999, \"connect\", \"h\", 1], [-111, \"connect\"], [0, \"connect\", \"h\", 1], [\"x\", \"connect\", \"h\", 1], [-111, \"connect\", \"\", 0, \"add\"], [-111, U, \"h\", 1.5]];\nout.exceptionWithHostPort = hpCases.map(a => ({ args: a, ...(() => { try { return { result: exc(util._exceptionWithHostPort(...a.map(dec))) }; } catch (e) { return { error: err(e) }; } })() }));\n// deprecations\nconst warnings = [];\nprocess.on(\"warning\", w => warnings.push({ name: w.name, code: w.code, message: w.message }));\nconst target = { a: 1 };\nout.extend = [\n  { r: util._extend(target, { b: 2, a: 3 }), same: util._extend(target, {}) === target },\n  { r: util._extend({ a: 1 }, null) }, { r: util._extend({ a: 1 }, \"str\") }, { r: util._extend({ a: 1 }, [7, 8]) }, { r: enc(util._extend(undefined, undefined)) },\n  { r: util._extend(5, 6) }, run(() => util._extend(undefined, { a: 1 })),\n];\nout.isArray = [[], {}, \"a\", null, new Array(3), { length: 0 }].map(v => util.isArray(v));\n// MIME\nconst mimeInputs = [\"text/plain\", \"TEXT/Plain; Charset=UTF-8\", \" \\t text/html ;charset=utf-8; q=0.9\", \"application/json;a=b;a=c\", \"text/plain;charset=\\\"utf-8\\\"\", \"text/plain;a=\\\"x\\\\\\\"y\\\\\\\\z\\\"\", \"text/plain;a=\\\"unterminated\", \"text/plain;a=\\\"esc\\\\\", \"text/plain;a=;b=1;;c;d=2\", \"text/plain; a = 1 \", \"text/plain;a=b c\", \"text/plain;\u00e9=1;ok=\u00e9\", \"text/plain;x=\\\"\\\"\", \"text/plain;x=\\\"a;b\\\";y=2\", \"application/vnd.api+json;profile=\\\"http://x/y z\\\"\", \"x/y;A=B;a=c\", \"text/plain;a=\\\"q\\\" junk;b=2\",\n  \"\", \"text\", \"/plain\", \"text/\", \"text/;a=1\", \"te xt/plain\", \"text/pl ain\", \"text/plain/x\", \"t\u00e9xt/plain\", \"text/pl\u00e4in\", \";\", \" / \", \"text/plain\\n\", \"\\ntext/plain\", \"a/b;c=\u0100\"];\nconst mime = s => { const m = new util.MIMEType(s); return { type: m.type, subtype: m.subtype, essence: m.essence, str: m.toString(), json: JSON.stringify(m), tpl: `${m}`, params: [...m.params], keys: [...m.params.keys()], values: [...m.params.values()], paramsStr: m.params.toString(), paramsJson: JSON.stringify(m.params), entries: [...m.params.entries()] }; };\nout.mimeParse = mimeInputs.map(s => ({ input: s, ...run(() => mime(s)) }));\nout.mimeNonString = [U, null, 5, {}, { $: \"obj\", toString: \"a/b\" }].map(a => ({ arg: a, ...run(() => new util.MIMEType(a && a.$ === \"obj\" ? { toString() { return \"a/b\"; } } : dec(a)).toString()) }));\nconst ops = [\n  [[\"type\", \"IMAGE\"], [\"subtype\", \"PNG\"]], [[\"type\", \"\"]], [[\"type\", \"a/b\"]], [[\"type\", \"a b\"]], [[\"subtype\", \"\"]], [[\"subtype\", \"x;y\"]], [[\"type\", 5], [\"subtype\", null]],\n  [[\"set\", \"charset\", \"utf-8\"]], [[\"set\", \"a\", \"b c\"]], [[\"set\", \"a\", \"\"]], [[\"set\", \"a\", \"q\\\"u\\\\o\"]], [[\"set\", \"\", \"x\"]], [[\"set\", \"a b\", \"x\"]], [[\"set\", \"a\", \"x\\ny\"]], [[\"set\", \"a\", \"\u0100\"]], [[\"set\", \"Key\", \"V\"], [\"get\", \"key\"], [\"get\", \"Key\"], [\"has\", \"Key\"], [\"has\", \"nope\"], [\"get\", \"nope\"]],\n  [[\"set\", \"a\", 1], [\"set\", \"b\", null], [\"set\", 7, U]], [[\"set\", \"x\", \"1\"], [\"set\", \"y\", \"2\"], [\"delete\", \"x\"], [\"has\", \"x\"], [\"delete\", \"zz\"]], [[\"set\", \"z\", \"1\"], [\"set\", \"a\", \"2\"], [\"set\", \"z\", \"3\"]], [[\"get\", \"base\"], [\"delete\", \"base\"], [\"get\", \"base\"]],\n];\nout.mimeOps = ops.map(seq => { const m = new util.MIMEType(\"text/plain;base=1\"); const steps = []; for (const [op, a, b] of seq) { steps.push(run(() => op === \"type\" || op === \"subtype\" ? (m[op] = dec(a), m[op]) : enc(m.params[op](dec(a), dec(b))))); } return { seq, steps, final: m.toString(), essence: m.essence }; });\n{ const p = new util.MIMEParams(); const r = {}; r.empty = p.toString(); p.set(\"a\", \"1\"); p.set(\"b\", \"x y\"); r.str = p.toString(); r.json = JSON.stringify(p); r.iterSame = p[Symbol.iterator] === p.entries; r.entries = [...p]; r.getMissing = p.get(\"zz\"); r.ignoredCtorArg = new util.MIMEParams(\"a=1\").toString();\n  r.protoKeys = Object.getOwnPropertyNames(util.MIMEParams.prototype); r.typeProtoKeys = Object.getOwnPropertyNames(util.MIMEType.prototype); r.staticKeys = Object.getOwnPropertyNames(util.MIMEParams); r.paramsSame = (m => m.params === m.params)(new util.MIMEType(\"a/b\")); r.paramsInstance = new util.MIMEType(\"a/b\").params instanceof util.MIMEParams;\n  r.noNew = run(() => util.MIMEType(\"a/b\")).error; r.entriesTag = Object.prototype.toString.call(p.entries()); r.inspect = util.inspect(new util.MIMEType(\"a/b;c=d\")); r.inspectParams = util.inspect(p); r.setLen = p.set.length; r.typeLen = util.MIMEType.length;\n  out.mimeParams = r; }\n// getCallSites\nfunction outer() { return inner(); } function inner() { return util.getCallSites(); }\n{ const s = outer(); out.callSites = { length: s.length, keys: Object.keys(s[0]), proto: Object.getPrototypeOf(s[0]) === Object.prototype ? \"Object\" : Object.getPrototypeOf(s[0]) === null ? \"null\" : \"other\", types: Object.fromEntries(Object.entries(s[0]).map(([k, v]) => [k, typeof v])), names: s.slice(0, 2).map(x => x.functionName), first: s[0], n1: util.getCallSites(1).length, n3: (function a() { return (function b() { return (function c() { return util.getCallSites(3).map(x => x.functionName); })(); })(); })(), topName: util.getCallSites(1)[0].functionName, optsOnly: Array.isArray(util.getCallSites({ sourceMap: false })), isArray: Array.isArray(s), lineEqCol: s[0].column === s[0].columnNumber };\n  out.callSiteErrors = [[0], [201], [1.5], [\"1\"], [null], [{ $: \"NaN\" }], [5, null], [5, 1], [5, { sourceMap: 1 }], [{ sourceMap: \"x\" }], [-1], [true], [200], [[]], [5, []], [5, { $: \"fn\" }]].map(a => ({ args: a, ...run(() => util.getCallSites(...a.map(dec)).length > 0) })); }\n// diff\nconst diffCases = [[\"abc\", \"abc\"], [\"12345678\", \"12!!5!7!\"], [\"kitten\", \"sitting\"], [\"\", \"abc\"], [\"abc\", \"\"], [\"\", \"\"], [[\"a\", \"b\", \"c\"], [\"a\", \"x\", \"c\"]], [[\"1\", \"2\", \"3\"], [\"2\", \"3\", \"4\"]], [[], [\"a\"]], [[\"a\"], []], [[], []], [\"h\u00e9llo \u2603\", \"hello \u2603!\"], [\"a\ud83d\ude00b\", \"a\ud83d\ude01b\"], [[\"line one\", \"line two\"], [\"line one\", \"line 2\", \"line three\"]], [\"abc\", [\"a\", \"b\", \"c\"]], [[\"ab\"], \"ab\"], [\"abcabba\", \"cbabac\"],\n  [1, \"a\"], [\"a\", 1], [null, \"a\"], [[\"a\", 1], [\"a\"]], [[\"a\"], [\"a\", null]], [U, \"a\"], [{}, {}], [1, 1], [U, U], [\"a\"], [[\"a\"], U]];\nout.diff = diffCases.map(a => ({ args: a, ...run(() => util.diff(...a.map(dec))) }));\n// signals\nout.signalNames = Object.keys(require(\"os\").constants.signals);\nout.signalExit = [\"SIGINT\", \"SIGTERM\", \"SIGKILL\", \"SIGHUP\", \"SIGUSR1\", \"SIGSYS\", \"SIGUNUSED\", \"SIGPOLL\", \"sigint\", \"INT\", \"\", 2, null, U, \"SIGFOO\", {}, [\"SIGINT\"]].map(a => ({ arg: a, ...run(() => util.convertProcessSignalToExitCode(dec(a))) }));\n// abort\n{ const c = util.transferableAbortController(); const s = new AbortController().signal;\n  out.abort = { ctrlIsAbortController: c instanceof AbortController, signalIsAbortSignal: c.signal instanceof AbortSignal, aborted: c.signal.aborted, fresh: util.transferableAbortController() !== c, sameSignal: util.transferableAbortSignal(s) === s, afterAbort: (c.abort(\"why\"), [c.signal.aborted, c.signal.reason]),\n    errors: [U, null, {}, \"s\", 5, { aborted: false }, { $: \"fn\" }].map(a => ({ arg: a, ...run(() => util.transferableAbortSignal(dec(a)) !== null) })) }; }\nout.traceSigInt = [true, false, U, null, 1, \"true\", {}].map(a => ({ arg: a, ...run(() => util.setTraceSigInt(dec(a))) }));\nout.float16 = { global: typeof Float16Array, has: typeof util.types.isFloat16Array, cases: typeof Float16Array === \"function\" ? [util.types.isFloat16Array(new Float16Array(2)), util.types.isFloat16Array(new Float32Array(2)), util.types.isFloat16Array({ [Symbol.toStringTag]: \"Float16Array\" }), util.types.isFloat16Array(null), util.types.isFloat16Array(Object.create(Float16Array.prototype))] : [] , name: util.types.isFloat16Array.name, length: util.types.isFloat16Array.length };\nout.extendDeprecated = { name: util._extend.name, length: util._extend.length, isArrayName: util.isArray.name, isArrayLength: util.isArray.length };\nsetTimeout(() => { out.warnings = warnings; process.stdout.write(JSON.stringify(out, null, 1)); }, 50);\n",
+ "functions": [
+  {
+   "name": "getSystemErrorName",
+   "fname": "getSystemErrorName",
+   "length": 1
+  },
+  {
+   "name": "getSystemErrorMap",
+   "fname": "getSystemErrorMap",
+   "length": 0
+  },
+  {
+   "name": "getSystemErrorMessage",
+   "fname": "getSystemErrorMessage",
+   "length": 1
+  },
+  {
+   "name": "_errnoException",
+   "fname": "_errnoException",
+   "length": 0
+  },
+  {
+   "name": "_exceptionWithHostPort",
+   "fname": "_exceptionWithHostPort",
+   "length": 0
+  },
+  {
+   "name": "_extend",
+   "fname": "deprecated",
+   "length": 2
+  },
+  {
+   "name": "isArray",
+   "fname": "deprecated",
+   "length": 1
+  },
+  {
+   "name": "MIMEType",
+   "fname": "MIMEType",
+   "length": 1
+  },
+  {
+   "name": "MIMEParams",
+   "fname": "MIMEParams",
+   "length": 0
+  },
+  {
+   "name": "getCallSites",
+   "fname": "getCallSites",
+   "length": 0
+  },
+  {
+   "name": "diff",
+   "fname": "diff",
+   "length": 2
+  },
+  {
+   "name": "convertProcessSignalToExitCode",
+   "fname": "convertProcessSignalToExitCode",
+   "length": 1
+  },
+  {
+   "name": "transferableAbortController",
+   "fname": "transferableAbortController",
+   "length": 0
+  },
+  {
+   "name": "transferableAbortSignal",
+   "fname": "transferableAbortSignal",
+   "length": 1
+  },
+  {
+   "name": "setTraceSigInt",
+   "fname": "setTraceSigInt",
+   "length": 1
+  }
+ ],
+ "systemErrorName": [
+  {
+   "arg": -2,
+   "value": "ENOENT"
+  },
+  {
+   "arg": -1,
+   "value": "EPERM"
+  },
+  {
+   "arg": -13,
+   "value": "EACCES"
+  },
+  {
+   "arg": -4095,
+   "value": "EOF"
+  },
+  {
+   "arg": -9999,
+   "value": "Unknown system error -9999"
+  },
+  {
+   "arg": -123456789,
+   "value": "Unknown system error -123456789"
+  },
+  {
+   "arg": 0,
+   "error": {
+    "name": "RangeError",
+    "code": "ERR_OUT_OF_RANGE",
+    "message": "The value of \"err\" is out of range. It must be a negative integer. Received 0",
+    "ctor": "RangeError"
+   }
+  },
+  {
+   "arg": 1,
+   "error": {
+    "name": "RangeError",
+    "code": "ERR_OUT_OF_RANGE",
+    "message": "The value of \"err\" is out of range. It must be a negative integer. Received 1",
+    "ctor": "RangeError"
+   }
+  },
+  {
+   "arg": -1.5,
+   "error": {
+    "name": "RangeError",
+    "code": "ERR_OUT_OF_RANGE",
+    "message": "The value of \"err\" is out of range. It must be a negative integer. Received -1.5",
+    "ctor": "RangeError"
+   }
+  },
+  {
+   "arg": {
+    "$": "NaN"
+   },
+   "error": {
+    "name": "RangeError",
+    "code": "ERR_OUT_OF_RANGE",
+    "message": "The value of \"err\" is out of range. It must be a negative integer. Received NaN",
+    "ctor": "RangeError"
+   }
+  },
+  {
+   "arg": {
+    "$": "Infinity"
+   },
+   "error": {
+    "name": "RangeError",
+    "code": "ERR_OUT_OF_RANGE",
+    "message": "The value of \"err\" is out of range. It must be a negative integer. Received Infinity",
+    "ctor": "RangeError"
+   }
+  },
+  {
+   "arg": "x",
+   "error": {
+    "name": "TypeError",
+    "code": "ERR_INVALID_ARG_TYPE",
+    "message": "The \"err\" argument must be of type number. Received type string ('x')",
+    "ctor": "TypeError"
+   }
+  },
+  {
+   "arg": null,
+   "error": {
+    "name": "TypeError",
+    "code": "ERR_INVALID_ARG_TYPE",
+    "message": "The \"err\" argument must be of type number. Received null",
+    "ctor": "TypeError"
+   }
+  },
+  {
+   "arg": {
+    "$": "undefined"
+   },
+   "error": {
+    "name": "TypeError",
+    "code": "ERR_INVALID_ARG_TYPE",
+    "message": "The \"err\" argument must be of type number. Received undefined",
+    "ctor": "TypeError"
+   }
+  },
+  {
+   "arg": {},
+   "error": {
+    "name": "TypeError",
+    "code": "ERR_INVALID_ARG_TYPE",
+    "message": "The \"err\" argument must be of type number. Received an instance of Object",
+    "ctor": "TypeError"
+   }
+  },
+  {
+   "arg": [],
+   "error": {
+    "name": "TypeError",
+    "code": "ERR_INVALID_ARG_TYPE",
+    "message": "The \"err\" argument must be of type number. Received an instance of Array",
+    "ctor": "TypeError"
+   }
+  },
+  {
+   "arg": true,
+   "error": {
+    "name": "TypeError",
+    "code": "ERR_INVALID_ARG_TYPE",
+    "message": "The \"err\" argument must be of type number. Received type boolean (true)",
+    "ctor": "TypeError"
+   }
+  },
+  {
+   "arg": {
+    "$": "bigint",
+    "v": "-2"
+   },
+   "error": {
+    "name": "TypeError",
+    "code": "ERR_INVALID_ARG_TYPE",
+    "message": "The \"err\" argument must be of type number. Received type bigint (-2n)",
+    "ctor": "TypeError"
+   }
+  },
+  {
+   "arg": -9007199254740992,
+   "error": {
+    "name": "RangeError",
+    "code": "ERR_OUT_OF_RANGE",
+    "message": "The value of \"err\" is out of range. It must be a negative integer. Received -9_007_199_254_740_992",
+    "ctor": "RangeError"
+   }
+  },
+  {
+   "arg": -4294967297,
+   "value": "Unknown system error -4294967297"
+  }
+ ],
+ "systemErrorMessage": [
+  {
+   "arg": -2,
+   "value": "no such file or directory"
+  },
+  {
+   "arg": -1,
+   "value": "operation not permitted"
+  },
+  {
+   "arg": -13,
+   "value": "permission denied"
+  },
+  {
+   "arg": -4095,
+   "value": "end of file"
+  },
+  {
+   "arg": -9999,
+   "value": "Unknown system error -9999"
+  },
+  {
+   "arg": -123456789,
+   "value": "Unknown system error -123456789"
+  },
+  {
+   "arg": 0,
+   "error": {
+    "name": "RangeError",
+    "code": "ERR_OUT_OF_RANGE",
+    "message": "The value of \"err\" is out of range. It must be a negative integer. Received 0",
+    "ctor": "RangeError"
+   }
+  },
+  {
+   "arg": 1,
+   "error": {
+    "name": "RangeError",
+    "code": "ERR_OUT_OF_RANGE",
+    "message": "The value of \"err\" is out of range. It must be a negative integer. Received 1",
+    "ctor": "RangeError"
+   }
+  },
+  {
+   "arg": -1.5,
+   "error": {
+    "name": "RangeError",
+    "code": "ERR_OUT_OF_RANGE",
+    "message": "The value of \"err\" is out of range. It must be a negative integer. Received -1.5",
+    "ctor": "RangeError"
+   }
+  },
+  {
+   "arg": {
+    "$": "NaN"
+   },
+   "error": {
+    "name": "RangeError",
+    "code": "ERR_OUT_OF_RANGE",
+    "message": "The value of \"err\" is out of range. It must be a negative integer. Received NaN",
+    "ctor": "RangeError"
+   }
+  },
+  {
+   "arg": {
+    "$": "Infinity"
+   },
+   "error": {
+    "name": "RangeError",
+    "code": "ERR_OUT_OF_RANGE",
+    "message": "The value of \"err\" is out of range. It must be a negative integer. Received Infinity",
+    "ctor": "RangeError"
+   }
+  },
+  {
+   "arg": "x",
+   "error": {
+    "name": "TypeError",
+    "code": "ERR_INVALID_ARG_TYPE",
+    "message": "The \"err\" argument must be of type number. Received type string ('x')",
+    "ctor": "TypeError"
+   }
+  },
+  {
+   "arg": null,
+   "error": {
+    "name": "TypeError",
+    "code": "ERR_INVALID_ARG_TYPE",
+    "message": "The \"err\" argument must be of type number. Received null",
+    "ctor": "TypeError"
+   }
+  },
+  {
+   "arg": {
+    "$": "undefined"
+   },
+   "error": {
+    "name": "TypeError",
+    "code": "ERR_INVALID_ARG_TYPE",
+    "message": "The \"err\" argument must be of type number. Received undefined",
+    "ctor": "TypeError"
+   }
+  },
+  {
+   "arg": {},
+   "error": {
+    "name": "TypeError",
+    "code": "ERR_INVALID_ARG_TYPE",
+    "message": "The \"err\" argument must be of type number. Received an instance of Object",
+    "ctor": "TypeError"
+   }
+  },
+  {
+   "arg": [],
+   "error": {
+    "name": "TypeError",
+    "code": "ERR_INVALID_ARG_TYPE",
+    "message": "The \"err\" argument must be of type number. Received an instance of Array",
+    "ctor": "TypeError"
+   }
+  },
+  {
+   "arg": true,
+   "error": {
+    "name": "TypeError",
+    "code": "ERR_INVALID_ARG_TYPE",
+    "message": "The \"err\" argument must be of type number. Received type boolean (true)",
+    "ctor": "TypeError"
+   }
+  },
+  {
+   "arg": {
+    "$": "bigint",
+    "v": "-2"
+   },
+   "error": {
+    "name": "TypeError",
+    "code": "ERR_INVALID_ARG_TYPE",
+    "message": "The \"err\" argument must be of type number. Received type bigint (-2n)",
+    "ctor": "TypeError"
+   }
+  },
+  {
+   "arg": -9007199254740992,
+   "error": {
+    "name": "RangeError",
+    "code": "ERR_OUT_OF_RANGE",
+    "message": "The value of \"err\" is out of range. It must be a negative integer. Received -9_007_199_254_740_992",
+    "ctor": "RangeError"
+   }
+  },
+  {
+   "arg": -4294967297,
+   "value": "Unknown system error -2147483648"
+  }
+ ],
+ "systemErrorMap": [
+  [
+   -7,
+   [
+    "E2BIG",
+    "argument list too long"
+   ]
+  ],
+  [
+   -13,
+   [
+    "EACCES",
+    "permission denied"
+   ]
+  ],
+  [
+   -98,
+   [
+    "EADDRINUSE",
+    "address already in use"
+   ]
+  ],
+  [
+   -99,
+   [
+    "EADDRNOTAVAIL",
+    "address not available"
+   ]
+  ],
+  [
+   -97,
+   [
+    "EAFNOSUPPORT",
+    "address family not supported"
+   ]
+  ],
+  [
+   -11,
+   [
+    "EAGAIN",
+    "resource temporarily unavailable"
+   ]
+  ],
+  [
+   -3000,
+   [
+    "EAI_ADDRFAMILY",
+    "address family not supported"
+   ]
+  ],
+  [
+   -3001,
+   [
+    "EAI_AGAIN",
+    "temporary failure"
+   ]
+  ],
+  [
+   -3002,
+   [
+    "EAI_BADFLAGS",
+    "bad ai_flags value"
+   ]
+  ],
+  [
+   -3013,
+   [
+    "EAI_BADHINTS",
+    "invalid value for hints"
+   ]
+  ],
+  [
+   -3003,
+   [
+    "EAI_CANCELED",
+    "request canceled"
+   ]
+  ],
+  [
+   -3004,
+   [
+    "EAI_FAIL",
+    "permanent failure"
+   ]
+  ],
+  [
+   -3005,
+   [
+    "EAI_FAMILY",
+    "ai_family not supported"
+   ]
+  ],
+  [
+   -3006,
+   [
+    "EAI_MEMORY",
+    "out of memory"
+   ]
+  ],
+  [
+   -3007,
+   [
+    "EAI_NODATA",
+    "no address"
+   ]
+  ],
+  [
+   -3008,
+   [
+    "EAI_NONAME",
+    "unknown node or service"
+   ]
+  ],
+  [
+   -3009,
+   [
+    "EAI_OVERFLOW",
+    "argument buffer overflow"
+   ]
+  ],
+  [
+   -3014,
+   [
+    "EAI_PROTOCOL",
+    "resolved protocol is unknown"
+   ]
+  ],
+  [
+   -3010,
+   [
+    "EAI_SERVICE",
+    "service not available for socket type"
+   ]
+  ],
+  [
+   -3011,
+   [
+    "EAI_SOCKTYPE",
+    "socket type not supported"
+   ]
+  ],
+  [
+   -114,
+   [
+    "EALREADY",
+    "connection already in progress"
+   ]
+  ],
+  [
+   -9,
+   [
+    "EBADF",
+    "bad file descriptor"
+   ]
+  ],
+  [
+   -16,
+   [
+    "EBUSY",
+    "resource busy or locked"
+   ]
+  ],
+  [
+   -125,
+   [
+    "ECANCELED",
+    "operation canceled"
+   ]
+  ],
+  [
+   -4080,
+   [
+    "ECHARSET",
+    "invalid Unicode character"
+   ]
+  ],
+  [
+   -103,
+   [
+    "ECONNABORTED",
+    "software caused connection abort"
+   ]
+  ],
+  [
+   -111,
+   [
+    "ECONNREFUSED",
+    "connection refused"
+   ]
+  ],
+  [
+   -104,
+   [
+    "ECONNRESET",
+    "connection reset by peer"
+   ]
+  ],
+  [
+   -89,
+   [
+    "EDESTADDRREQ",
+    "destination address required"
+   ]
+  ],
+  [
+   -17,
+   [
+    "EEXIST",
+    "file already exists"
+   ]
+  ],
+  [
+   -14,
+   [
+    "EFAULT",
+    "bad address in system call argument"
+   ]
+  ],
+  [
+   -27,
+   [
+    "EFBIG",
+    "file too large"
+   ]
+  ],
+  [
+   -113,
+   [
+    "EHOSTUNREACH",
+    "host is unreachable"
+   ]
+  ],
+  [
+   -4,
+   [
+    "EINTR",
+    "interrupted system call"
+   ]
+  ],
+  [
+   -22,
+   [
+    "EINVAL",
+    "invalid argument"
+   ]
+  ],
+  [
+   -5,
+   [
+    "EIO",
+    "i/o error"
+   ]
+  ],
+  [
+   -106,
+   [
+    "EISCONN",
+    "socket is already connected"
+   ]
+  ],
+  [
+   -21,
+   [
+    "EISDIR",
+    "illegal operation on a directory"
+   ]
+  ],
+  [
+   -40,
+   [
+    "ELOOP",
+    "too many symbolic links encountered"
+   ]
+  ],
+  [
+   -24,
+   [
+    "EMFILE",
+    "too many open files"
+   ]
+  ],
+  [
+   -90,
+   [
+    "EMSGSIZE",
+    "message too long"
+   ]
+  ],
+  [
+   -36,
+   [
+    "ENAMETOOLONG",
+    "name too long"
+   ]
+  ],
+  [
+   -100,
+   [
+    "ENETDOWN",
+    "network is down"
+   ]
+  ],
+  [
+   -101,
+   [
+    "ENETUNREACH",
+    "network is unreachable"
+   ]
+  ],
+  [
+   -23,
+   [
+    "ENFILE",
+    "file table overflow"
+   ]
+  ],
+  [
+   -105,
+   [
+    "ENOBUFS",
+    "no buffer space available"
+   ]
+  ],
+  [
+   -19,
+   [
+    "ENODEV",
+    "no such device"
+   ]
+  ],
+  [
+   -2,
+   [
+    "ENOENT",
+    "no such file or directory"
+   ]
+  ],
+  [
+   -12,
+   [
+    "ENOMEM",
+    "not enough memory"
+   ]
+  ],
+  [
+   -64,
+   [
+    "ENONET",
+    "machine is not on the network"
+   ]
+  ],
+  [
+   -92,
+   [
+    "ENOPROTOOPT",
+    "protocol not available"
+   ]
+  ],
+  [
+   -28,
+   [
+    "ENOSPC",
+    "no space left on device"
+   ]
+  ],
+  [
+   -38,
+   [
+    "ENOSYS",
+    "function not implemented"
+   ]
+  ],
+  [
+   -107,
+   [
+    "ENOTCONN",
+    "socket is not connected"
+   ]
+  ],
+  [
+   -20,
+   [
+    "ENOTDIR",
+    "not a directory"
+   ]
+  ],
+  [
+   -39,
+   [
+    "ENOTEMPTY",
+    "directory not empty"
+   ]
+  ],
+  [
+   -88,
+   [
+    "ENOTSOCK",
+    "socket operation on non-socket"
+   ]
+  ],
+  [
+   -95,
+   [
+    "ENOTSUP",
+    "operation not supported on socket"
+   ]
+  ],
+  [
+   -75,
+   [
+    "EOVERFLOW",
+    "value too large for defined data type"
+   ]
+  ],
+  [
+   -1,
+   [
+    "EPERM",
+    "operation not permitted"
+   ]
+  ],
+  [
+   -32,
+   [
+    "EPIPE",
+    "broken pipe"
+   ]
+  ],
+  [
+   -71,
+   [
+    "EPROTO",
+    "protocol error"
+   ]
+  ],
+  [
+   -93,
+   [
+    "EPROTONOSUPPORT",
+    "protocol not supported"
+   ]
+  ],
+  [
+   -91,
+   [
+    "EPROTOTYPE",
+    "protocol wrong type for socket"
+   ]
+  ],
+  [
+   -34,
+   [
+    "ERANGE",
+    "result too large"
+   ]
+  ],
+  [
+   -30,
+   [
+    "EROFS",
+    "read-only file system"
+   ]
+  ],
+  [
+   -108,
+   [
+    "ESHUTDOWN",
+    "cannot send after transport endpoint shutdown"
+   ]
+  ],
+  [
+   -29,
+   [
+    "ESPIPE",
+    "invalid seek"
+   ]
+  ],
+  [
+   -3,
+   [
+    "ESRCH",
+    "no such process"
+   ]
+  ],
+  [
+   -110,
+   [
+    "ETIMEDOUT",
+    "connection timed out"
+   ]
+  ],
+  [
+   -26,
+   [
+    "ETXTBSY",
+    "text file is busy"
+   ]
+  ],
+  [
+   -18,
+   [
+    "EXDEV",
+    "cross-device link not permitted"
+   ]
+  ],
+  [
+   -4094,
+   [
+    "UNKNOWN",
+    "unknown error"
+   ]
+  ],
+  [
+   -4095,
+   [
+    "EOF",
+    "end of file"
+   ]
+  ],
+  [
+   -6,
+   [
+    "ENXIO",
+    "no such device or address"
+   ]
+  ],
+  [
+   -31,
+   [
+    "EMLINK",
+    "too many links"
+   ]
+  ],
+  [
+   -112,
+   [
+    "EHOSTDOWN",
+    "host is down"
+   ]
+  ],
+  [
+   -121,
+   [
+    "EREMOTEIO",
+    "remote I/O error"
+   ]
+  ],
+  [
+   -25,
+   [
+    "ENOTTY",
+    "inappropriate ioctl for device"
+   ]
+  ],
+  [
+   -4028,
+   [
+    "EFTYPE",
+    "inappropriate file type or format"
+   ]
+  ],
+  [
+   -84,
+   [
+    "EILSEQ",
+    "illegal byte sequence"
+   ]
+  ],
+  [
+   -94,
+   [
+    "ESOCKTNOSUPPORT",
+    "socket type not supported"
+   ]
+  ],
+  [
+   -61,
+   [
+    "ENODATA",
+    "no data available"
+   ]
+  ],
+  [
+   -49,
+   [
+    "EUNATCH",
+    "protocol driver not attached"
+   ]
+  ],
+  [
+   -8,
+   [
+    "ENOEXEC",
+    "exec format error"
+   ]
+  ]
+ ],
+ "systemErrorMapFresh": false,
+ "errnoException": [
+  {
+   "args": [
+    -2,
+    "open"
+   ],
+   "result": {
+    "name": "Error",
+    "message": "open ENOENT",
+    "keys": [
+     "errno",
+     "code",
+     "syscall"
+    ],
+    "props": {
+     "errno": -2,
+     "code": "ENOENT",
+     "syscall": "open"
+    },
+    "ctorIsError": true,
+    "isError": true,
+    "stackHead": "Error: open ENOENT"
+   }
+  },
+  {
+   "args": [
+    -2,
+    "open",
+    "extra detail"
+   ],
+   "result": {
+    "name": "Error",
+    "message": "open ENOENT extra detail",
+    "keys": [
+     "errno",
+     "code",
+     "syscall"
+    ],
+    "props": {
+     "errno": -2,
+     "code": "ENOENT",
+     "syscall": "open"
+    },
+    "ctorIsError": true,
+    "isError": true,
+    "stackHead": "Error: open ENOENT extra detail"
+   }
+  },
+  {
+   "args": [
+    -13,
+    "connect",
+    ""
+   ],
+   "result": {
+    "name": "Error",
+    "message": "connect EACCES",
+    "keys": [
+     "errno",
+     "code",
+     "syscall"
+    ],
+    "props": {
+     "errno": -13,
+     "code": "EACCES",
+     "syscall": "connect"
+    },
+    "ctorIsError": true,
+    "isError": true,
+    "stackHead": "Error: connect EACCES"
+   }
+  },
+  {
+   "args": [
+    -98,
+    "listen",
+    "addr"
+   ],
+   "result": {
+    "name": "Error",
+    "message": "listen EADDRINUSE addr",
+    "keys": [
+     "errno",
+     "code",
+     "syscall"
+    ],
+    "props": {
+     "errno": -98,
+     "code": "EADDRINUSE",
+     "syscall": "listen"
+    },
+    "ctorIsError": true,
+    "isError": true,
+    "stackHead": "Error: listen EADDRINUSE addr"
+   }
+  },
+  {
+   "args": [
+    -9999,
+    "x"
+   ],
+   "result": {
+    "name": "Error",
+    "message": "x Unknown system error -9999",
+    "keys": [
+     "errno",
+     "code",
+     "syscall"
+    ],
+    "props": {
+     "errno": -9999,
+     "code": "Unknown system error -9999",
+     "syscall": "x"
+    },
+    "ctorIsError": true,
+    "isError": true,
+    "stackHead": "Error: x Unknown system error -9999"
+   }
+  },
+  {
+   "args": [
+    -2
+   ],
+   "result": {
+    "name": "Error",
+    "message": "undefined ENOENT",
+    "keys": [
+     "errno",
+     "code",
+     "syscall"
+    ],
+    "props": {
+     "errno": -2,
+     "code": "ENOENT",
+     "syscall": {
+      "$": "undefined"
+     }
+    },
+    "ctorIsError": true,
+    "isError": true,
+    "stackHead": "Error: undefined ENOENT"
+   }
+  },
+  {
+   "args": [
+    -2,
+    {
+     "$": "undefined"
+    },
+    "o"
+   ],
+   "result": {
+    "name": "Error",
+    "message": "undefined ENOENT o",
+    "keys": [
+     "errno",
+     "code",
+     "syscall"
+    ],
+    "props": {
+     "errno": -2,
+     "code": "ENOENT",
+     "syscall": {
+      "$": "undefined"
+     }
+    },
+    "ctorIsError": true,
+    "isError": true,
+    "stackHead": "Error: undefined ENOENT o"
+   }
+  },
+  {
+   "args": [
+    -2,
+    5,
+    7
+   ],
+   "result": {
+    "name": "Error",
+    "message": "5 ENOENT 7",
+    "keys": [
+     "errno",
+     "code",
+     "syscall"
+    ],
+    "props": {
+     "errno": -2,
+     "code": "ENOENT",
+     "syscall": 5
+    },
+    "ctorIsError": true,
+    "isError": true,
+    "stackHead": "Error: 5 ENOENT 7"
+   }
+  },
+  {
+   "args": [
+    0,
+    "open"
+   ],
+   "error": {
+    "name": "RangeError",
+    "code": "ERR_OUT_OF_RANGE",
+    "message": "The value of \"err\" is out of range. It must be a negative integer. Received 0",
+    "ctor": "RangeError"
+   }
+  },
+  {
+   "args": [
+    "x",
+    "open"
+   ],
+   "error": {
+    "name": "TypeError",
+    "code": "ERR_INVALID_ARG_TYPE",
+    "message": "The \"err\" argument must be of type number. Received type string ('x')",
+    "ctor": "TypeError"
+   }
+  },
+  {
+   "args": [
+    {
+     "$": "undefined"
+    },
+    "open"
+   ],
+   "error": {
+    "name": "TypeError",
+    "code": "ERR_INVALID_ARG_TYPE",
+    "message": "The \"err\" argument must be of type number. Received undefined",
+    "ctor": "TypeError"
+   }
+  },
+  {
+   "args": [
+    -2,
+    "open",
+    0
+   ],
+   "result": {
+    "name": "Error",
+    "message": "open ENOENT",
+    "keys": [
+     "errno",
+     "code",
+     "syscall"
+    ],
+    "props": {
+     "errno": -2,
+     "code": "ENOENT",
+     "syscall": "open"
+    },
+    "ctorIsError": true,
+    "isError": true,
+    "stackHead": "Error: open ENOENT"
+   }
+  }
+ ],
+ "exceptionWithHostPort": [
+  {
+   "args": [
+    -111,
+    "connect",
+    "127.0.0.1",
+    80
+   ],
+   "result": {
+    "name": "Error",
+    "message": "connect ECONNREFUSED 127.0.0.1:80",
+    "keys": [
+     "errno",
+     "code",
+     "syscall",
+     "address",
+     "port"
+    ],
+    "props": {
+     "errno": -111,
+     "code": "ECONNREFUSED",
+     "syscall": "connect",
+     "address": "127.0.0.1",
+     "port": 80
+    },
+    "ctorIsError": true,
+    "isError": true,
+    "stackHead": "Error: connect ECONNREFUSED 127.0.0.1:80"
+   }
+  },
+  {
+   "args": [
+    -111,
+    "connect",
+    "127.0.0.1",
+    80,
+    "- Local (0.0.0.0:0)"
+   ],
+   "result": {
+    "name": "Error",
+    "message": "connect ECONNREFUSED 127.0.0.1:80 - Local (- Local (0.0.0.0:0))",
+    "keys": [
+     "errno",
+     "code",
+     "syscall",
+     "address",
+     "port"
+    ],
+    "props": {
+     "errno": -111,
+     "code": "ECONNREFUSED",
+     "syscall": "connect",
+     "address": "127.0.0.1",
+     "port": 80
+    },
+    "ctorIsError": true,
+    "isError": true,
+    "stackHead": "Error: connect ECONNREFUSED 127.0.0.1:80 - Local (- Local (0.0.0.0:0))"
+   }
+  },
+  {
+   "args": [
+    -98,
+    "listen",
+    "::",
+    3000
+   ],
+   "result": {
+    "name": "Error",
+    "message": "listen EADDRINUSE :::3000",
+    "keys": [
+     "errno",
+     "code",
+     "syscall",
+     "address",
+     "port"
+    ],
+    "props": {
+     "errno": -98,
+     "code": "EADDRINUSE",
+     "syscall": "listen",
+     "address": "::",
+     "port": 3000
+    },
+    "ctorIsError": true,
+    "isError": true,
+    "stackHead": "Error: listen EADDRINUSE :::3000"
+   }
+  },
+  {
+   "args": [
+    -2,
+    "connect",
+    "/tmp/sock"
+   ],
+   "result": {
+    "name": "Error",
+    "message": "connect ENOENT /tmp/sock",
+    "keys": [
+     "errno",
+     "code",
+     "syscall",
+     "address"
+    ],
+    "props": {
+     "errno": -2,
+     "code": "ENOENT",
+     "syscall": "connect",
+     "address": "/tmp/sock"
+    },
+    "ctorIsError": true,
+    "isError": true,
+    "stackHead": "Error: connect ENOENT /tmp/sock"
+   }
+  },
+  {
+   "args": [
+    -2,
+    "connect",
+    "/tmp/sock",
+    -1
+   ],
+   "result": {
+    "name": "Error",
+    "message": "connect ENOENT /tmp/sock",
+    "keys": [
+     "errno",
+     "code",
+     "syscall",
+     "address",
+     "port"
+    ],
+    "props": {
+     "errno": -2,
+     "code": "ENOENT",
+     "syscall": "connect",
+     "address": "/tmp/sock",
+     "port": -1
+    },
+    "ctorIsError": true,
+    "isError": true,
+    "stackHead": "Error: connect ENOENT /tmp/sock"
+   }
+  },
+  {
+   "args": [
+    -2,
+    "connect",
+    "/tmp/sock",
+    0
+   ],
+   "result": {
+    "name": "Error",
+    "message": "connect ENOENT /tmp/sock",
+    "keys": [
+     "errno",
+     "code",
+     "syscall",
+     "address"
+    ],
+    "props": {
+     "errno": -2,
+     "code": "ENOENT",
+     "syscall": "connect",
+     "address": "/tmp/sock"
+    },
+    "ctorIsError": true,
+    "isError": true,
+    "stackHead": "Error: connect ENOENT /tmp/sock"
+   }
+  },
+  {
+   "args": [
+    -111,
+    "connect",
+    {
+     "$": "undefined"
+    },
+    80
+   ],
+   "result": {
+    "name": "Error",
+    "message": "connect ECONNREFUSED undefined:80",
+    "keys": [
+     "errno",
+     "code",
+     "syscall",
+     "address",
+     "port"
+    ],
+    "props": {
+     "errno": -111,
+     "code": "ECONNREFUSED",
+     "syscall": "connect",
+     "address": {
+      "$": "undefined"
+     },
+     "port": 80
+    },
+    "ctorIsError": true,
+    "isError": true,
+    "stackHead": "Error: connect ECONNREFUSED undefined:80"
+   }
+  },
+  {
+   "args": [
+    -111,
+    "connect",
+    "h",
+    "80"
+   ],
+   "result": {
+    "name": "Error",
+    "message": "connect ECONNREFUSED h:80",
+    "keys": [
+     "errno",
+     "code",
+     "syscall",
+     "address",
+     "port"
+    ],
+    "props": {
+     "errno": -111,
+     "code": "ECONNREFUSED",
+     "syscall": "connect",
+     "address": "h",
+     "port": "80"
+    },
+    "ctorIsError": true,
+    "isError": true,
+    "stackHead": "Error: connect ECONNREFUSED h:80"
+   }
+  },
+  {
+   "args": [
+    -9999,
+    "connect",
+    "h",
+    1
+   ],
+   "result": {
+    "name": "Error",
+    "message": "connect Unknown system error -9999 h:1",
+    "keys": [
+     "errno",
+     "code",
+     "syscall",
+     "address",
+     "port"
+    ],
+    "props": {
+     "errno": -9999,
+     "code": "Unknown system error -9999",
+     "syscall": "connect",
+     "address": "h",
+     "port": 1
+    },
+    "ctorIsError": true,
+    "isError": true,
+    "stackHead": "Error: connect Unknown system error -9999 h:1"
+   }
+  },
+  {
+   "args": [
+    -111,
+    "connect"
+   ],
+   "result": {
+    "name": "Error",
+    "message": "connect ECONNREFUSED",
+    "keys": [
+     "errno",
+     "code",
+     "syscall",
+     "address"
+    ],
+    "props": {
+     "errno": -111,
+     "code": "ECONNREFUSED",
+     "syscall": "connect",
+     "address": {
+      "$": "undefined"
+     }
+    },
+    "ctorIsError": true,
+    "isError": true,
+    "stackHead": "Error: connect ECONNREFUSED"
+   }
+  },
+  {
+   "args": [
+    0,
+    "connect",
+    "h",
+    1
+   ],
+   "error": {
+    "name": "RangeError",
+    "code": "ERR_OUT_OF_RANGE",
+    "message": "The value of \"err\" is out of range. It must be a negative integer. Received 0",
+    "ctor": "RangeError"
+   }
+  },
+  {
+   "args": [
+    "x",
+    "connect",
+    "h",
+    1
+   ],
+   "error": {
+    "name": "TypeError",
+    "code": "ERR_INVALID_ARG_TYPE",
+    "message": "The \"err\" argument must be of type number. Received type string ('x')",
+    "ctor": "TypeError"
+   }
+  },
+  {
+   "args": [
+    -111,
+    "connect",
+    "",
+    0,
+    "add"
+   ],
+   "result": {
+    "name": "Error",
+    "message": "connect ECONNREFUSED - Local (add)",
+    "keys": [
+     "errno",
+     "code",
+     "syscall",
+     "address"
+    ],
+    "props": {
+     "errno": -111,
+     "code": "ECONNREFUSED",
+     "syscall": "connect",
+     "address": ""
+    },
+    "ctorIsError": true,
+    "isError": true,
+    "stackHead": "Error: connect ECONNREFUSED - Local (add)"
+   }
+  },
+  {
+   "args": [
+    -111,
+    {
+     "$": "undefined"
+    },
+    "h",
+    1.5
+   ],
+   "result": {
+    "name": "Error",
+    "message": "undefined ECONNREFUSED h:1.5",
+    "keys": [
+     "errno",
+     "code",
+     "syscall",
+     "address",
+     "port"
+    ],
+    "props": {
+     "errno": -111,
+     "code": "ECONNREFUSED",
+     "syscall": {
+      "$": "undefined"
+     },
+     "address": "h",
+     "port": 1.5
+    },
+    "ctorIsError": true,
+    "isError": true,
+    "stackHead": "Error: undefined ECONNREFUSED h:1.5"
+   }
+  }
+ ],
+ "extend": [
+  {
+   "r": {
+    "a": 3,
+    "b": 2
+   },
+   "same": true
+  },
+  {
+   "r": {
+    "a": 1
+   }
+  },
+  {
+   "r": {
+    "a": 1
+   }
+  },
+  {
+   "r": {
+    "0": 7,
+    "1": 8,
+    "a": 1
+   }
+  },
+  {
+   "r": {
+    "$": "undefined"
+   }
+  },
+  {
+   "r": 5
+  },
+  {
+   "error": {
+    "name": "TypeError",
+    "code": {
+     "$": "undefined"
+    },
+    "message": "Cannot set properties of undefined (setting 'a')",
+    "ctor": "TypeError"
+   }
+  }
+ ],
+ "isArray": [
+  true,
+  false,
+  false,
+  false,
+  true,
+  false
+ ],
+ "mimeParse": [
+  {
+   "input": "text/plain",
+   "value": {
+    "type": "text",
+    "subtype": "plain",
+    "essence": "text/plain",
+    "str": "text/plain",
+    "json": "\"text/plain\"",
+    "tpl": "text/plain",
+    "params": [],
+    "keys": [],
+    "values": [],
+    "paramsStr": "",
+    "paramsJson": "\"\"",
+    "entries": []
+   }
+  },
+  {
+   "input": "TEXT/Plain; Charset=UTF-8",
+   "value": {
+    "type": "text",
+    "subtype": "plain",
+    "essence": "text/plain",
+    "str": "text/plain;charset=UTF-8",
+    "json": "\"text/plain;charset=UTF-8\"",
+    "tpl": "text/plain;charset=UTF-8",
+    "params": [
+     [
+      "charset",
+      "UTF-8"
+     ]
+    ],
+    "keys": [
+     "charset"
+    ],
+    "values": [
+     "UTF-8"
+    ],
+    "paramsStr": "charset=UTF-8",
+    "paramsJson": "\"charset=UTF-8\"",
+    "entries": [
+     [
+      "charset",
+      "UTF-8"
+     ]
+    ]
+   }
+  },
+  {
+   "input": " \t text/html ;charset=utf-8; q=0.9",
+   "value": {
+    "type": "text",
+    "subtype": "html",
+    "essence": "text/html",
+    "str": "text/html;charset=utf-8;q=0.9",
+    "json": "\"text/html;charset=utf-8;q=0.9\"",
+    "tpl": "text/html;charset=utf-8;q=0.9",
+    "params": [
+     [
+      "charset",
+      "utf-8"
+     ],
+     [
+      "q",
+      "0.9"
+     ]
+    ],
+    "keys": [
+     "charset",
+     "q"
+    ],
+    "values": [
+     "utf-8",
+     "0.9"
+    ],
+    "paramsStr": "charset=utf-8;q=0.9",
+    "paramsJson": "\"charset=utf-8;q=0.9\"",
+    "entries": [
+     [
+      "charset",
+      "utf-8"
+     ],
+     [
+      "q",
+      "0.9"
+     ]
+    ]
+   }
+  },
+  {
+   "input": "application/json;a=b;a=c",
+   "value": {
+    "type": "application",
+    "subtype": "json",
+    "essence": "application/json",
+    "str": "application/json;a=b",
+    "json": "\"application/json;a=b\"",
+    "tpl": "application/json;a=b",
+    "params": [
+     [
+      "a",
+      "b"
+     ]
+    ],
+    "keys": [
+     "a"
+    ],
+    "values": [
+     "b"
+    ],
+    "paramsStr": "a=b",
+    "paramsJson": "\"a=b\"",
+    "entries": [
+     [
+      "a",
+      "b"
+     ]
+    ]
+   }
+  },
+  {
+   "input": "text/plain;charset=\"utf-8\"",
+   "value": {
+    "type": "text",
+    "subtype": "plain",
+    "essence": "text/plain",
+    "str": "text/plain;charset=utf-8",
+    "json": "\"text/plain;charset=utf-8\"",
+    "tpl": "text/plain;charset=utf-8",
+    "params": [
+     [
+      "charset",
+      "utf-8"
+     ]
+    ],
+    "keys": [
+     "charset"
+    ],
+    "values": [
+     "utf-8"
+    ],
+    "paramsStr": "charset=utf-8",
+    "paramsJson": "\"charset=utf-8\"",
+    "entries": [
+     [
+      "charset",
+      "utf-8"
+     ]
+    ]
+   }
+  },
+  {
+   "input": "text/plain;a=\"x\\\"y\\\\z\"",
+   "value": {
+    "type": "text",
+    "subtype": "plain",
+    "essence": "text/plain",
+    "str": "text/plain;a=\"x\\\"y\\\\z\"",
+    "json": "\"text/plain;a=\\\"x\\\\\\\"y\\\\\\\\z\\\"\"",
+    "tpl": "text/plain;a=\"x\\\"y\\\\z\"",
+    "params": [
+     [
+      "a",
+      "x\"y\\z"
+     ]
+    ],
+    "keys": [
+     "a"
+    ],
+    "values": [
+     "x\"y\\z"
+    ],
+    "paramsStr": "a=\"x\\\"y\\\\z\"",
+    "paramsJson": "\"a=\\\"x\\\\\\\"y\\\\\\\\z\\\"\"",
+    "entries": [
+     [
+      "a",
+      "x\"y\\z"
+     ]
+    ]
+   }
+  },
+  {
+   "input": "text/plain;a=\"unterminated",
+   "value": {
+    "type": "text",
+    "subtype": "plain",
+    "essence": "text/plain",
+    "str": "text/plain;a=unterminated",
+    "json": "\"text/plain;a=unterminated\"",
+    "tpl": "text/plain;a=unterminated",
+    "params": [
+     [
+      "a",
+      "unterminated"
+     ]
+    ],
+    "keys": [
+     "a"
+    ],
+    "values": [
+     "unterminated"
+    ],
+    "paramsStr": "a=unterminated",
+    "paramsJson": "\"a=unterminated\"",
+    "entries": [
+     [
+      "a",
+      "unterminated"
+     ]
+    ]
+   }
+  },
+  {
+   "input": "text/plain;a=\"esc\\",
+   "value": {
+    "type": "text",
+    "subtype": "plain",
+    "essence": "text/plain",
+    "str": "text/plain;a=\"esc\\\\\"",
+    "json": "\"text/plain;a=\\\"esc\\\\\\\\\\\"\"",
+    "tpl": "text/plain;a=\"esc\\\\\"",
+    "params": [
+     [
+      "a",
+      "esc\\"
+     ]
+    ],
+    "keys": [
+     "a"
+    ],
+    "values": [
+     "esc\\"
+    ],
+    "paramsStr": "a=\"esc\\\\\"",
+    "paramsJson": "\"a=\\\"esc\\\\\\\\\\\"\"",
+    "entries": [
+     [
+      "a",
+      "esc\\"
+     ]
+    ]
+   }
+  },
+  {
+   "input": "text/plain;a=;b=1;;c;d=2",
+   "value": {
+    "type": "text",
+    "subtype": "plain",
+    "essence": "text/plain",
+    "str": "text/plain;b=1;d=2",
+    "json": "\"text/plain;b=1;d=2\"",
+    "tpl": "text/plain;b=1;d=2",
+    "params": [
+     [
+      "b",
+      "1"
+     ],
+     [
+      "d",
+      "2"
+     ]
+    ],
+    "keys": [
+     "b",
+     "d"
+    ],
+    "values": [
+     "1",
+     "2"
+    ],
+    "paramsStr": "b=1;d=2",
+    "paramsJson": "\"b=1;d=2\"",
+    "entries": [
+     [
+      "b",
+      "1"
+     ],
+     [
+      "d",
+      "2"
+     ]
+    ]
+   }
+  },
+  {
+   "input": "text/plain; a = 1 ",
+   "value": {
+    "type": "text",
+    "subtype": "plain",
+    "essence": "text/plain",
+    "str": "text/plain",
+    "json": "\"text/plain\"",
+    "tpl": "text/plain",
+    "params": [],
+    "keys": [],
+    "values": [],
+    "paramsStr": "",
+    "paramsJson": "\"\"",
+    "entries": []
+   }
+  },
+  {
+   "input": "text/plain;a=b c",
+   "value": {
+    "type": "text",
+    "subtype": "plain",
+    "essence": "text/plain",
+    "str": "text/plain;a=\"b c\"",
+    "json": "\"text/plain;a=\\\"b c\\\"\"",
+    "tpl": "text/plain;a=\"b c\"",
+    "params": [
+     [
+      "a",
+      "b c"
+     ]
+    ],
+    "keys": [
+     "a"
+    ],
+    "values": [
+     "b c"
+    ],
+    "paramsStr": "a=\"b c\"",
+    "paramsJson": "\"a=\\\"b c\\\"\"",
+    "entries": [
+     [
+      "a",
+      "b c"
+     ]
+    ]
+   }
+  },
+  {
+   "input": "text/plain;\u00e9=1;ok=\u00e9",
+   "value": {
+    "type": "text",
+    "subtype": "plain",
+    "essence": "text/plain",
+    "str": "text/plain;ok=\"\u00e9\"",
+    "json": "\"text/plain;ok=\\\"\u00e9\\\"\"",
+    "tpl": "text/plain;ok=\"\u00e9\"",
+    "params": [
+     [
+      "ok",
+      "\u00e9"
+     ]
+    ],
+    "keys": [
+     "ok"
+    ],
+    "values": [
+     "\u00e9"
+    ],
+    "paramsStr": "ok=\"\u00e9\"",
+    "paramsJson": "\"ok=\\\"\u00e9\\\"\"",
+    "entries": [
+     [
+      "ok",
+      "\u00e9"
+     ]
+    ]
+   }
+  },
+  {
+   "input": "text/plain;x=\"\"",
+   "value": {
+    "type": "text",
+    "subtype": "plain",
+    "essence": "text/plain",
+    "str": "text/plain;x=\"\"",
+    "json": "\"text/plain;x=\\\"\\\"\"",
+    "tpl": "text/plain;x=\"\"",
+    "params": [
+     [
+      "x",
+      ""
+     ]
+    ],
+    "keys": [
+     "x"
+    ],
+    "values": [
+     ""
+    ],
+    "paramsStr": "x=\"\"",
+    "paramsJson": "\"x=\\\"\\\"\"",
+    "entries": [
+     [
+      "x",
+      ""
+     ]
+    ]
+   }
+  },
+  {
+   "input": "text/plain;x=\"a;b\";y=2",
+   "value": {
+    "type": "text",
+    "subtype": "plain",
+    "essence": "text/plain",
+    "str": "text/plain;x=\"a;b\";y=2",
+    "json": "\"text/plain;x=\\\"a;b\\\";y=2\"",
+    "tpl": "text/plain;x=\"a;b\";y=2",
+    "params": [
+     [
+      "x",
+      "a;b"
+     ],
+     [
+      "y",
+      "2"
+     ]
+    ],
+    "keys": [
+     "x",
+     "y"
+    ],
+    "values": [
+     "a;b",
+     "2"
+    ],
+    "paramsStr": "x=\"a;b\";y=2",
+    "paramsJson": "\"x=\\\"a;b\\\";y=2\"",
+    "entries": [
+     [
+      "x",
+      "a;b"
+     ],
+     [
+      "y",
+      "2"
+     ]
+    ]
+   }
+  },
+  {
+   "input": "application/vnd.api+json;profile=\"http://x/y z\"",
+   "value": {
+    "type": "application",
+    "subtype": "vnd.api+json",
+    "essence": "application/vnd.api+json",
+    "str": "application/vnd.api+json;profile=\"http://x/y z\"",
+    "json": "\"application/vnd.api+json;profile=\\\"http://x/y z\\\"\"",
+    "tpl": "application/vnd.api+json;profile=\"http://x/y z\"",
+    "params": [
+     [
+      "profile",
+      "http://x/y z"
+     ]
+    ],
+    "keys": [
+     "profile"
+    ],
+    "values": [
+     "http://x/y z"
+    ],
+    "paramsStr": "profile=\"http://x/y z\"",
+    "paramsJson": "\"profile=\\\"http://x/y z\\\"\"",
+    "entries": [
+     [
+      "profile",
+      "http://x/y z"
+     ]
+    ]
+   }
+  },
+  {
+   "input": "x/y;A=B;a=c",
+   "value": {
+    "type": "x",
+    "subtype": "y",
+    "essence": "x/y",
+    "str": "x/y;a=B",
+    "json": "\"x/y;a=B\"",
+    "tpl": "x/y;a=B",
+    "params": [
+     [
+      "a",
+      "B"
+     ]
+    ],
+    "keys": [
+     "a"
+    ],
+    "values": [
+     "B"
+    ],
+    "paramsStr": "a=B",
+    "paramsJson": "\"a=B\"",
+    "entries": [
+     [
+      "a",
+      "B"
+     ]
+    ]
+   }
+  },
+  {
+   "input": "text/plain;a=\"q\" junk;b=2",
+   "value": {
+    "type": "text",
+    "subtype": "plain",
+    "essence": "text/plain",
+    "str": "text/plain;a=q;b=2",
+    "json": "\"text/plain;a=q;b=2\"",
+    "tpl": "text/plain;a=q;b=2",
+    "params": [
+     [
+      "a",
+      "q"
+     ],
+     [
+      "b",
+      "2"
+     ]
+    ],
+    "keys": [
+     "a",
+     "b"
+    ],
+    "values": [
+     "q",
+     "2"
+    ],
+    "paramsStr": "a=q;b=2",
+    "paramsJson": "\"a=q;b=2\"",
+    "entries": [
+     [
+      "a",
+      "q"
+     ],
+     [
+      "b",
+      "2"
+     ]
+    ]
+   }
+  },
+  {
+   "input": "",
+   "error": {
+    "name": "TypeError",
+    "code": "ERR_INVALID_MIME_SYNTAX",
+    "message": "The MIME syntax for a type in \"\" is invalid",
+    "ctor": "TypeError"
+   }
+  },
+  {
+   "input": "text",
+   "error": {
+    "name": "TypeError",
+    "code": "ERR_INVALID_MIME_SYNTAX",
+    "message": "The MIME syntax for a type in \"text\" is invalid",
+    "ctor": "TypeError"
+   }
+  },
+  {
+   "input": "/plain",
+   "error": {
+    "name": "TypeError",
+    "code": "ERR_INVALID_MIME_SYNTAX",
+    "message": "The MIME syntax for a type in \"/plain\" is invalid",
+    "ctor": "TypeError"
+   }
+  },
+  {
+   "input": "text/",
+   "error": {
+    "name": "TypeError",
+    "code": "ERR_INVALID_MIME_SYNTAX",
+    "message": "The MIME syntax for a subtype in \"text/\" is invalid",
+    "ctor": "TypeError"
+   }
+  },
+  {
+   "input": "text/;a=1",
+   "error": {
+    "name": "TypeError",
+    "code": "ERR_INVALID_MIME_SYNTAX",
+    "message": "The MIME syntax for a subtype in \"text/;a=1\" is invalid",
+    "ctor": "TypeError"
+   }
+  },
+  {
+   "input": "te xt/plain",
+   "error": {
+    "name": "TypeError",
+    "code": "ERR_INVALID_MIME_SYNTAX",
+    "message": "The MIME syntax for a type in \"te xt/plain\" is invalid at 2",
+    "ctor": "TypeError"
+   }
+  },
+  {
+   "input": "text/pl ain",
+   "error": {
+    "name": "TypeError",
+    "code": "ERR_INVALID_MIME_SYNTAX",
+    "message": "The MIME syntax for a subtype in \"text/pl ain\" is invalid at 2",
+    "ctor": "TypeError"
+   }
+  },
+  {
+   "input": "text/plain/x",
+   "error": {
+    "name": "TypeError",
+    "code": "ERR_INVALID_MIME_SYNTAX",
+    "message": "The MIME syntax for a subtype in \"text/plain/x\" is invalid at 5",
+    "ctor": "TypeError"
+   }
+  },
+  {
+   "input": "t\u00e9xt/plain",
+   "error": {
+    "name": "TypeError",
+    "code": "ERR_INVALID_MIME_SYNTAX",
+    "message": "The MIME syntax for a type in \"t\u00e9xt/plain\" is invalid at 1",
+    "ctor": "TypeError"
+   }
+  },
+  {
+   "input": "text/pl\u00e4in",
+   "error": {
+    "name": "TypeError",
+    "code": "ERR_INVALID_MIME_SYNTAX",
+    "message": "The MIME syntax for a subtype in \"text/pl\u00e4in\" is invalid at 2",
+    "ctor": "TypeError"
+   }
+  },
+  {
+   "input": ";",
+   "error": {
+    "name": "TypeError",
+    "code": "ERR_INVALID_MIME_SYNTAX",
+    "message": "The MIME syntax for a type in \";\" is invalid at 0",
+    "ctor": "TypeError"
+   }
+  },
+  {
+   "input": " / ",
+   "error": {
+    "name": "TypeError",
+    "code": "ERR_INVALID_MIME_SYNTAX",
+    "message": "The MIME syntax for a type in \" / \" is invalid",
+    "ctor": "TypeError"
+   }
+  },
+  {
+   "input": "text/plain\n",
+   "value": {
+    "type": "text",
+    "subtype": "plain",
+    "essence": "text/plain",
+    "str": "text/plain",
+    "json": "\"text/plain\"",
+    "tpl": "text/plain",
+    "params": [],
+    "keys": [],
+    "values": [],
+    "paramsStr": "",
+    "paramsJson": "\"\"",
+    "entries": []
+   }
+  },
+  {
+   "input": "\ntext/plain",
+   "value": {
+    "type": "text",
+    "subtype": "plain",
+    "essence": "text/plain",
+    "str": "text/plain",
+    "json": "\"text/plain\"",
+    "tpl": "text/plain",
+    "params": [],
+    "keys": [],
+    "values": [],
+    "paramsStr": "",
+    "paramsJson": "\"\"",
+    "entries": []
+   }
+  },
+  {
+   "input": "a/b;c=\u0100",
+   "value": {
+    "type": "a",
+    "subtype": "b",
+    "essence": "a/b",
+    "str": "a/b",
+    "json": "\"a/b\"",
+    "tpl": "a/b",
+    "params": [],
+    "keys": [],
+    "values": [],
+    "paramsStr": "",
+    "paramsJson": "\"\"",
+    "entries": []
+   }
+  }
+ ],
+ "mimeNonString": [
+  {
+   "arg": {
+    "$": "undefined"
+   },
+   "error": {
+    "name": "TypeError",
+    "code": "ERR_INVALID_MIME_SYNTAX",
+    "message": "The MIME syntax for a type in \"undefined\" is invalid",
+    "ctor": "TypeError"
+   }
+  },
+  {
+   "arg": null,
+   "error": {
+    "name": "TypeError",
+    "code": "ERR_INVALID_MIME_SYNTAX",
+    "message": "The MIME syntax for a type in \"null\" is invalid",
+    "ctor": "TypeError"
+   }
+  },
+  {
+   "arg": 5,
+   "error": {
+    "name": "TypeError",
+    "code": "ERR_INVALID_MIME_SYNTAX",
+    "message": "The MIME syntax for a type in \"5\" is invalid",
+    "ctor": "TypeError"
+   }
+  },
+  {
+   "arg": {},
+   "error": {
+    "name": "TypeError",
+    "code": "ERR_INVALID_MIME_SYNTAX",
+    "message": "The MIME syntax for a type in \"[object Object]\" is invalid at 0",
+    "ctor": "TypeError"
+   }
+  },
+  {
+   "arg": {
+    "$": "obj",
+    "toString": "a/b"
+   },
+   "value": "a/b"
+  }
+ ],
+ "mimeOps": [
+  {
+   "seq": [
+    [
+     "type",
+     "IMAGE"
+    ],
+    [
+     "subtype",
+     "PNG"
+    ]
+   ],
+   "steps": [
+    {
+     "value": "image"
+    },
+    {
+     "value": "png"
+    }
+   ],
+   "final": "image/png;base=1",
+   "essence": "image/png"
+  },
+  {
+   "seq": [
+    [
+     "type",
+     ""
+    ]
+   ],
+   "steps": [
+    {
+     "error": {
+      "name": "TypeError",
+      "code": "ERR_INVALID_MIME_SYNTAX",
+      "message": "The MIME syntax for a type in \"\" is invalid",
+      "ctor": "TypeError"
+     }
+    }
+   ],
+   "final": "text/plain;base=1",
+   "essence": "text/plain"
+  },
+  {
+   "seq": [
+    [
+     "type",
+     "a/b"
+    ]
+   ],
+   "steps": [
+    {
+     "error": {
+      "name": "TypeError",
+      "code": "ERR_INVALID_MIME_SYNTAX",
+      "message": "The MIME syntax for a type in \"a/b\" is invalid at 1",
+      "ctor": "TypeError"
+     }
+    }
+   ],
+   "final": "text/plain;base=1",
+   "essence": "text/plain"
+  },
+  {
+   "seq": [
+    [
+     "type",
+     "a b"
+    ]
+   ],
+   "steps": [
+    {
+     "error": {
+      "name": "TypeError",
+      "code": "ERR_INVALID_MIME_SYNTAX",
+      "message": "The MIME syntax for a type in \"a b\" is invalid at 1",
+      "ctor": "TypeError"
+     }
+    }
+   ],
+   "final": "text/plain;base=1",
+   "essence": "text/plain"
+  },
+  {
+   "seq": [
+    [
+     "subtype",
+     ""
+    ]
+   ],
+   "steps": [
+    {
+     "error": {
+      "name": "TypeError",
+      "code": "ERR_INVALID_MIME_SYNTAX",
+      "message": "The MIME syntax for a subtype in \"\" is invalid",
+      "ctor": "TypeError"
+     }
+    }
+   ],
+   "final": "text/plain;base=1",
+   "essence": "text/plain"
+  },
+  {
+   "seq": [
+    [
+     "subtype",
+     "x;y"
+    ]
+   ],
+   "steps": [
+    {
+     "error": {
+      "name": "TypeError",
+      "code": "ERR_INVALID_MIME_SYNTAX",
+      "message": "The MIME syntax for a subtype in \"x;y\" is invalid at 1",
+      "ctor": "TypeError"
+     }
+    }
+   ],
+   "final": "text/plain;base=1",
+   "essence": "text/plain"
+  },
+  {
+   "seq": [
+    [
+     "type",
+     5
+    ],
+    [
+     "subtype",
+     null
+    ]
+   ],
+   "steps": [
+    {
+     "value": "5"
+    },
+    {
+     "value": "null"
+    }
+   ],
+   "final": "5/null;base=1",
+   "essence": "5/null"
+  },
+  {
+   "seq": [
+    [
+     "set",
+     "charset",
+     "utf-8"
+    ]
+   ],
+   "steps": [
+    {
+     "value": {
+      "$": "undefined"
+     }
+    }
+   ],
+   "final": "text/plain;base=1;charset=utf-8",
+   "essence": "text/plain"
+  },
+  {
+   "seq": [
+    [
+     "set",
+     "a",
+     "b c"
+    ]
+   ],
+   "steps": [
+    {
+     "value": {
+      "$": "undefined"
+     }
+    }
+   ],
+   "final": "text/plain;base=1;a=\"b c\"",
+   "essence": "text/plain"
+  },
+  {
+   "seq": [
+    [
+     "set",
+     "a",
+     ""
+    ]
+   ],
+   "steps": [
+    {
+     "value": {
+      "$": "undefined"
+     }
+    }
+   ],
+   "final": "text/plain;base=1;a=\"\"",
+   "essence": "text/plain"
+  },
+  {
+   "seq": [
+    [
+     "set",
+     "a",
+     "q\"u\\o"
+    ]
+   ],
+   "steps": [
+    {
+     "value": {
+      "$": "undefined"
+     }
+    }
+   ],
+   "final": "text/plain;base=1;a=\"q\\\"u\\\\o\"",
+   "essence": "text/plain"
+  },
+  {
+   "seq": [
+    [
+     "set",
+     "",
+     "x"
+    ]
+   ],
+   "steps": [
+    {
+     "error": {
+      "name": "TypeError",
+      "code": "ERR_INVALID_MIME_SYNTAX",
+      "message": "The MIME syntax for a parameter name in \"\" is invalid",
+      "ctor": "TypeError"
+     }
+    }
+   ],
+   "final": "text/plain;base=1",
+   "essence": "text/plain"
+  },
+  {
+   "seq": [
+    [
+     "set",
+     "a b",
+     "x"
+    ]
+   ],
+   "steps": [
+    {
+     "error": {
+      "name": "TypeError",
+      "code": "ERR_INVALID_MIME_SYNTAX",
+      "message": "The MIME syntax for a parameter name in \"a b\" is invalid at 1",
+      "ctor": "TypeError"
+     }
+    }
+   ],
+   "final": "text/plain;base=1",
+   "essence": "text/plain"
+  },
+  {
+   "seq": [
+    [
+     "set",
+     "a",
+     "x\ny"
+    ]
+   ],
+   "steps": [
+    {
+     "error": {
+      "name": "TypeError",
+      "code": "ERR_INVALID_MIME_SYNTAX",
+      "message": "The MIME syntax for a parameter value in \"x\ny\" is invalid at 1",
+      "ctor": "TypeError"
+     }
+    }
+   ],
+   "final": "text/plain;base=1",
+   "essence": "text/plain"
+  },
+  {
+   "seq": [
+    [
+     "set",
+     "a",
+     "\u0100"
+    ]
+   ],
+   "steps": [
+    {
+     "error": {
+      "name": "TypeError",
+      "code": "ERR_INVALID_MIME_SYNTAX",
+      "message": "The MIME syntax for a parameter value in \"\u0100\" is invalid at 0",
+      "ctor": "TypeError"
+     }
+    }
+   ],
+   "final": "text/plain;base=1",
+   "essence": "text/plain"
+  },
+  {
+   "seq": [
+    [
+     "set",
+     "Key",
+     "V"
+    ],
+    [
+     "get",
+     "key"
+    ],
+    [
+     "get",
+     "Key"
+    ],
+    [
+     "has",
+     "Key"
+    ],
+    [
+     "has",
+     "nope"
+    ],
+    [
+     "get",
+     "nope"
+    ]
+   ],
+   "steps": [
+    {
+     "value": {
+      "$": "undefined"
+     }
+    },
+    {
+     "value": null
+    },
+    {
+     "value": "V"
+    },
+    {
+     "value": true
+    },
+    {
+     "value": false
+    },
+    {
+     "value": null
+    }
+   ],
+   "final": "text/plain;base=1;Key=V",
+   "essence": "text/plain"
+  },
+  {
+   "seq": [
+    [
+     "set",
+     "a",
+     1
+    ],
+    [
+     "set",
+     "b",
+     null
+    ],
+    [
+     "set",
+     7,
+     {
+      "$": "undefined"
+     }
+    ]
+   ],
+   "steps": [
+    {
+     "value": {
+      "$": "undefined"
+     }
+    },
+    {
+     "value": {
+      "$": "undefined"
+     }
+    },
+    {
+     "value": {
+      "$": "undefined"
+     }
+    }
+   ],
+   "final": "text/plain;base=1;a=1;b=null;7=undefined",
+   "essence": "text/plain"
+  },
+  {
+   "seq": [
+    [
+     "set",
+     "x",
+     "1"
+    ],
+    [
+     "set",
+     "y",
+     "2"
+    ],
+    [
+     "delete",
+     "x"
+    ],
+    [
+     "has",
+     "x"
+    ],
+    [
+     "delete",
+     "zz"
+    ]
+   ],
+   "steps": [
+    {
+     "value": {
+      "$": "undefined"
+     }
+    },
+    {
+     "value": {
+      "$": "undefined"
+     }
+    },
+    {
+     "value": {
+      "$": "undefined"
+     }
+    },
+    {
+     "value": false
+    },
+    {
+     "value": {
+      "$": "undefined"
+     }
+    }
+   ],
+   "final": "text/plain;base=1;y=2",
+   "essence": "text/plain"
+  },
+  {
+   "seq": [
+    [
+     "set",
+     "z",
+     "1"
+    ],
+    [
+     "set",
+     "a",
+     "2"
+    ],
+    [
+     "set",
+     "z",
+     "3"
+    ]
+   ],
+   "steps": [
+    {
+     "value": {
+      "$": "undefined"
+     }
+    },
+    {
+     "value": {
+      "$": "undefined"
+     }
+    },
+    {
+     "value": {
+      "$": "undefined"
+     }
+    }
+   ],
+   "final": "text/plain;base=1;z=3;a=2",
+   "essence": "text/plain"
+  },
+  {
+   "seq": [
+    [
+     "get",
+     "base"
+    ],
+    [
+     "delete",
+     "base"
+    ],
+    [
+     "get",
+     "base"
+    ]
+   ],
+   "steps": [
+    {
+     "value": "1"
+    },
+    {
+     "value": {
+      "$": "undefined"
+     }
+    },
+    {
+     "value": null
+    }
+   ],
+   "final": "text/plain",
+   "essence": "text/plain"
+  }
+ ],
+ "mimeParams": {
+  "empty": "",
+  "str": "a=1;b=\"x y\"",
+  "json": "\"a=1;b=\\\"x y\\\"\"",
+  "iterSame": true,
+  "entries": [
+   [
+    "a",
+    "1"
+   ],
+   [
+    "b",
+    "x y"
+   ]
+  ],
+  "getMissing": null,
+  "ignoredCtorArg": "",
+  "protoKeys": [
+   "constructor",
+   "delete",
+   "get",
+   "has",
+   "set",
+   "entries",
+   "keys",
+   "values",
+   "toString",
+   "toJSON"
+  ],
+  "typeProtoKeys": [
+   "constructor",
+   "type",
+   "subtype",
+   "essence",
+   "params",
+   "toString",
+   "toJSON"
+  ],
+  "staticKeys": [
+   "length",
+   "name",
+   "prototype"
+  ],
+  "paramsSame": true,
+  "paramsInstance": true,
+  "noNew": {
+   "name": "TypeError",
+   "code": {
+    "$": "undefined"
+   },
+   "message": "Class constructor MIMEType cannot be invoked without 'new'",
+   "ctor": "TypeError"
+  },
+  "entriesTag": "[object Generator]",
+  "inspect": "MIMEType {}",
+  "inspectParams": "MIMEParams {}",
+  "setLen": 2,
+  "typeLen": 1
+ },
+ "callSites": {
+  "length": 10,
+  "keys": [
+   "functionName",
+   "scriptId",
+   "scriptName",
+   "lineNumber",
+   "columnNumber",
+   "column"
+  ],
+  "proto": "null",
+  "types": {
+   "functionName": "string",
+   "scriptId": "string",
+   "scriptName": "string",
+   "lineNumber": "number",
+   "columnNumber": "number",
+   "column": "number"
+  },
+  "names": [
+   "inner",
+   "outer"
+  ],
+  "first": {
+   "functionName": "inner",
+   "scriptId": "87",
+   "scriptName": "/rec/util-rec.cjs",
+   "lineNumber": 47,
+   "columnNumber": 69,
+   "column": 69
+  },
+  "n1": 1,
+  "n3": [
+   "c",
+   "b",
+   "a"
+  ],
+  "topName": "",
+  "optsOnly": true,
+  "isArray": true,
+  "lineEqCol": true
+ },
+ "callSiteErrors": [
+  {
+   "args": [
+    0
+   ],
+   "error": {
+    "name": "RangeError",
+    "code": "ERR_OUT_OF_RANGE",
+    "message": "The value of \"frameCount\" is out of range. It must be >= 1 && <= 200. Received 0",
+    "ctor": "RangeError"
+   }
+  },
+  {
+   "args": [
+    201
+   ],
+   "error": {
+    "name": "RangeError",
+    "code": "ERR_OUT_OF_RANGE",
+    "message": "The value of \"frameCount\" is out of range. It must be >= 1 && <= 200. Received 201",
+    "ctor": "RangeError"
+   }
+  },
+  {
+   "args": [
+    1.5
+   ],
+   "error": {
+    "name": "RangeError",
+    "code": "ERR_OUT_OF_RANGE",
+    "message": "The value of \"frameCount\" is out of range. It must be an integer. Received 1.5",
+    "ctor": "RangeError"
+   }
+  },
+  {
+   "args": [
+    "1"
+   ],
+   "error": {
+    "name": "TypeError",
+    "code": "ERR_INVALID_ARG_TYPE",
+    "message": "The \"frameCount\" argument must be of type number. Received type string ('1')",
+    "ctor": "TypeError"
+   }
+  },
+  {
+   "args": [
+    null
+   ],
+   "error": {
+    "name": "TypeError",
+    "code": "ERR_INVALID_ARG_TYPE",
+    "message": "The \"options\" argument must be of type object. Received null",
+    "ctor": "TypeError"
+   }
+  },
+  {
+   "args": [
+    {
+     "$": "NaN"
+    }
+   ],
+   "error": {
+    "name": "RangeError",
+    "code": "ERR_OUT_OF_RANGE",
+    "message": "The value of \"frameCount\" is out of range. It must be an integer. Received NaN",
+    "ctor": "RangeError"
+   }
+  },
+  {
+   "args": [
+    5,
+    null
+   ],
+   "error": {
+    "name": "TypeError",
+    "code": "ERR_INVALID_ARG_TYPE",
+    "message": "The \"options\" argument must be of type object. Received null",
+    "ctor": "TypeError"
+   }
+  },
+  {
+   "args": [
+    5,
+    1
+   ],
+   "error": {
+    "name": "TypeError",
+    "code": "ERR_INVALID_ARG_TYPE",
+    "message": "The \"options\" argument must be of type object. Received type number (1)",
+    "ctor": "TypeError"
+   }
+  },
+  {
+   "args": [
+    5,
+    {
+     "sourceMap": 1
+    }
+   ],
+   "error": {
+    "name": "TypeError",
+    "code": "ERR_INVALID_ARG_TYPE",
+    "message": "The \"options.sourceMap\" property must be of type boolean. Received type number (1)",
+    "ctor": "TypeError"
+   }
+  },
+  {
+   "args": [
+    {
+     "sourceMap": "x"
+    }
+   ],
+   "error": {
+    "name": "TypeError",
+    "code": "ERR_INVALID_ARG_TYPE",
+    "message": "The \"options.sourceMap\" property must be of type boolean. Received type string ('x')",
+    "ctor": "TypeError"
+   }
+  },
+  {
+   "args": [
+    -1
+   ],
+   "error": {
+    "name": "RangeError",
+    "code": "ERR_OUT_OF_RANGE",
+    "message": "The value of \"frameCount\" is out of range. It must be >= 1 && <= 200. Received -1",
+    "ctor": "RangeError"
+   }
+  },
+  {
+   "args": [
+    true
+   ],
+   "error": {
+    "name": "TypeError",
+    "code": "ERR_INVALID_ARG_TYPE",
+    "message": "The \"frameCount\" argument must be of type number. Received type boolean (true)",
+    "ctor": "TypeError"
+   }
+  },
+  {
+   "args": [
+    200
+   ],
+   "value": true
+  },
+  {
+   "args": [
+    []
+   ],
+   "error": {
+    "name": "TypeError",
+    "code": "ERR_INVALID_ARG_TYPE",
+    "message": "The \"options\" argument must be of type object. Received an instance of Array",
+    "ctor": "TypeError"
+   }
+  },
+  {
+   "args": [
+    5,
+    []
+   ],
+   "error": {
+    "name": "TypeError",
+    "code": "ERR_INVALID_ARG_TYPE",
+    "message": "The \"options\" argument must be of type object. Received an instance of Array",
+    "ctor": "TypeError"
+   }
+  },
+  {
+   "args": [
+    5,
+    {
+     "$": "fn"
+    }
+   ],
+   "error": {
+    "name": "TypeError",
+    "code": "ERR_INVALID_ARG_TYPE",
+    "message": "The \"options\" argument must be of type object. Received function fn",
+    "ctor": "TypeError"
+   }
+  }
+ ],
+ "diff": [
+  {
+   "args": [
+    "abc",
+    "abc"
+   ],
+   "value": []
+  },
+  {
+   "args": [
+    "12345678",
+    "12!!5!7!"
+   ],
+   "value": [
+    [
+     0,
+     "1"
+    ],
+    [
+     0,
+     "2"
+    ],
+    [
+     1,
+     "3"
+    ],
+    [
+     1,
+     "4"
+    ],
+    [
+     -1,
+     "!"
+    ],
+    [
+     -1,
+     "!"
+    ],
+    [
+     0,
+     "5"
+    ],
+    [
+     1,
+     "6"
+    ],
+    [
+     -1,
+     "!"
+    ],
+    [
+     0,
+     "7"
+    ],
+    [
+     1,
+     "8"
+    ],
+    [
+     -1,
+     "!"
+    ]
+   ]
+  },
+  {
+   "args": [
+    "kitten",
+    "sitting"
+   ],
+   "value": [
+    [
+     1,
+     "k"
+    ],
+    [
+     -1,
+     "s"
+    ],
+    [
+     0,
+     "i"
+    ],
+    [
+     0,
+     "t"
+    ],
+    [
+     0,
+     "t"
+    ],
+    [
+     1,
+     "e"
+    ],
+    [
+     -1,
+     "i"
+    ],
+    [
+     0,
+     "n"
+    ],
+    [
+     -1,
+     "g"
+    ]
+   ]
+  },
+  {
+   "args": [
+    "",
+    "abc"
+   ],
+   "value": [
+    [
+     -1,
+     "a"
+    ],
+    [
+     -1,
+     "b"
+    ],
+    [
+     -1,
+     "c"
+    ]
+   ]
+  },
+  {
+   "args": [
+    "abc",
+    ""
+   ],
+   "value": [
+    [
+     1,
+     "a"
+    ],
+    [
+     1,
+     "b"
+    ],
+    [
+     1,
+     "c"
+    ]
+   ]
+  },
+  {
+   "args": [
+    "",
+    ""
+   ],
+   "value": []
+  },
+  {
+   "args": [
+    [
+     "a",
+     "b",
+     "c"
+    ],
+    [
+     "a",
+     "x",
+     "c"
+    ]
+   ],
+   "value": [
+    [
+     0,
+     "a"
+    ],
+    [
+     1,
+     "b"
+    ],
+    [
+     -1,
+     "x"
+    ],
+    [
+     0,
+     "c"
+    ]
+   ]
+  },
+  {
+   "args": [
+    [
+     "1",
+     "2",
+     "3"
+    ],
+    [
+     "2",
+     "3",
+     "4"
+    ]
+   ],
+   "value": [
+    [
+     1,
+     "1"
+    ],
+    [
+     0,
+     "2"
+    ],
+    [
+     0,
+     "3"
+    ],
+    [
+     -1,
+     "4"
+    ]
+   ]
+  },
+  {
+   "args": [
+    [],
+    [
+     "a"
+    ]
+   ],
+   "value": [
+    [
+     -1,
+     "a"
+    ]
+   ]
+  },
+  {
+   "args": [
+    [
+     "a"
+    ],
+    []
+   ],
+   "value": [
+    [
+     1,
+     "a"
+    ]
+   ]
+  },
+  {
+   "args": [
+    [],
+    []
+   ],
+   "error": {
+    "name": "TypeError",
+    "code": {
+     "$": "undefined"
+    },
+    "message": "Cannot convert undefined or null to object",
+    "ctor": "TypeError"
+   }
+  },
+  {
+   "args": [
+    "h\u00e9llo \u2603",
+    "hello \u2603!"
+   ],
+   "value": [
+    [
+     0,
+     "h"
+    ],
+    [
+     1,
+     "\u00e9"
+    ],
+    [
+     -1,
+     "e"
+    ],
+    [
+     0,
+     "l"
+    ],
+    [
+     0,
+     "l"
+    ],
+    [
+     0,
+     "o"
+    ],
+    [
+     0,
+     " "
+    ],
+    [
+     0,
+     "\u2603"
+    ],
+    [
+     -1,
+     "!"
+    ]
+   ]
+  },
+  {
+   "args": [
+    "a\ud83d\ude00b",
+    "a\ud83d\ude01b"
+   ],
+   "value": [
+    [
+     0,
+     "a"
+    ],
+    [
+     0,
+     "\ud83d"
+    ],
+    [
+     1,
+     "\ude00"
+    ],
+    [
+     -1,
+     "\ude01"
+    ],
+    [
+     0,
+     "b"
+    ]
+   ]
+  },
+  {
+   "args": [
+    [
+     "line one",
+     "line two"
+    ],
+    [
+     "line one",
+     "line 2",
+     "line three"
+    ]
+   ],
+   "value": [
+    [
+     0,
+     "line one"
+    ],
+    [
+     1,
+     "line two"
+    ],
+    [
+     -1,
+     "line 2"
+    ],
+    [
+     -1,
+     "line three"
+    ]
+   ]
+  },
+  {
+   "args": [
+    "abc",
+    [
+     "a",
+     "b",
+     "c"
+    ]
+   ],
+   "value": [
+    [
+     0,
+     "a"
+    ],
+    [
+     0,
+     "b"
+    ],
+    [
+     0,
+     "c"
+    ]
+   ]
+  },
+  {
+   "args": [
+    [
+     "ab"
+    ],
+    "ab"
+   ],
+   "value": [
+    [
+     1,
+     "ab"
+    ],
+    [
+     -1,
+     "a"
+    ],
+    [
+     -1,
+     "b"
+    ]
+   ]
+  },
+  {
+   "args": [
+    "abcabba",
+    "cbabac"
+   ],
+   "value": [
+    [
+     1,
+     "a"
+    ],
+    [
+     1,
+     "b"
+    ],
+    [
+     0,
+     "c"
+    ],
+    [
+     -1,
+     "b"
+    ],
+    [
+     0,
+     "a"
+    ],
+    [
+     0,
+     "b"
+    ],
+    [
+     1,
+     "b"
+    ],
+    [
+     0,
+     "a"
+    ],
+    [
+     -1,
+     "c"
+    ]
+   ]
+  },
+  {
+   "args": [
+    1,
+    "a"
+   ],
+   "error": {
+    "name": "TypeError",
+    "code": "ERR_INVALID_ARG_TYPE",
+    "message": "The \"actual\" argument must be of type string. Received type number (1)",
+    "ctor": "TypeError"
+   }
+  },
+  {
+   "args": [
+    "a",
+    1
+   ],
+   "error": {
+    "name": "TypeError",
+    "code": "ERR_INVALID_ARG_TYPE",
+    "message": "The \"expected\" argument must be of type string. Received type number (1)",
+    "ctor": "TypeError"
+   }
+  },
+  {
+   "args": [
+    null,
+    "a"
+   ],
+   "error": {
+    "name": "TypeError",
+    "code": "ERR_INVALID_ARG_TYPE",
+    "message": "The \"actual\" argument must be of type string. Received null",
+    "ctor": "TypeError"
+   }
+  },
+  {
+   "args": [
+    [
+     "a",
+     1
+    ],
+    [
+     "a"
+    ]
+   ],
+   "error": {
+    "name": "TypeError",
+    "code": "ERR_INVALID_ARG_TYPE",
+    "message": "The \"actual[1]\" argument must be of type string. Received type number (1)",
+    "ctor": "TypeError"
+   }
+  },
+  {
+   "args": [
+    [
+     "a"
+    ],
+    [
+     "a",
+     null
+    ]
+   ],
+   "error": {
+    "name": "TypeError",
+    "code": "ERR_INVALID_ARG_TYPE",
+    "message": "The \"expected[1]\" argument must be of type string. Received null",
+    "ctor": "TypeError"
+   }
+  },
+  {
+   "args": [
+    {
+     "$": "undefined"
+    },
+    "a"
+   ],
+   "error": {
+    "name": "TypeError",
+    "code": "ERR_INVALID_ARG_TYPE",
+    "message": "The \"actual\" argument must be of type string. Received undefined",
+    "ctor": "TypeError"
+   }
+  },
+  {
+   "args": [
+    {},
+    {}
+   ],
+   "error": {
+    "name": "TypeError",
+    "code": "ERR_INVALID_ARG_TYPE",
+    "message": "The \"actual\" argument must be of type string. Received an instance of Object",
+    "ctor": "TypeError"
+   }
+  },
+  {
+   "args": [
+    1,
+    1
+   ],
+   "value": []
+  },
+  {
+   "args": [
+    {
+     "$": "undefined"
+    },
+    {
+     "$": "undefined"
+    }
+   ],
+   "value": []
+  },
+  {
+   "args": [
+    "a"
+   ],
+   "error": {
+    "name": "TypeError",
+    "code": "ERR_INVALID_ARG_TYPE",
+    "message": "The \"expected\" argument must be of type string. Received undefined",
+    "ctor": "TypeError"
+   }
+  },
+  {
+   "args": [
+    [
+     "a"
+    ],
+    {
+     "$": "undefined"
+    }
+   ],
+   "error": {
+    "name": "TypeError",
+    "code": "ERR_INVALID_ARG_TYPE",
+    "message": "The \"expected\" argument must be of type string. Received undefined",
+    "ctor": "TypeError"
+   }
+  }
+ ],
+ "signalNames": [
+  "SIGHUP",
+  "SIGINT",
+  "SIGQUIT",
+  "SIGILL",
+  "SIGTRAP",
+  "SIGABRT",
+  "SIGIOT",
+  "SIGBUS",
+  "SIGFPE",
+  "SIGKILL",
+  "SIGUSR1",
+  "SIGSEGV",
+  "SIGUSR2",
+  "SIGPIPE",
+  "SIGALRM",
+  "SIGTERM",
+  "SIGCHLD",
+  "SIGSTKFLT",
+  "SIGCONT",
+  "SIGSTOP",
+  "SIGTSTP",
+  "SIGTTIN",
+  "SIGTTOU",
+  "SIGURG",
+  "SIGXCPU",
+  "SIGXFSZ",
+  "SIGVTALRM",
+  "SIGPROF",
+  "SIGWINCH",
+  "SIGIO",
+  "SIGPOLL",
+  "SIGPWR",
+  "SIGSYS",
+  "SIGUNUSED"
+ ],
+ "signalExit": [
+  {
+   "arg": "SIGINT",
+   "value": 130
+  },
+  {
+   "arg": "SIGTERM",
+   "value": 143
+  },
+  {
+   "arg": "SIGKILL",
+   "value": 137
+  },
+  {
+   "arg": "SIGHUP",
+   "value": 129
+  },
+  {
+   "arg": "SIGUSR1",
+   "value": 138
+  },
+  {
+   "arg": "SIGSYS",
+   "value": 159
+  },
+  {
+   "arg": "SIGUNUSED",
+   "value": 159
+  },
+  {
+   "arg": "SIGPOLL",
+   "value": 157
+  },
+  {
+   "arg": "sigint",
+   "error": {
+    "name": "TypeError",
+    "code": "ERR_INVALID_ARG_VALUE",
+    "message": "The argument 'signalCode' must be one of: 'SIGHUP', 'SIGINT', 'SIGQUIT', 'SIGILL', 'SIGTRAP', 'SIGABRT', 'SIGIOT', 'SIGBUS', 'SIGFPE', 'SIGKILL', 'SIGUSR1', 'SIGSEGV', 'SIGUSR2', 'SIGPIPE', 'SIGALRM', 'SIGTERM', 'SIGCHLD', 'SIGSTKFLT', 'SIGCONT', 'SIGSTOP', 'SIGTSTP', 'SIGTTIN', 'SIGTTOU', 'SIGURG', 'SIGXCPU', 'SIGXFSZ', 'SIGVTALRM', 'SIGPROF', 'SIGWINCH', 'SIGIO', 'SIGPOLL', 'SIGPWR', 'SIGSYS', 'SIGUNUSED'. Received 'sigint'",
+    "ctor": "TypeError"
+   }
+  },
+  {
+   "arg": "INT",
+   "error": {
+    "name": "TypeError",
+    "code": "ERR_INVALID_ARG_VALUE",
+    "message": "The argument 'signalCode' must be one of: 'SIGHUP', 'SIGINT', 'SIGQUIT', 'SIGILL', 'SIGTRAP', 'SIGABRT', 'SIGIOT', 'SIGBUS', 'SIGFPE', 'SIGKILL', 'SIGUSR1', 'SIGSEGV', 'SIGUSR2', 'SIGPIPE', 'SIGALRM', 'SIGTERM', 'SIGCHLD', 'SIGSTKFLT', 'SIGCONT', 'SIGSTOP', 'SIGTSTP', 'SIGTTIN', 'SIGTTOU', 'SIGURG', 'SIGXCPU', 'SIGXFSZ', 'SIGVTALRM', 'SIGPROF', 'SIGWINCH', 'SIGIO', 'SIGPOLL', 'SIGPWR', 'SIGSYS', 'SIGUNUSED'. Received 'INT'",
+    "ctor": "TypeError"
+   }
+  },
+  {
+   "arg": "",
+   "error": {
+    "name": "TypeError",
+    "code": "ERR_INVALID_ARG_VALUE",
+    "message": "The argument 'signalCode' must be one of: 'SIGHUP', 'SIGINT', 'SIGQUIT', 'SIGILL', 'SIGTRAP', 'SIGABRT', 'SIGIOT', 'SIGBUS', 'SIGFPE', 'SIGKILL', 'SIGUSR1', 'SIGSEGV', 'SIGUSR2', 'SIGPIPE', 'SIGALRM', 'SIGTERM', 'SIGCHLD', 'SIGSTKFLT', 'SIGCONT', 'SIGSTOP', 'SIGTSTP', 'SIGTTIN', 'SIGTTOU', 'SIGURG', 'SIGXCPU', 'SIGXFSZ', 'SIGVTALRM', 'SIGPROF', 'SIGWINCH', 'SIGIO', 'SIGPOLL', 'SIGPWR', 'SIGSYS', 'SIGUNUSED'. Received ''",
+    "ctor": "TypeError"
+   }
+  },
+  {
+   "arg": 2,
+   "error": {
+    "name": "TypeError",
+    "code": "ERR_INVALID_ARG_VALUE",
+    "message": "The argument 'signalCode' must be one of: 'SIGHUP', 'SIGINT', 'SIGQUIT', 'SIGILL', 'SIGTRAP', 'SIGABRT', 'SIGIOT', 'SIGBUS', 'SIGFPE', 'SIGKILL', 'SIGUSR1', 'SIGSEGV', 'SIGUSR2', 'SIGPIPE', 'SIGALRM', 'SIGTERM', 'SIGCHLD', 'SIGSTKFLT', 'SIGCONT', 'SIGSTOP', 'SIGTSTP', 'SIGTTIN', 'SIGTTOU', 'SIGURG', 'SIGXCPU', 'SIGXFSZ', 'SIGVTALRM', 'SIGPROF', 'SIGWINCH', 'SIGIO', 'SIGPOLL', 'SIGPWR', 'SIGSYS', 'SIGUNUSED'. Received 2",
+    "ctor": "TypeError"
+   }
+  },
+  {
+   "arg": null,
+   "error": {
+    "name": "TypeError",
+    "code": "ERR_INVALID_ARG_VALUE",
+    "message": "The argument 'signalCode' must be one of: 'SIGHUP', 'SIGINT', 'SIGQUIT', 'SIGILL', 'SIGTRAP', 'SIGABRT', 'SIGIOT', 'SIGBUS', 'SIGFPE', 'SIGKILL', 'SIGUSR1', 'SIGSEGV', 'SIGUSR2', 'SIGPIPE', 'SIGALRM', 'SIGTERM', 'SIGCHLD', 'SIGSTKFLT', 'SIGCONT', 'SIGSTOP', 'SIGTSTP', 'SIGTTIN', 'SIGTTOU', 'SIGURG', 'SIGXCPU', 'SIGXFSZ', 'SIGVTALRM', 'SIGPROF', 'SIGWINCH', 'SIGIO', 'SIGPOLL', 'SIGPWR', 'SIGSYS', 'SIGUNUSED'. Received null",
+    "ctor": "TypeError"
+   }
+  },
+  {
+   "arg": {
+    "$": "undefined"
+   },
+   "error": {
+    "name": "TypeError",
+    "code": "ERR_INVALID_ARG_VALUE",
+    "message": "The argument 'signalCode' must be one of: 'SIGHUP', 'SIGINT', 'SIGQUIT', 'SIGILL', 'SIGTRAP', 'SIGABRT', 'SIGIOT', 'SIGBUS', 'SIGFPE', 'SIGKILL', 'SIGUSR1', 'SIGSEGV', 'SIGUSR2', 'SIGPIPE', 'SIGALRM', 'SIGTERM', 'SIGCHLD', 'SIGSTKFLT', 'SIGCONT', 'SIGSTOP', 'SIGTSTP', 'SIGTTIN', 'SIGTTOU', 'SIGURG', 'SIGXCPU', 'SIGXFSZ', 'SIGVTALRM', 'SIGPROF', 'SIGWINCH', 'SIGIO', 'SIGPOLL', 'SIGPWR', 'SIGSYS', 'SIGUNUSED'. Received undefined",
+    "ctor": "TypeError"
+   }
+  },
+  {
+   "arg": "SIGFOO",
+   "error": {
+    "name": "TypeError",
+    "code": "ERR_INVALID_ARG_VALUE",
+    "message": "The argument 'signalCode' must be one of: 'SIGHUP', 'SIGINT', 'SIGQUIT', 'SIGILL', 'SIGTRAP', 'SIGABRT', 'SIGIOT', 'SIGBUS', 'SIGFPE', 'SIGKILL', 'SIGUSR1', 'SIGSEGV', 'SIGUSR2', 'SIGPIPE', 'SIGALRM', 'SIGTERM', 'SIGCHLD', 'SIGSTKFLT', 'SIGCONT', 'SIGSTOP', 'SIGTSTP', 'SIGTTIN', 'SIGTTOU', 'SIGURG', 'SIGXCPU', 'SIGXFSZ', 'SIGVTALRM', 'SIGPROF', 'SIGWINCH', 'SIGIO', 'SIGPOLL', 'SIGPWR', 'SIGSYS', 'SIGUNUSED'. Received 'SIGFOO'",
+    "ctor": "TypeError"
+   }
+  },
+  {
+   "arg": {},
+   "error": {
+    "name": "TypeError",
+    "code": "ERR_INVALID_ARG_VALUE",
+    "message": "The argument 'signalCode' must be one of: 'SIGHUP', 'SIGINT', 'SIGQUIT', 'SIGILL', 'SIGTRAP', 'SIGABRT', 'SIGIOT', 'SIGBUS', 'SIGFPE', 'SIGKILL', 'SIGUSR1', 'SIGSEGV', 'SIGUSR2', 'SIGPIPE', 'SIGALRM', 'SIGTERM', 'SIGCHLD', 'SIGSTKFLT', 'SIGCONT', 'SIGSTOP', 'SIGTSTP', 'SIGTTIN', 'SIGTTOU', 'SIGURG', 'SIGXCPU', 'SIGXFSZ', 'SIGVTALRM', 'SIGPROF', 'SIGWINCH', 'SIGIO', 'SIGPOLL', 'SIGPWR', 'SIGSYS', 'SIGUNUSED'. Received {}",
+    "ctor": "TypeError"
+   }
+  },
+  {
+   "arg": [
+    "SIGINT"
+   ],
+   "error": {
+    "name": "TypeError",
+    "code": "ERR_INVALID_ARG_VALUE",
+    "message": "The argument 'signalCode' must be one of: 'SIGHUP', 'SIGINT', 'SIGQUIT', 'SIGILL', 'SIGTRAP', 'SIGABRT', 'SIGIOT', 'SIGBUS', 'SIGFPE', 'SIGKILL', 'SIGUSR1', 'SIGSEGV', 'SIGUSR2', 'SIGPIPE', 'SIGALRM', 'SIGTERM', 'SIGCHLD', 'SIGSTKFLT', 'SIGCONT', 'SIGSTOP', 'SIGTSTP', 'SIGTTIN', 'SIGTTOU', 'SIGURG', 'SIGXCPU', 'SIGXFSZ', 'SIGVTALRM', 'SIGPROF', 'SIGWINCH', 'SIGIO', 'SIGPOLL', 'SIGPWR', 'SIGSYS', 'SIGUNUSED'. Received [ 'SIGINT' ]",
+    "ctor": "TypeError"
+   }
+  }
+ ],
+ "abort": {
+  "ctrlIsAbortController": true,
+  "signalIsAbortSignal": true,
+  "aborted": false,
+  "fresh": true,
+  "sameSignal": true,
+  "afterAbort": [
+   true,
+   "why"
+  ],
+  "errors": [
+   {
+    "arg": {
+     "$": "undefined"
+    },
+    "error": {
+     "name": "TypeError",
+     "code": "ERR_INVALID_ARG_TYPE",
+     "message": "The \"signal\" argument must be an instance of AbortSignal. Received undefined",
+     "ctor": "TypeError"
+    }
+   },
+   {
+    "arg": null,
+    "error": {
+     "name": "TypeError",
+     "code": "ERR_INVALID_ARG_TYPE",
+     "message": "The \"signal\" argument must be an instance of AbortSignal. Received null",
+     "ctor": "TypeError"
+    }
+   },
+   {
+    "arg": {},
+    "error": {
+     "name": "TypeError",
+     "code": "ERR_INVALID_ARG_TYPE",
+     "message": "The \"signal\" argument must be an instance of AbortSignal. Received an instance of Object",
+     "ctor": "TypeError"
+    }
+   },
+   {
+    "arg": "s",
+    "error": {
+     "name": "TypeError",
+     "code": "ERR_INVALID_ARG_TYPE",
+     "message": "The \"signal\" argument must be an instance of AbortSignal. Received type string ('s')",
+     "ctor": "TypeError"
+    }
+   },
+   {
+    "arg": 5,
+    "error": {
+     "name": "TypeError",
+     "code": "ERR_INVALID_ARG_TYPE",
+     "message": "The \"signal\" argument must be an instance of AbortSignal. Received type number (5)",
+     "ctor": "TypeError"
+    }
+   },
+   {
+    "arg": {
+     "aborted": false
+    },
+    "error": {
+     "name": "TypeError",
+     "code": "ERR_INVALID_ARG_TYPE",
+     "message": "The \"signal\" argument must be an instance of AbortSignal. Received an instance of Object",
+     "ctor": "TypeError"
+    }
+   },
+   {
+    "arg": {
+     "$": "fn"
+    },
+    "error": {
+     "name": "TypeError",
+     "code": "ERR_INVALID_ARG_TYPE",
+     "message": "The \"signal\" argument must be an instance of AbortSignal. Received function fn",
+     "ctor": "TypeError"
+    }
+   }
+  ]
+ },
+ "traceSigInt": [
+  {
+   "arg": true,
+   "value": {
+    "$": "undefined"
+   }
+  },
+  {
+   "arg": false,
+   "value": {
+    "$": "undefined"
+   }
+  },
+  {
+   "arg": {
+    "$": "undefined"
+   },
+   "value": {
+    "$": "undefined"
+   }
+  },
+  {
+   "arg": null,
+   "value": {
+    "$": "undefined"
+   }
+  },
+  {
+   "arg": 1,
+   "value": {
+    "$": "undefined"
+   }
+  },
+  {
+   "arg": "true",
+   "value": {
+    "$": "undefined"
+   }
+  },
+  {
+   "arg": {},
+   "value": {
+    "$": "undefined"
+   }
+  }
+ ],
+ "float16": {
+  "global": "function",
+  "has": "function",
+  "cases": [
+   true,
+   false,
+   false,
+   false,
+   false
+  ],
+  "name": "isFloat16Array",
+  "length": 1
+ },
+ "extendDeprecated": {
+  "name": "deprecated",
+  "length": 2,
+  "isArrayName": "deprecated",
+  "isArrayLength": 1
+ },
+ "warnings": [
+  {
+   "name": "DeprecationWarning",
+   "code": "DEP0060",
+   "message": "The `util._extend` API is deprecated. Please use Object.assign() instead."
+  },
+  {
+   "name": "DeprecationWarning",
+   "code": "DEP0044",
+   "message": "The `util.isArray` API is deprecated. Please use `Array.isArray()` instead."
+  }
+ ]
+}

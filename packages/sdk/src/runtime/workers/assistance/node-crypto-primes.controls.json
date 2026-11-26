@@ -1,0 +1,337 @@
+{
+ "node": {
+  "version": "v24.18.1",
+  "openssl": "3.5.7"
+ },
+ "recorder": "// Recorder for node-crypto-primes.controls.json. Run with:\n//   docker run --rm -v \"$PWD\":/w:ro node:24.18.1-alpine node /w/primes-facts.cjs > node-crypto-primes.controls.json\n// Every generated prime is random: a new run gives new samples of the same shape.\nconst crypto = require('node:crypto');\nconst big = b => BigInt('0x' + Buffer.from(b).toString('hex'));\nconst stat = (label, options, bits, count, check) => {  let top2 = 0; const lens = {}; let ok = 0; const samples = []; for (let i = 0; i < count; i++) { const p = crypto.generatePrimeSync(bits, { ...options, bigint: true }); const b = p.toString(2); if (b[1] === '1') top2++; lens[b.length] = (lens[b.length] ?? 0) + 1; if (check(p)) ok++; if (i < 3) samples.push(p.toString()); } return { label, bits, count, topTwoBits: top2, bitLengths: lens, conditionHeld: ok, samples }; };\nconst out = [\n  stat('plain', {}, 64, 300, () => true), stat('plain', {}, 2, 20, () => true), stat('plain', {}, 3, 40, () => true), stat('plain', {}, 4, 40, () => true), stat('plain', {}, 8, 100, () => true),\n  stat('safe', { safe: true }, 64, 100, p => p % 4n === 3n), stat('safe', { safe: true }, 6, 40, () => true), stat('safe', { safe: true }, 3, 10, () => true),\n  stat('add 12 (rem default 1)', { add: 12n }, 64, 200, p => p % 12n === 1n), stat('add 12 rem 5', { add: 12n, rem: 5n }, 64, 200, p => p % 12n === 5n),\n  stat('safe add 8 (rem default 3)', { safe: true, add: 8n }, 64, 60, p => p % 8n === 3n), stat('safe add 24 rem 23', { safe: true, add: 24n, rem: 23n }, 64, 60, p => p % 24n === 23n), stat('safe add 12 rem 11', { safe: true, add: 12n, rem: 11n }, 32, 60, p => p % 12n === 11n),\n  stat('add 7 rem 3', { add: 7n, rem: 3n }, 16, 200, p => p % 7n === 3n), stat('add 2^15+1', { add: 32769n }, 16, 50, p => p % 32769n === 1n),\n];\nconst fail = f => { try { return String(f()); } catch (e) { return { name: e.name, message: e.message, code: e.code }; } };\nconst errors = { bits1: fail(() => crypto.generatePrimeSync(1)), safe5: fail(() => crypto.generatePrimeSync(5, { safe: true })), safe4: fail(() => crypto.generatePrimeSync(4, { safe: true })), addTooLarge: fail(() => crypto.generatePrimeSync(8, { add: 257n, bigint: true })), remTooLarge: fail(() => crypto.generatePrimeSync(8, { add: 7n, rem: 7n, bigint: true })) };\nconst checked = {};\nfor (const value of [0n, 1n, 2n, 3n, 4n, 561n, 1105n, 7919n, 3215031751n, 3825123056546413051n, 2n ** 61n - 1n, 2n ** 89n - 1n, 2n ** 127n - 1n, 2n ** 127n + 1n, (2n ** 61n - 1n) * (2n ** 89n - 1n), 318665857834031151167461n, 3317044064679887385961981n, 2n ** 521n - 1n, 2n ** 523n - 1n]) checked[value.toString()] = { default: crypto.checkPrimeSync(value), oneCheck: crypto.checkPrimeSync(value, { checks: 1 }) };\nconsole.log(JSON.stringify({ node: { version: process.version, openssl: process.versions.openssl }, recorder: require('node:fs').readFileSync(__filename, 'utf8'), generated: out, errors, checkPrime: checked }, null, 1));\n",
+ "generated": [
+  {
+   "label": "plain",
+   "bits": 64,
+   "count": 300,
+   "topTwoBits": 300,
+   "bitLengths": {
+    "64": 300
+   },
+   "conditionHeld": 300,
+   "samples": [
+    "14704162629931454969",
+    "14712305603026669019",
+    "14676637832045371309"
+   ]
+  },
+  {
+   "label": "plain",
+   "bits": 2,
+   "count": 20,
+   "topTwoBits": 20,
+   "bitLengths": {
+    "2": 20
+   },
+   "conditionHeld": 20,
+   "samples": [
+    "3",
+    "3",
+    "3"
+   ]
+  },
+  {
+   "label": "plain",
+   "bits": 3,
+   "count": 40,
+   "topTwoBits": 40,
+   "bitLengths": {
+    "3": 40
+   },
+   "conditionHeld": 40,
+   "samples": [
+    "7",
+    "7",
+    "7"
+   ]
+  },
+  {
+   "label": "plain",
+   "bits": 4,
+   "count": 40,
+   "topTwoBits": 40,
+   "bitLengths": {
+    "4": 40
+   },
+   "conditionHeld": 40,
+   "samples": [
+    "13",
+    "13",
+    "13"
+   ]
+  },
+  {
+   "label": "plain",
+   "bits": 8,
+   "count": 100,
+   "topTwoBits": 100,
+   "bitLengths": {
+    "8": 100
+   },
+   "conditionHeld": 100,
+   "samples": [
+    "251",
+    "229",
+    "211"
+   ]
+  },
+  {
+   "label": "safe",
+   "bits": 64,
+   "count": 100,
+   "topTwoBits": 100,
+   "bitLengths": {
+    "64": 100
+   },
+   "conditionHeld": 100,
+   "samples": [
+    "17361906216412579103",
+    "16273985910463275923",
+    "14437860472895901407"
+   ]
+  },
+  {
+   "label": "safe",
+   "bits": 6,
+   "count": 40,
+   "topTwoBits": 40,
+   "bitLengths": {
+    "6": 40
+   },
+   "conditionHeld": 40,
+   "samples": [
+    "59",
+    "59",
+    "59"
+   ]
+  },
+  {
+   "label": "safe",
+   "bits": 3,
+   "count": 10,
+   "topTwoBits": 10,
+   "bitLengths": {
+    "3": 10
+   },
+   "conditionHeld": 10,
+   "samples": [
+    "7",
+    "7",
+    "7"
+   ]
+  },
+  {
+   "label": "add 12 (rem default 1)",
+   "bits": 64,
+   "count": 200,
+   "topTwoBits": 109,
+   "bitLengths": {
+    "64": 200
+   },
+   "conditionHeld": 200,
+   "samples": [
+    "11727832688837588857",
+    "18362804914352074117",
+    "12153294349465749541"
+   ]
+  },
+  {
+   "label": "add 12 rem 5",
+   "bits": 64,
+   "count": 200,
+   "topTwoBits": 95,
+   "bitLengths": {
+    "64": 200
+   },
+   "conditionHeld": 200,
+   "samples": [
+    "14352522407348566577",
+    "17193236793102815657",
+    "15742493104168038077"
+   ]
+  },
+  {
+   "label": "safe add 8 (rem default 3)",
+   "bits": 64,
+   "count": 60,
+   "topTwoBits": 28,
+   "bitLengths": {
+    "64": 60
+   },
+   "conditionHeld": 60,
+   "samples": [
+    "14796852438120141443",
+    "10101156245181392747",
+    "11580336557480547827"
+   ]
+  },
+  {
+   "label": "safe add 24 rem 23",
+   "bits": 64,
+   "count": 60,
+   "topTwoBits": 31,
+   "bitLengths": {
+    "64": 60
+   },
+   "conditionHeld": 60,
+   "samples": [
+    "17580555952981395359",
+    "9318704218508019983",
+    "11746592557674000239"
+   ]
+  },
+  {
+   "label": "safe add 12 rem 11",
+   "bits": 32,
+   "count": 60,
+   "topTwoBits": 39,
+   "bitLengths": {
+    "32": 60
+   },
+   "conditionHeld": 60,
+   "samples": [
+    "3297554003",
+    "2409712079",
+    "3471317699"
+   ]
+  },
+  {
+   "label": "add 7 rem 3",
+   "bits": 16,
+   "count": 200,
+   "topTwoBits": 104,
+   "bitLengths": {
+    "16": 199,
+    "17": 1
+   },
+   "conditionHeld": 200,
+   "samples": [
+    "43067",
+    "36067",
+    "59671"
+   ]
+  },
+  {
+   "label": "add 2^15+1",
+   "bits": 16,
+   "count": 50,
+   "topTwoBits": 0,
+   "bitLengths": {
+    "17": 50
+   },
+   "conditionHeld": 50,
+   "samples": [
+    "65539",
+    "65539",
+    "65539"
+   ]
+  }
+ ],
+ "errors": {
+  "bits1": {
+   "name": "Error",
+   "message": "error:01800076:bignum routines::bits too small"
+  },
+  "safe5": {
+   "name": "Error",
+   "message": "error:01800076:bignum routines::bits too small"
+  },
+  "safe4": {
+   "name": "Error",
+   "message": "error:01800076:bignum routines::bits too small"
+  },
+  "addTooLarge": {
+   "name": "RangeError",
+   "message": "invalid options.add",
+   "code": "ERR_OUT_OF_RANGE"
+  },
+  "remTooLarge": {
+   "name": "RangeError",
+   "message": "invalid options.rem",
+   "code": "ERR_OUT_OF_RANGE"
+  }
+ },
+ "checkPrime": {
+  "0": {
+   "default": false,
+   "oneCheck": false
+  },
+  "1": {
+   "default": false,
+   "oneCheck": false
+  },
+  "2": {
+   "default": true,
+   "oneCheck": true
+  },
+  "3": {
+   "default": true,
+   "oneCheck": true
+  },
+  "4": {
+   "default": false,
+   "oneCheck": false
+  },
+  "561": {
+   "default": false,
+   "oneCheck": false
+  },
+  "1105": {
+   "default": false,
+   "oneCheck": false
+  },
+  "7919": {
+   "default": true,
+   "oneCheck": true
+  },
+  "3215031751": {
+   "default": false,
+   "oneCheck": false
+  },
+  "3825123056546413051": {
+   "default": false,
+   "oneCheck": false
+  },
+  "2305843009213693951": {
+   "default": true,
+   "oneCheck": true
+  },
+  "618970019642690137449562111": {
+   "default": true,
+   "oneCheck": true
+  },
+  "170141183460469231731687303715884105727": {
+   "default": true,
+   "oneCheck": true
+  },
+  "170141183460469231731687303715884105729": {
+   "default": false,
+   "oneCheck": false
+  },
+  "1427247692705959880439315947500961989719490561": {
+   "default": false,
+   "oneCheck": false
+  },
+  "318665857834031151167461": {
+   "default": false,
+   "oneCheck": false
+  },
+  "3317044064679887385961981": {
+   "default": false,
+   "oneCheck": false
+  },
+  "6864797660130609714981900799081393217269435300143305409394463459185543183397656052122559640661454554977296311391480858037121987999716643812574028291115057151": {
+   "default": true,
+   "oneCheck": true
+  },
+  "27459190640522438859927603196325572869077741200573221637577853836742172733590624208490238562645818219909185245565923432148487951998866575250296113164460228607": {
+   "default": false,
+   "oneCheck": false
+  }
+ }
+}

@@ -1,6 +1,7 @@
 import { VMError } from "../../errors.ts";
 import { createNodePath } from "./node-path.ts";
 import { formatLegacy, Url } from "./node-url-legacy.ts";
+import { createNodeUrlExtras } from "./node-url-extras.ts";
 
 const NativeURL = URL;
 const NativeURLSearchParams = URLSearchParams;
@@ -10,6 +11,7 @@ const NativeURLSearchParams = URLSearchParams;
 export function createNodeUrl(cwd: () => string) {
   const paths = createNodePath(cwd);
   return {
+    ...createNodeUrlExtras(),
     URL: NativeURL, URLSearchParams: NativeURLSearchParams, fileURLToPath, format, Url, parse, resolve, resolveObject,
     pathToFileURL(path: unknown, options?: unknown): URL {
       posixOptions(options);

@@ -1,0 +1,1447 @@
+{
+ "description": "crypto.generateKeyPair(Sync) and generateKey(Sync) recorded from Node.js v24.18.1 (OpenSSL 3.5.7). `cases` holds each call and what it did; `observations` holds measurements over many generated keys. Re-record: docker run --rm -i -v \"$PWD\":/w node:24.18.1-alpine node /w/recorder.cjs < this-file > recorded.json (recorder.cjs = the `recorder` text; observer.cjs = the `observer` text, run without input).",
+ "recorder": "// Records node:crypto behaviour for the cases of a controls file. Usage (Node 24.18.1):\n//   docker run --rm -i -v \"$PWD\":/w node:24.18.1-alpine node /w/recorder.js < controls.json > recorded.json\n// Reads { cases: [{ id, fn, args, isolate? }] } and writes the same document with a `result` per case.\n// Argument notation: { $: 'undefined' | 'cb' | 'fn' | 'sym' }, { $: 'big', v }, { $: 'buffer' | 'u8' | 'ab' | 'dv' | 'u16', hex }.\nconst crypto = require('node:crypto');\nconst { spawnSync } = require('node:child_process');\nfunction decode(value, callback) {\n  if (Array.isArray(value)) return value.map(item => decode(item, callback));\n  if (value === null || typeof value !== 'object') return value;\n  if (typeof value.$ === 'string') {\n    switch (value.$) {\n      case 'undefined': return undefined;\n      case 'cb': return callback;\n      case 'fn': return function () {};\n      case 'sym': return Symbol('s');\n      case 'big': return BigInt(value.v);\n      case 'buffer': return Buffer.from(value.hex, 'hex');\n      case 'u8': return new Uint8Array(Buffer.from(value.hex, 'hex'));\n      case 'u16': { const b = Buffer.from(value.hex, 'hex'); return new Uint16Array(b.buffer.slice(b.byteOffset, b.byteOffset + b.length)); }\n      case 'ab': { const b = Buffer.from(value.hex, 'hex'); return b.buffer.slice(b.byteOffset, b.byteOffset + b.length); }\n      case 'dv': { const b = Buffer.from(value.hex, 'hex'); return new DataView(b.buffer.slice(b.byteOffset, b.byteOffset + b.length)); }\n    }\n  }\n  return Object.fromEntries(Object.entries(value).map(([key, item]) => [key, decode(item, callback)]));\n}\nfunction details(value) {\n  if (value === undefined) return undefined;\n  return Object.fromEntries(Object.entries(value).map(([key, item]) => [key, typeof item === 'bigint' ? `${item}n` : item]));\n}\nfunction summary(value) {\n  if (value === undefined) return { t: 'undefined' };\n  if (value === null) return { t: 'null' };\n  if (typeof value === 'bigint') return { t: 'bigint', bits: value === 0n ? 0 : value.toString(2).length };\n  if (typeof value === 'string') return { t: 'string', line: value.split('\\n')[0] };\n  if (typeof value !== 'object') return { t: typeof value, v: value };\n  if (value instanceof Error) {\n    const out = { t: 'error', name: value.name, message: value.message };\n    for (const key of ['code', 'library', 'reason', 'opensslErrorStack']) if (value[key] !== undefined) out[key] = value[key];\n    out.own = Object.keys(value);\n    return out;\n  }\n  if (value instanceof ArrayBuffer) return { t: 'ArrayBuffer', bytes: value.byteLength };\n  if (Buffer.isBuffer(value)) return { t: 'Buffer' };\n  if (value instanceof crypto.KeyObject) {\n    const out = { t: 'KeyObject', ctor: value.constructor.name, type: value.type };\n    if (value.type === 'secret') out.size = value.symmetricKeySize;\n    else { out.akt = value.asymmetricKeyType; out.details = details(value.asymmetricKeyDetails); }\n    return out;\n  }\n  if ('publicKey' in value && 'privateKey' in value) return { t: 'pair', keys: Object.keys(value), publicKey: summary(value.publicKey), privateKey: summary(value.privateKey) };\n  if (typeof value.kty === 'string') return { t: 'jwk', kty: value.kty, crv: value.crv, keys: Object.keys(value).sort() };\n  return { t: 'object', ctor: value.constructor && value.constructor.name };\n}\nfunction run(item) {\n  return new Promise(resolve => {\n    const result = {};\n    const warnings = [];\n    const emit = process.emitWarning;\n    process.emitWarning = (...args) => { warnings.push(args); };\n    const finish = () => { process.emitWarning = emit; if (warnings.length > 0) result.warnings = warnings; resolve(result); };\n    let sync = true, expectsCallback = false, timer;\n    const callback = function (...args) {\n      result.callback = { sync, this: this === undefined ? 'undefined' : this === null ? 'null' : this.constructor && this.constructor.name, args: args.map(summary) };\n      clearTimeout(timer);\n      finish();\n    };\n    const args = decode(item.args, callback);\n    expectsCallback = args.includes(callback);\n    try { result.returned = summary(crypto[item.fn](...args)); }\n    catch (error) { result.threw = summary(error); expectsCallback = false; }\n    sync = false;\n    if (!expectsCallback) finish();\n    else timer = setTimeout(() => { result.callback = 'never'; finish(); }, 20000);\n  });\n}\nasync function main() {\n  let text = '';\n  for await (const chunk of process.stdin) text += chunk;\n  const document = JSON.parse(text);\n  if (process.argv[2] === 'one') { process.stdout.write(JSON.stringify(await run(document))); return; }\n  for (const item of document.cases) {\n    if (item.isolate === true) {\n      const child = spawnSync(process.execPath, [__filename, 'one'], { input: JSON.stringify(item), timeout: 4000, encoding: 'utf8' });\n      item.result = child.error !== undefined ? { hangs: true } : child.status !== 0 ? { crashes: String(child.stderr).split('\\n').slice(0, 3).join(' | ') } : JSON.parse(child.stdout);\n    } else item.result = await run(item);\n  }\n  document.node = process.version; document.openssl = process.versions.openssl;\n  process.stdout.write(JSON.stringify(document, null, 1));\n}\nmain();\n",
+ "observer": "const crypto = require('node:crypto'); const util = require('node:util');\nconst out = {};\nconst err = e => ({ name: e.name, code: e.code, message: e.message });\nconst attempt = f => { try { return f(); } catch (e) { return { threw: err(e) }; } };\nout.curves = crypto.getCurves();\nout.curveNames = {};\nfor (const c of ['SHA256', 'RSA', 'X448', 'ED25519', 'Ed25519', 'ED448', 'id-ecPublicKey', 'rsaEncryption', 'AES-128-CBC', 'B-163', 'K-163', 'P-192', 'secp112r1', 'wap-wsg-idm-ecid-wtls1', 'c2pnb163v1', 'Oakley-EC2N-3', 'prime256v1 ', 'CN'])\n  out.curveNames[c] = attempt(() => { const k = crypto.generateKeyPairSync('ec', { namedCurve: c }); return [k.publicKey.asymmetricKeyType, k.publicKey.asymmetricKeyDetails]; });\nout.functions = Object.fromEntries(['generateKeyPair', 'generateKeyPairSync', 'generateKey', 'generateKeySync', 'generatePrime', 'generatePrimeSync', 'checkPrime', 'checkPrimeSync'].map(n => [n, { name: crypto[n].name, length: crypto[n].length, symbols: Object.getOwnPropertySymbols(crypto[n]).map(String), keys: Object.getOwnPropertyNames(crypto[n]).sort() }]));\n// DER helpers\nfunction tlv(b, o) { let l = b[o + 1], h = 2; if (l & 0x80) { const n = l & 0x7f; l = 0; for (let i = 0; i < n; i++) l = l * 256 + b[o + 2 + i]; h = 2 + n; } return { tag: b[o], start: o + h, end: o + h + l }; }\nfunction children(b, t) { const r = []; for (let o = t.start; o < t.end;) { const c = tlv(b, o); r.push(c); o = c.end; } return r; }\nconst int = (b, t) => BigInt('0x' + (b.subarray(t.start, t.end).toString('hex') || '0'));\nfunction dhPrivate(key) { const b = key.export({ type: 'pkcs8', format: 'der' }); const top = children(b, tlv(b, 0)); const alg = children(b, top[1]); const params = children(b, alg[1]); const x = tlv(b, top[2].start);\n  return { p: int(b, params[0]), g: int(b, params[1]), extra: params.slice(2).map(t => [t.tag, int(b, t).toString()]), x: int(b, x) }; }\nconst bits = v => v === 0n ? 0 : v.toString(2).length;\nfunction dhStats(options, n = 40) { let min = 1e9, max = 0, odd = 0, info; for (let i = 0; i < n; i++) { const k = crypto.generateKeyPairSync('dh', options); const d = dhPrivate(k.privateKey); min = Math.min(min, bits(d.x)); max = Math.max(max, bits(d.x)); odd += Number(d.x & 1n); info = d; }\n  return { pBits: bits(info.p), g: String(info.g), extra: info.extra, xBitsMin: min, xBitsMax: max, oddX: odd, samples: n, pBit2: Number((info.p >> 2n) & 1n) }; }\nout.dhGroups = {};\nfor (const g of ['modp1', 'modp2', 'modp5', 'modp14', 'modp15', 'modp16', 'modp17', 'modp18']) out.dhGroups[g] = dhStats({ group: g }, g > 'modp15' ? 12 : 40);\nconst MODP1 = 'ffffffffffffffffc90fdaa22168c234c4c6628b80dc1cd129024e088a67cc74020bbea63b139b22514a08798e3404ddef9519b3cd3a431b302b0a6df25f14374fe1356d6d51c245e485b576625e7ec6f44c42e9a63a3620ffffffffffffffff';\nout.dhPrime = {};\nout.dhPrime.modp1 = dhStats({ prime: Buffer.from(MODP1, 'hex') });\nout.dhPrime.modp1g5 = dhStats({ prime: Buffer.from(MODP1, 'hex'), generator: 5 });\nout.dhPrime.composite = dhStats({ prime: Buffer.from(MODP1.slice(0, -2) + 'fd', 'hex') });\nout.dhPrime.bit2clear = dhStats({ prime: Buffer.from(MODP1.slice(0, -2) + 'fb', 'hex') });\nout.dhPrime.even = attempt(() => dhStats({ prime: Buffer.from(MODP1.slice(0, -2) + 'f0', 'hex') }, 10));\nout.dhPrime.leadingZeros = dhStats({ prime: Buffer.from('0000' + MODP1, 'hex') }, 5);\nout.dhPrime.bits512 = attempt(() => dhStats({ prime: Buffer.from('80' + '00'.repeat(62) + '6f', 'hex') }, 5));\nout.dhPrime.bits511 = attempt(() => dhStats({ prime: Buffer.from('7f' + 'ff'.repeat(62) + 'ff', 'hex') }, 5));\nout.dhPrime.g0 = attempt(() => { const k = crypto.generateKeyPairSync('dh', { prime: Buffer.from(MODP1, 'hex'), generator: 0 }); return k.publicKey.export({ type: 'spki', format: 'der' }).toString('hex').slice(-40); });\nout.dhPrime.g1 = attempt(() => { const k = crypto.generateKeyPairSync('dh', { prime: Buffer.from(MODP1, 'hex'), generator: 1 }); return k.publicKey.export({ type: 'spki', format: 'der' }).toString('hex').slice(-40); });\nout.dhGenerated = {};\nconst isPrime = v => crypto.checkPrimeSync(v);\nfor (const g of [undefined, 2, 5, 3, 7, 0, 1, 4]) out.dhGenerated[String(g)] = attempt(() => { const rows = []; for (let i = 0; i < 3; i++) { const k = crypto.generateKeyPairSync('dh', { primeLength: 512, ...(g === undefined ? {} : { generator: g }) }); const d = dhPrivate(k.privateKey);\n  rows.push({ pBits: bits(d.p), g: String(d.g), mod24: Number(d.p % 24n), mod60: Number(d.p % 60n), mod12: Number(d.p % 12n), safe: isPrime(d.p) && isPrime((d.p - 1n) / 2n), xBits: bits(d.x), extra: d.extra }); } return rows; });\nout.dhGenerated.len513 = attempt(() => { const d = dhPrivate(crypto.generateKeyPairSync('dh', { primeLength: 513 }).privateKey); return { pBits: bits(d.p), xBits: bits(d.x) }; });\n// OKP clamping\nout.okp = {};\nfor (const t of ['x25519', 'x448', 'ed25519', 'ed448']) { let and0 = 255, or0 = 0, andL = 255, orL = 0, len; for (let i = 0; i < 64; i++) { const d = Buffer.from(crypto.generateKeyPairSync(t).privateKey.export({ format: 'jwk' }).d, 'base64url'); len = d.length; and0 &= d[0]; or0 |= d[0]; andL &= d[len - 1]; orL |= d[len - 1]; } out.okp[t] = { len, and0, or0, andL, orL }; }\n// PSS hashes\nout.pssHashes = {};\nfor (const h of ['sha1', 'sha224', 'sha256', 'sha384', 'sha512', 'sha512-224', 'sha512-256', 'sha3-224', 'sha3-256', 'sha3-384', 'sha3-512', 'md5', 'ripemd160', 'blake2b512', 'blake2s256', 'sm3', 'shake256', 'md5-sha1', 'RSA-SHA1', 'sha2-256', 'SHA-512/256'])\n  out.pssHashes[h] = attempt(() => { const k = crypto.generateKeyPairSync('rsa-pss', { modulusLength: 512, hashAlgorithm: h }); const d = k.publicKey.asymmetricKeyDetails; const pem = k.publicKey.export({ type: 'spki', format: 'der' }); return { hashAlgorithm: d.hashAlgorithm, mgf1HashAlgorithm: d.mgf1HashAlgorithm, saltLength: d.saltLength, algHex: pem.toString('hex').slice(0, 160) }; });\nout.pssMgf = {};\nfor (const h of ['sha3-256', 'md5', 'sha512-256']) out.pssMgf[h] = attempt(() => { const d = crypto.generateKeyPairSync('rsa-pss', { modulusLength: 512, hashAlgorithm: 'sha256', mgf1HashAlgorithm: h }).publicKey.asymmetricKeyDetails; return { hashAlgorithm: d.hashAlgorithm, mgf1HashAlgorithm: d.mgf1HashAlgorithm, saltLength: d.saltLength }; });\n// RSA modulus sizes and paths\nout.rsaBits = {};\nfor (const m of [512, 513, 1023, 1024, 1025]) { const set = new Set(); for (let i = 0; i < 8; i++) { const j = crypto.generateKeyPairSync('rsa', { modulusLength: m }).privateKey.export({ format: 'jwk' }); const b = s => bits(BigInt('0x' + Buffer.from(s, 'base64url').toString('hex'))); set.add(`${b(j.n)}:${b(j.p)}:${b(j.q)}`); } out.rsaBits[m] = [...set]; }\nconst pending = [];\nconst asyncCase = (name, type, options) => pending.push(new Promise(resolve => { try { crypto.generateKeyPair(type, options, function (e, pub, priv) { out.asyncEncoding[name] = { callback: e ? err(e) : 'ok' }; resolve(); }); } catch (e) { out.asyncEncoding[name] = { threw: err(e) }; resolve(); } }));\nout.asyncEncoding = {};\nasyncCase('rsaRawPublic', 'rsa', { modulusLength: 512, publicKeyEncoding: { format: 'raw-public' } });\nasyncCase('rsaRawPrivate', 'rsa', { modulusLength: 512, privateKeyEncoding: { format: 'raw-private' } });\nasyncCase('pssJwk', 'rsa-pss', { modulusLength: 512, publicKeyEncoding: { format: 'jwk' } });\nasyncCase('dhJwk', 'dh', { group: 'modp14', privateKeyEncoding: { format: 'jwk' } });\nasyncCase('ecRawSeed', 'ec', { namedCurve: 'P-256', privateKeyEncoding: { format: 'raw-seed' } });\nasyncCase('rsaKeySmallAndRaw', 'rsa', { modulusLength: 100, publicKeyEncoding: { format: 'raw-public' } });\nout.syncOrder = { smallAndRaw: attempt(() => crypto.generateKeyPairSync('rsa', { modulusLength: 100, publicKeyEncoding: { format: 'raw-public' } })), smallAndCipher: attempt(() => crypto.generateKeyPairSync('rsa', { modulusLength: 100, privateKeyEncoding: { type: 'pkcs8', format: 'pem', cipher: 'foo', passphrase: 'x' } })),\n  curveAndCipher: attempt(() => crypto.generateKeyPairSync('ec', { namedCurve: 'foo', privateKeyEncoding: { type: 'pkcs8', format: 'pem', cipher: 'foo', passphrase: 'x' } })),\n  groupAndCipher: attempt(() => crypto.generateKeyPairSync('dh', { group: 'foo', privateKeyEncoding: { type: 'pkcs8', format: 'pem', cipher: 'foo', passphrase: 'x' } })),\n  digestAndCipher: attempt(() => crypto.generateKeyPairSync('rsa-pss', { modulusLength: 512, hashAlgorithm: 'foo', privateKeyEncoding: { type: 'pkcs8', format: 'pem', cipher: 'foo', passphrase: 'x' } })),\n  mgfAndDigest: attempt(() => crypto.generateKeyPairSync('rsa-pss', { modulusLength: 512, hashAlgorithm: 'foo', mgf1HashAlgorithm: 'bar' })),\n  okpCipher: attempt(() => crypto.generateKeyPairSync('ed25519', { privateKeyEncoding: { type: 'pkcs8', format: 'pem', cipher: 'foo', passphrase: 'x' } })),\n  encodingArray: attempt(() => crypto.generateKeyPairSync('ed25519', { publicKeyEncoding: [] })),\n  expZeroPss: attempt(() => crypto.generateKeyPairSync('rsa-pss', { modulusLength: 512, publicExponent: 0 })), expZeroSmall: attempt(() => crypto.generateKeyPairSync('rsa', { modulusLength: 100, publicExponent: 0 })), expEvenSmall: attempt(() => crypto.generateKeyPairSync('rsa', { modulusLength: 100, publicExponent: 2 })),\n  rsa16384: 'skipped' };\npending.push(util.promisify(crypto.generateKeyPair)('ed25519').then(v => { out.promisify = { keyPair: Object.keys(v) }; }));\npending.push(util.promisify(crypto.generateKeyPair)('rsa', { modulusLength: 100 }).catch(e => { out.promisifyError = err(e); }));\npending.push(util.promisify(crypto.generateKey)('aes', { length: 128 }).then(v => { out.promisify.key = v.constructor.name; }));\npending.push(util.promisify(crypto.generatePrime)(16).then(v => { out.promisify.prime = Object.prototype.toString.call(v); }));\npending.push(util.promisify(crypto.checkPrime)(7n).then(v => { out.promisify.check = v; }));\n// prime shapes through the API\nout.primeShapes = {};\nconst shape = (size, options, n = 200) => { let top2 = 0, minBits = 1e9, maxBits = 0; const values = new Set(); for (let i = 0; i < n; i++) { const p = crypto.generatePrimeSync(size, { ...options, bigint: true }); const b = bits(p); minBits = Math.min(minBits, b); maxBits = Math.max(maxBits, b); if (b >= 2 && ((p >> BigInt(b - 2)) & 1n) === 1n) top2++; if (values.size < 40) values.add(String(p)); }\n  return { minBits, maxBits, top2, n, distinct: values.size <= 12 ? [...values].sort((a, b) => Number(a) - Number(b)) : undefined }; };\nfor (const [name, size, options] of [['b2', 2, {}], ['b3', 3, {}], ['b4', 4, {}], ['b5', 5, {}], ['b8', 8, {}], ['b64', 64, {}], ['safe3', 3, { safe: true }], ['safe6', 6, { safe: true }], ['safe7', 7, { safe: true }], ['safe8', 8, { safe: true }], ['add7', 16, { add: 7n }], ['add12rem5', 16, { add: 12n, rem: 5n }], ['b8add128', 8, { add: 128n, rem: 1n }], ['b8add6rem5', 8, { add: 6n, rem: 5n }], ['b8add6rem1', 8, { add: 6n, rem: 1n }], ['b3add5rem2', 3, { add: 5n, rem: 2n }], ['b2add3rem2', 2, { add: 3n, rem: 2n }], ['b2add3rem0', 2, { add: 3n, rem: 0n }], ['b8add250rem7', 8, { add: 250n, rem: 7n }], ['safe8add12', 8, { safe: true, add: 12n, rem: 11n }], ['b4add2rem1', 4, { add: 2n, rem: 1n }], ['b4add1', 4, { add: 1n }]])\n  out.primeShapes[name] = shape(size, options);\nPromise.all(pending).then(() => { console.log(JSON.stringify(out, null, 1)); });\n",
+ "observations": {
+  "curves": [
+   "Oakley-EC2N-3",
+   "Oakley-EC2N-4",
+   "SM2",
+   "brainpoolP160r1",
+   "brainpoolP160t1",
+   "brainpoolP192r1",
+   "brainpoolP192t1",
+   "brainpoolP224r1",
+   "brainpoolP224t1",
+   "brainpoolP256r1",
+   "brainpoolP256t1",
+   "brainpoolP320r1",
+   "brainpoolP320t1",
+   "brainpoolP384r1",
+   "brainpoolP384t1",
+   "brainpoolP512r1",
+   "brainpoolP512t1",
+   "c2pnb163v1",
+   "c2pnb163v2",
+   "c2pnb163v3",
+   "c2pnb176v1",
+   "c2pnb208w1",
+   "c2pnb272w1",
+   "c2pnb304w1",
+   "c2pnb368w1",
+   "c2tnb191v1",
+   "c2tnb191v2",
+   "c2tnb191v3",
+   "c2tnb239v1",
+   "c2tnb239v2",
+   "c2tnb239v3",
+   "c2tnb359v1",
+   "c2tnb431r1",
+   "prime192v1",
+   "prime192v2",
+   "prime192v3",
+   "prime239v1",
+   "prime239v2",
+   "prime239v3",
+   "prime256v1",
+   "secp112r1",
+   "secp112r2",
+   "secp128r1",
+   "secp128r2",
+   "secp160k1",
+   "secp160r1",
+   "secp160r2",
+   "secp192k1",
+   "secp224k1",
+   "secp224r1",
+   "secp256k1",
+   "secp384r1",
+   "secp521r1",
+   "sect113r1",
+   "sect113r2",
+   "sect131r1",
+   "sect131r2",
+   "sect163k1",
+   "sect163r1",
+   "sect163r2",
+   "sect193r1",
+   "sect193r2",
+   "sect233k1",
+   "sect233r1",
+   "sect239k1",
+   "sect283k1",
+   "sect283r1",
+   "sect409k1",
+   "sect409r1",
+   "sect571k1",
+   "sect571r1",
+   "wap-wsg-idm-ecid-wtls1",
+   "wap-wsg-idm-ecid-wtls10",
+   "wap-wsg-idm-ecid-wtls11",
+   "wap-wsg-idm-ecid-wtls12",
+   "wap-wsg-idm-ecid-wtls3",
+   "wap-wsg-idm-ecid-wtls4",
+   "wap-wsg-idm-ecid-wtls5",
+   "wap-wsg-idm-ecid-wtls6",
+   "wap-wsg-idm-ecid-wtls7",
+   "wap-wsg-idm-ecid-wtls8",
+   "wap-wsg-idm-ecid-wtls9"
+  ],
+  "curveNames": {
+   "SHA256": {
+    "threw": {
+     "name": "Error",
+     "message": "error:0800008D:elliptic curve routines::invalid curve"
+    }
+   },
+   "RSA": {
+    "threw": {
+     "name": "Error",
+     "message": "error:0800008D:elliptic curve routines::invalid curve"
+    }
+   },
+   "X448": [
+    "x448",
+    {}
+   ],
+   "ED25519": [
+    "ed25519",
+    {}
+   ],
+   "Ed25519": {
+    "threw": {
+     "name": "TypeError",
+     "code": "ERR_CRYPTO_INVALID_CURVE",
+     "message": "Invalid EC curve name"
+    }
+   },
+   "ED448": [
+    "ed448",
+    {}
+   ],
+   "id-ecPublicKey": {
+    "threw": {
+     "name": "Error",
+     "message": "error:0800008D:elliptic curve routines::invalid curve"
+    }
+   },
+   "rsaEncryption": {
+    "threw": {
+     "name": "Error",
+     "message": "error:0800008D:elliptic curve routines::invalid curve"
+    }
+   },
+   "AES-128-CBC": {
+    "threw": {
+     "name": "Error",
+     "message": "error:0800008D:elliptic curve routines::invalid curve"
+    }
+   },
+   "B-163": [
+    "ec",
+    {
+     "namedCurve": "sect163r2"
+    }
+   ],
+   "K-163": [
+    "ec",
+    {
+     "namedCurve": "sect163k1"
+    }
+   ],
+   "P-192": [
+    "ec",
+    {
+     "namedCurve": "prime192v1"
+    }
+   ],
+   "secp112r1": [
+    "ec",
+    {
+     "namedCurve": "secp112r1"
+    }
+   ],
+   "wap-wsg-idm-ecid-wtls1": [
+    "ec",
+    {
+     "namedCurve": "wap-wsg-idm-ecid-wtls1"
+    }
+   ],
+   "c2pnb163v1": [
+    "ec",
+    {
+     "namedCurve": "c2pnb163v1"
+    }
+   ],
+   "Oakley-EC2N-3": [
+    "ec",
+    {
+     "namedCurve": "Oakley-EC2N-3"
+    }
+   ],
+   "prime256v1 ": {
+    "threw": {
+     "name": "TypeError",
+     "code": "ERR_CRYPTO_INVALID_CURVE",
+     "message": "Invalid EC curve name"
+    }
+   },
+   "CN": {
+    "threw": {
+     "name": "Error",
+     "message": "error:0800008D:elliptic curve routines::invalid curve"
+    }
+   }
+  },
+  "functions": {
+   "generateKeyPair": {
+    "name": "generateKeyPair",
+    "length": 3,
+    "symbols": [
+     "Symbol(customPromisifyArgs)"
+    ],
+    "keys": [
+     "length",
+     "name",
+     "prototype"
+    ]
+   },
+   "generateKeyPairSync": {
+    "name": "generateKeyPairSync",
+    "length": 2,
+    "symbols": [],
+    "keys": [
+     "length",
+     "name",
+     "prototype"
+    ]
+   },
+   "generateKey": {
+    "name": "generateKey",
+    "length": 3,
+    "symbols": [],
+    "keys": [
+     "length",
+     "name",
+     "prototype"
+    ]
+   },
+   "generateKeySync": {
+    "name": "generateKeySync",
+    "length": 2,
+    "symbols": [],
+    "keys": [
+     "length",
+     "name",
+     "prototype"
+    ]
+   },
+   "generatePrime": {
+    "name": "generatePrime",
+    "length": 3,
+    "symbols": [],
+    "keys": [
+     "length",
+     "name",
+     "prototype"
+    ]
+   },
+   "generatePrimeSync": {
+    "name": "generatePrimeSync",
+    "length": 1,
+    "symbols": [],
+    "keys": [
+     "length",
+     "name",
+     "prototype"
+    ]
+   },
+   "checkPrime": {
+    "name": "checkPrime",
+    "length": 1,
+    "symbols": [],
+    "keys": [
+     "length",
+     "name",
+     "prototype"
+    ]
+   },
+   "checkPrimeSync": {
+    "name": "checkPrimeSync",
+    "length": 1,
+    "symbols": [],
+    "keys": [
+     "length",
+     "name",
+     "prototype"
+    ]
+   }
+  },
+  "dhGroups": {
+   "modp1": {
+    "pBits": 768,
+    "g": "2",
+    "extra": [],
+    "xBitsMin": 766,
+    "xBitsMax": 766,
+    "oddX": 21,
+    "samples": 40,
+    "pBit2": 1
+   },
+   "modp2": {
+    "pBits": 1024,
+    "g": "2",
+    "extra": [],
+    "xBitsMin": 1022,
+    "xBitsMax": 1022,
+    "oddX": 5,
+    "samples": 12,
+    "pBit2": 1
+   },
+   "modp5": {
+    "pBits": 1536,
+    "g": "2",
+    "extra": [],
+    "xBitsMin": 196,
+    "xBitsMax": 200,
+    "oddX": 5,
+    "samples": 12,
+    "pBit2": 1
+   },
+   "modp14": {
+    "pBits": 2048,
+    "g": "2",
+    "extra": [],
+    "xBitsMin": 219,
+    "xBitsMax": 225,
+    "oddX": 22,
+    "samples": 40,
+    "pBit2": 1
+   },
+   "modp15": {
+    "pBits": 3072,
+    "g": "2",
+    "extra": [],
+    "xBitsMin": 268,
+    "xBitsMax": 275,
+    "oddX": 22,
+    "samples": 40,
+    "pBit2": 1
+   },
+   "modp16": {
+    "pBits": 4096,
+    "g": "2",
+    "extra": [],
+    "xBitsMin": 322,
+    "xBitsMax": 325,
+    "oddX": 5,
+    "samples": 12,
+    "pBit2": 1
+   },
+   "modp17": {
+    "pBits": 6144,
+    "g": "2",
+    "extra": [],
+    "xBitsMin": 372,
+    "xBitsMax": 375,
+    "oddX": 6,
+    "samples": 12,
+    "pBit2": 1
+   },
+   "modp18": {
+    "pBits": 8192,
+    "g": "2",
+    "extra": [],
+    "xBitsMin": 398,
+    "xBitsMax": 400,
+    "oddX": 5,
+    "samples": 12,
+    "pBit2": 1
+   }
+  },
+  "dhPrime": {
+   "modp1": {
+    "pBits": 768,
+    "g": "2",
+    "extra": [],
+    "xBitsMin": 766,
+    "xBitsMax": 766,
+    "oddX": 16,
+    "samples": 40,
+    "pBit2": 1
+   },
+   "modp1g5": {
+    "pBits": 768,
+    "g": "5",
+    "extra": [],
+    "xBitsMin": 766,
+    "xBitsMax": 766,
+    "oddX": 23,
+    "samples": 40,
+    "pBit2": 1
+   },
+   "composite": {
+    "pBits": 768,
+    "g": "2",
+    "extra": [],
+    "xBitsMin": 766,
+    "xBitsMax": 766,
+    "oddX": 19,
+    "samples": 40,
+    "pBit2": 1
+   },
+   "bit2clear": {
+    "pBits": 768,
+    "g": "2",
+    "extra": [],
+    "xBitsMin": 766,
+    "xBitsMax": 766,
+    "oddX": 0,
+    "samples": 40,
+    "pBit2": 0
+   },
+   "even": {
+    "threw": {
+     "name": "Error",
+     "message": "error:0180006C:bignum routines::no inverse"
+    }
+   },
+   "leadingZeros": {
+    "pBits": 768,
+    "g": "2",
+    "extra": [],
+    "xBitsMin": 766,
+    "xBitsMax": 766,
+    "oddX": 2,
+    "samples": 5,
+    "pBit2": 1
+   },
+   "bits512": {
+    "pBits": 512,
+    "g": "2",
+    "extra": [],
+    "xBitsMin": 510,
+    "xBitsMax": 510,
+    "oddX": 2,
+    "samples": 5,
+    "pBit2": 1
+   },
+   "bits511": {
+    "threw": {
+     "name": "Error",
+     "message": "error:0280007E:Diffie-Hellman routines::modulus too small"
+    }
+   },
+   "g0": "3a3620ffffffffffffffff020100030400020100",
+   "g1": "3a3620ffffffffffffffff020101030400020101"
+  },
+  "dhGenerated": {
+   "0": {
+    "threw": {
+     "name": "Error",
+     "message": "error:02800065:Diffie-Hellman routines::bad generator"
+    }
+   },
+   "1": {
+    "threw": {
+     "name": "Error",
+     "message": "error:02800065:Diffie-Hellman routines::bad generator"
+    }
+   },
+   "2": [
+    {
+     "pBits": 512,
+     "g": "2",
+     "mod24": 23,
+     "mod60": 23,
+     "mod12": 11,
+     "safe": true,
+     "xBits": 510,
+     "extra": []
+    },
+    {
+     "pBits": 512,
+     "g": "2",
+     "mod24": 23,
+     "mod60": 59,
+     "mod12": 11,
+     "safe": true,
+     "xBits": 510,
+     "extra": []
+    },
+    {
+     "pBits": 512,
+     "g": "2",
+     "mod24": 23,
+     "mod60": 59,
+     "mod12": 11,
+     "safe": true,
+     "xBits": 510,
+     "extra": []
+    }
+   ],
+   "3": [
+    {
+     "pBits": 512,
+     "g": "3",
+     "mod24": 11,
+     "mod60": 59,
+     "mod12": 11,
+     "safe": true,
+     "xBits": 510,
+     "extra": []
+    },
+    {
+     "pBits": 512,
+     "g": "3",
+     "mod24": 23,
+     "mod60": 59,
+     "mod12": 11,
+     "safe": true,
+     "xBits": 510,
+     "extra": []
+    },
+    {
+     "pBits": 512,
+     "g": "3",
+     "mod24": 23,
+     "mod60": 47,
+     "mod12": 11,
+     "safe": true,
+     "xBits": 510,
+     "extra": []
+    }
+   ],
+   "4": [
+    {
+     "pBits": 512,
+     "g": "4",
+     "mod24": 23,
+     "mod60": 23,
+     "mod12": 11,
+     "safe": true,
+     "xBits": 510,
+     "extra": []
+    },
+    {
+     "pBits": 512,
+     "g": "4",
+     "mod24": 23,
+     "mod60": 59,
+     "mod12": 11,
+     "safe": true,
+     "xBits": 510,
+     "extra": []
+    },
+    {
+     "pBits": 512,
+     "g": "4",
+     "mod24": 23,
+     "mod60": 47,
+     "mod12": 11,
+     "safe": true,
+     "xBits": 510,
+     "extra": []
+    }
+   ],
+   "5": [
+    {
+     "pBits": 512,
+     "g": "5",
+     "mod24": 11,
+     "mod60": 59,
+     "mod12": 11,
+     "safe": true,
+     "xBits": 510,
+     "extra": []
+    },
+    {
+     "pBits": 512,
+     "g": "5",
+     "mod24": 23,
+     "mod60": 59,
+     "mod12": 11,
+     "safe": true,
+     "xBits": 510,
+     "extra": []
+    },
+    {
+     "pBits": 512,
+     "g": "5",
+     "mod24": 23,
+     "mod60": 59,
+     "mod12": 11,
+     "safe": true,
+     "xBits": 510,
+     "extra": []
+    }
+   ],
+   "7": [
+    {
+     "pBits": 512,
+     "g": "7",
+     "mod24": 23,
+     "mod60": 23,
+     "mod12": 11,
+     "safe": true,
+     "xBits": 510,
+     "extra": []
+    },
+    {
+     "pBits": 512,
+     "g": "7",
+     "mod24": 23,
+     "mod60": 59,
+     "mod12": 11,
+     "safe": true,
+     "xBits": 510,
+     "extra": []
+    },
+    {
+     "pBits": 512,
+     "g": "7",
+     "mod24": 23,
+     "mod60": 59,
+     "mod12": 11,
+     "safe": true,
+     "xBits": 510,
+     "extra": []
+    }
+   ],
+   "undefined": [
+    {
+     "pBits": 512,
+     "g": "2",
+     "mod24": 23,
+     "mod60": 59,
+     "mod12": 11,
+     "safe": true,
+     "xBits": 510,
+     "extra": []
+    },
+    {
+     "pBits": 512,
+     "g": "2",
+     "mod24": 23,
+     "mod60": 23,
+     "mod12": 11,
+     "safe": true,
+     "xBits": 510,
+     "extra": []
+    },
+    {
+     "pBits": 512,
+     "g": "2",
+     "mod24": 23,
+     "mod60": 59,
+     "mod12": 11,
+     "safe": true,
+     "xBits": 510,
+     "extra": []
+    }
+   ],
+   "len513": {
+    "pBits": 513,
+    "xBits": 511
+   }
+  },
+  "okp": {
+   "x25519": {
+    "len": 32,
+    "and0": 0,
+    "or0": 248,
+    "andL": 64,
+    "orL": 127
+   },
+   "x448": {
+    "len": 56,
+    "and0": 0,
+    "or0": 252,
+    "andL": 128,
+    "orL": 255
+   },
+   "ed25519": {
+    "len": 32,
+    "and0": 0,
+    "or0": 255,
+    "andL": 0,
+    "orL": 255
+   },
+   "ed448": {
+    "len": 57,
+    "and0": 0,
+    "or0": 255,
+    "andL": 0,
+    "orL": 255
+   }
+  },
+  "pssHashes": {
+   "sha1": {
+    "hashAlgorithm": "sha1",
+    "mgf1HashAlgorithm": "sha1",
+    "saltLength": 20,
+    "algHex": "305c300d06092a864886f70d01010a3000034b003048024100f827461ccfc44ea998e12edb308e086ea099b32d31e6a9d8976f4f57d7e211ebe040b3fc260b754c26b2cf822c077b1d0ab800bfbe56fb"
+   },
+   "sha224": {
+    "hashAlgorithm": "sha224",
+    "mgf1HashAlgorithm": "sha224",
+    "saltLength": 28,
+    "algHex": "308190304106092a864886f70d01010a3034a00f300d06096086480165030402040500a11c301a06092a864886f70d010108300d06096086480165030402040500a20302011c034b003048024100befc"
+   },
+   "sha256": {
+    "hashAlgorithm": "sha256",
+    "mgf1HashAlgorithm": "sha256",
+    "saltLength": 32,
+    "algHex": "308190304106092a864886f70d01010a3034a00f300d06096086480165030402010500a11c301a06092a864886f70d010108300d06096086480165030402010500a203020120034b003048024100ac9d"
+   },
+   "sha384": {
+    "hashAlgorithm": "sha384",
+    "mgf1HashAlgorithm": "sha384",
+    "saltLength": 48,
+    "algHex": "308190304106092a864886f70d01010a3034a00f300d06096086480165030402020500a11c301a06092a864886f70d010108300d06096086480165030402020500a203020130034b003048024100daa7"
+   },
+   "sha512": {
+    "hashAlgorithm": "sha512",
+    "mgf1HashAlgorithm": "sha512",
+    "saltLength": 64,
+    "algHex": "308190304106092a864886f70d01010a3034a00f300d06096086480165030402030500a11c301a06092a864886f70d010108300d06096086480165030402030500a203020140034b003048024100a90b"
+   },
+   "sha512-224": {
+    "hashAlgorithm": "sha512-224",
+    "mgf1HashAlgorithm": "sha512-224",
+    "saltLength": 28,
+    "algHex": "308190304106092a864886f70d01010a3034a00f300d06096086480165030402050500a11c301a06092a864886f70d010108300d06096086480165030402050500a20302011c034b003048024100c32d"
+   },
+   "sha512-256": {
+    "hashAlgorithm": "sha512-256",
+    "mgf1HashAlgorithm": "sha512-256",
+    "saltLength": 32,
+    "algHex": "308190304106092a864886f70d01010a3034a00f300d06096086480165030402060500a11c301a06092a864886f70d010108300d06096086480165030402060500a203020120034b003048024100f789"
+   },
+   "sha3-224": {
+    "threw": {
+     "name": "Error",
+     "message": "Failed to encode public key"
+    }
+   },
+   "sha3-256": {
+    "threw": {
+     "name": "Error",
+     "message": "Failed to encode public key"
+    }
+   },
+   "sha3-384": {
+    "threw": {
+     "name": "Error",
+     "message": "Failed to encode public key"
+    }
+   },
+   "sha3-512": {
+    "threw": {
+     "name": "Error",
+     "message": "Failed to encode public key"
+    }
+   },
+   "md5": {
+    "threw": {
+     "name": "Error",
+     "message": "Failed to encode public key"
+    }
+   },
+   "ripemd160": {
+    "threw": {
+     "name": "Error",
+     "message": "Failed to encode public key"
+    }
+   },
+   "blake2b512": {
+    "threw": {
+     "name": "Error",
+     "message": "Failed to encode public key"
+    }
+   },
+   "blake2s256": {
+    "threw": {
+     "name": "Error",
+     "message": "Failed to encode public key"
+    }
+   },
+   "sm3": {
+    "threw": {
+     "name": "Error",
+     "message": "Failed to encode public key"
+    }
+   },
+   "shake256": {
+    "threw": {
+     "name": "Error",
+     "message": "Failed to encode public key"
+    }
+   },
+   "md5-sha1": {
+    "threw": {
+     "name": "Error",
+     "message": "Failed to encode public key"
+    }
+   },
+   "RSA-SHA1": {
+    "hashAlgorithm": "sha1",
+    "mgf1HashAlgorithm": "sha1",
+    "saltLength": 20,
+    "algHex": "305c300d06092a864886f70d01010a3000034b003048024100a9927a7b228a390f387247fbd792308cc10d5098d522f886b1d5a7847e40971f630b1db95d054e009fbb39a61b7fd3b2020baf0014cb94"
+   },
+   "sha2-256": {
+    "hashAlgorithm": "sha256",
+    "mgf1HashAlgorithm": "sha256",
+    "saltLength": 32,
+    "algHex": "308190304106092a864886f70d01010a3034a00f300d06096086480165030402010500a11c301a06092a864886f70d010108300d06096086480165030402010500a203020120034b003048024100d309"
+   },
+   "SHA-512/256": {
+    "hashAlgorithm": "sha512-256",
+    "mgf1HashAlgorithm": "sha512-256",
+    "saltLength": 32,
+    "algHex": "308190304106092a864886f70d01010a3034a00f300d06096086480165030402060500a11c301a06092a864886f70d010108300d06096086480165030402060500a203020120034b003048024100f55a"
+   }
+  },
+  "pssMgf": {
+   "sha3-256": {
+    "hashAlgorithm": "sha256",
+    "mgf1HashAlgorithm": "sha1",
+    "saltLength": 32
+   },
+   "md5": {
+    "hashAlgorithm": "sha256",
+    "mgf1HashAlgorithm": "sha1",
+    "saltLength": 32
+   },
+   "sha512-256": {
+    "hashAlgorithm": "sha256",
+    "mgf1HashAlgorithm": "sha512-256",
+    "saltLength": 32
+   }
+  },
+  "rsaBits": {
+   "512": [
+    "512:256:256"
+   ],
+   "513": [
+    "513:257:256"
+   ],
+   "1023": [
+    "1023:512:511"
+   ],
+   "1024": [
+    "1024:512:512"
+   ],
+   "1025": [
+    "1025:513:512"
+   ]
+  },
+  "asyncEncoding": {
+   "dhJwk": {
+    "callback": {
+     "name": "Error",
+     "code": "ERR_CRYPTO_JWK_UNSUPPORTED_KEY_TYPE",
+     "message": "Unsupported JWK Key Type."
+    }
+   },
+   "ecRawSeed": {
+    "callback": {
+     "name": "Error",
+     "code": "ERR_CRYPTO_INCOMPATIBLE_KEY_OPTIONS",
+     "message": "The selected key encoding is incompatible with the key type"
+    }
+   },
+   "rsaKeySmallAndRaw": {
+    "callback": {
+     "name": "Error",
+     "message": "error:1C8000AB:Provider routines::key size too small"
+    }
+   },
+   "rsaRawPublic": {
+    "callback": {
+     "name": "Error",
+     "code": "ERR_CRYPTO_INCOMPATIBLE_KEY_OPTIONS",
+     "message": "The selected key encoding is incompatible with the key type"
+    }
+   },
+   "rsaRawPrivate": {
+    "callback": {
+     "name": "Error",
+     "code": "ERR_CRYPTO_INCOMPATIBLE_KEY_OPTIONS",
+     "message": "The selected key encoding is incompatible with the key type"
+    }
+   },
+   "pssJwk": {
+    "callback": {
+     "name": "Error",
+     "code": "ERR_CRYPTO_JWK_UNSUPPORTED_KEY_TYPE",
+     "message": "Unsupported JWK Key Type."
+    }
+   }
+  },
+  "syncOrder": {
+   "smallAndRaw": {
+    "threw": {
+     "name": "Error",
+     "message": "error:1C8000AB:Provider routines::key size too small"
+    }
+   },
+   "smallAndCipher": {
+    "threw": {
+     "name": "Error",
+     "code": "ERR_CRYPTO_UNKNOWN_CIPHER",
+     "message": "Unknown cipher"
+    }
+   },
+   "curveAndCipher": {
+    "threw": {
+     "name": "TypeError",
+     "code": "ERR_CRYPTO_INVALID_CURVE",
+     "message": "Invalid EC curve name"
+    }
+   },
+   "groupAndCipher": {
+    "threw": {
+     "name": "Error",
+     "code": "ERR_CRYPTO_UNKNOWN_DH_GROUP",
+     "message": "Unknown DH group"
+    }
+   },
+   "digestAndCipher": {
+    "threw": {
+     "name": "TypeError",
+     "code": "ERR_CRYPTO_INVALID_DIGEST",
+     "message": "Invalid digest: foo"
+    }
+   },
+   "mgfAndDigest": {
+    "threw": {
+     "name": "TypeError",
+     "code": "ERR_CRYPTO_INVALID_DIGEST",
+     "message": "Invalid digest: foo"
+    }
+   },
+   "okpCipher": {
+    "threw": {
+     "name": "Error",
+     "code": "ERR_CRYPTO_UNKNOWN_CIPHER",
+     "message": "Unknown cipher"
+    }
+   },
+   "encodingArray": {
+    "threw": {
+     "name": "TypeError",
+     "code": "ERR_INVALID_ARG_TYPE",
+     "message": "The \"options\" argument must be of type object. Received an instance of Array"
+    }
+   },
+   "expZeroPss": {
+    "threw": {
+     "name": "Error",
+     "message": "Key generation job failed"
+    }
+   },
+   "expZeroSmall": {
+    "threw": {
+     "name": "Error",
+     "message": "error:1C8000AB:Provider routines::key size too small"
+    }
+   },
+   "expEvenSmall": {
+    "threw": {
+     "name": "Error",
+     "message": "error:1C8000AB:Provider routines::key size too small"
+    }
+   },
+   "rsa16384": "skipped"
+  },
+  "promisify": {
+   "keyPair": [
+    "publicKey",
+    "privateKey"
+   ],
+   "key": "SecretKeyObject",
+   "prime": "[object ArrayBuffer]",
+   "check": true
+  },
+  "promisifyError": {
+   "name": "Error",
+   "message": "error:1C8000AB:Provider routines::key size too small"
+  }
+ },
+ "limits": {
+  "note": "recorded one by one with docker run --rm node:24.18.1-alpine node -e",
+  "rsa": {
+   "modulusLength 16385": "a key (OpenSSL sets no upper limit on generation)"
+  },
+  "dh": {
+   "prime of 10001 bits": "Error: error:02800067:Diffie-Hellman routines::modulus too large",
+   "prime of 10000 bits": "a key",
+   "primeLength 10001": "Error: error:02800067:Diffie-Hellman routines::modulus too large",
+   "primeLength 2147483647": "Error: error:02800067:Diffie-Hellman routines::modulus too large"
+  },
+  "ec": {
+   "paramEncoding explicit, P-256": "a key whose SPKI is 335 bytes (91 with named parameters)",
+   "namedCurve 'X25519' with privateKeyEncoding sec1": "Error: Failed to encode private key",
+   "namedCurve 'X25519' with publicKeyEncoding jwk": "crv 'X25519'"
+  },
+  "cipher": {
+   "privateKeyEncoding { format: 'jwk', cipher: 'foo', passphrase }": "Error [ERR_CRYPTO_UNKNOWN_CIPHER]: Unknown cipher",
+   "cipher 'aes-256-gcm', pkcs8 pem": "Error [ERR_OSSL_EVP_CIPHER_PARAMETER_ERROR]: error:0300007A:digital envelope routines::cipher parameter error"
+  }
+ },
+ "refusedHere": [
+  "generateKeyPairSync#105",
+  "generateKeyPairSync#107",
+  "generateKeyPairSync#108",
+  "generateKeyPairSync#140",
+  "generateKeyPairSync#141",
+  "generateKeyPairSync#142",
+  "generateKeyPairSync#143",
+  "generateKeyPairSync#163",
+  "generateKeyPairSync#164",
+  "generateKeyPairSync#165",
+  "generateKeyPairSync#166",
+  "generateKeyPairSync#167",
+  "generateKeyPairSync#170",
+  "generateKeyPairSync#175",
+  "generateKeyPair#344"
+ ],
+ "realNodeCheck": {
+  "what": "One-off check, 2026-11-25: keys and primes generated by this implementation (PEM, encrypted PEM, PKCS#1, SEC1, JWK) were imported by real Node.js v24.18.1 (OpenSSL 3.5.7) in docker; it compared public and private halves and asymmetricKeyDetails and signed/verified, encrypted/decrypted or derived a shared secret with each (against a peer key Node generated). 34/34 checks passed.",
+  "output": [
+   "ok   rsa2048 rsa {\"modulusLength\":2048,\"publicExponent\":\"65537n\"} sign/verify + encrypt/decrypt",
+   "ok   rsa1024e3 rsa {\"modulusLength\":1024,\"publicExponent\":\"3n\"} sign/verify + encrypt/decrypt",
+   "ok   rsa3072 rsa {\"modulusLength\":3072,\"publicExponent\":\"65537n\"} sign/verify + encrypt/decrypt",
+   "ok   rsa1025 rsa {\"modulusLength\":1025,\"publicExponent\":\"65537n\"} sign/verify + encrypt/decrypt",
+   "ok   pss rsa-pss {\"modulusLength\":2048,\"publicExponent\":\"65537n\",\"hashAlgorithm\":\"sha256\",\"mgf1HashAlgorithm\":\"sha256\",\"saltLength\":32} sign/verify",
+   "ok   pssPlain rsa-pss {\"modulusLength\":1024,\"publicExponent\":\"65537n\"} sign/verify",
+   "ok   ec-prime256v1 ec {\"namedCurve\":\"prime256v1\"} sign/verify + ecdh",
+   "ok   ec-secp384r1 ec {\"namedCurve\":\"secp384r1\"} sign/verify + ecdh",
+   "ok   ec-secp521r1 ec {\"namedCurve\":\"secp521r1\"} sign/verify + ecdh",
+   "ok   ec-secp256k1 ec {\"namedCurve\":\"secp256k1\"} sign/verify + ecdh",
+   "ok   ed25519 ed25519 {} sign/verify",
+   "ok   ed448 ed448 {} sign/verify",
+   "ok   x25519 x25519 {} derive",
+   "ok   x448 x448 {} derive",
+   "ok   dh-modp1 dh {} derive; p 768 bits prime=true safe=true",
+   "ok   dh-modp5 dh {} derive; p 1536 bits prime=true safe=true",
+   "ok   dh-modp14 dh {} derive; p 2048 bits prime=true safe=true",
+   "ok   dh-modp15 dh {} derive; p 3072 bits prime=true safe=true",
+   "ok   dh-512-g2 dh {} derive; p 512 bits prime=true safe=true",
+   "ok   dh-512-g5 dh {} derive; p 512 bits prime=true safe=true",
+   "ok   dh-768-g3 dh {} derive; p 768 bits prime=true safe=true",
+   "ok   encrypted ec {\"namedCurve\":\"prime256v1\"} sign/verify + ecdh",
+   "ok   rsaPkcs1Encrypted rsa {\"modulusLength\":1024,\"publicExponent\":\"65537n\"} sign/verify + encrypt/decrypt",
+   "ok   ecSec1 ec {\"namedCurve\":\"secp384r1\"} sign/verify + ecdh",
+   "ok   jwk RSA ",
+   "ok   jwk EC P-521",
+   "ok   jwk OKP Ed25519",
+   "ok   jwk OKP X448",
+   "ok   prime 64 bits",
+   "ok   prime 512 bits",
+   "ok   prime 1024 bits",
+   "ok   safe prime 64 bits",
+   "ok   safe prime 256 bits",
+   "ok   prime with add 2^64+13, rem 5",
+   "v24.18.1 OpenSSL 3.5.7: 34/34 checks passed"
+  ]
+ },
+ "node": "v24.18.1",
+ "openssl": "3.5.7",
+ "cases": [
+ {"id":"generateKeyPairSync#1","fn":"generateKeyPairSync","args":[],"result":{"threw":{"t":"error","name":"TypeError","message":"The \"type\" argument must be of type string. Received undefined","code":"ERR_INVALID_ARG_TYPE","own":["code"]}}},
+ {"id":"generateKeyPairSync#2","fn":"generateKeyPairSync","args":[1],"result":{"threw":{"t":"error","name":"TypeError","message":"The \"type\" argument must be of type string. Received type number (1)","code":"ERR_INVALID_ARG_TYPE","own":["code"]}}},
+ {"id":"generateKeyPairSync#3","fn":"generateKeyPairSync","args":[null],"result":{"threw":{"t":"error","name":"TypeError","message":"The \"type\" argument must be of type string. Received null","code":"ERR_INVALID_ARG_TYPE","own":["code"]}}},
+ {"id":"generateKeyPairSync#4","fn":"generateKeyPairSync","args":["foo"],"result":{"threw":{"t":"error","name":"TypeError","message":"The argument 'type' must be a supported key type. Received 'foo'","code":"ERR_INVALID_ARG_VALUE","own":["code"]}}},
+ {"id":"generateKeyPairSync#5","fn":"generateKeyPairSync","args":["RSA"],"result":{"threw":{"t":"error","name":"TypeError","message":"The argument 'type' must be a supported key type. Received 'RSA'","code":"ERR_INVALID_ARG_VALUE","own":["code"]}}},
+ {"id":"generateKeyPairSync#6","fn":"generateKeyPairSync","args":["foo",{"publicKeyEncoding":1}],"result":{"threw":{"t":"error","name":"TypeError","message":"The property 'options.publicKeyEncoding' is invalid. Received 1","code":"ERR_INVALID_ARG_VALUE","own":["code"]}}},
+ {"id":"generateKeyPairSync#7","fn":"generateKeyPairSync","args":[1,{"publicKeyEncoding":1}],"result":{"threw":{"t":"error","name":"TypeError","message":"The \"type\" argument must be of type string. Received type number (1)","code":"ERR_INVALID_ARG_TYPE","own":["code"]}}},
+ {"id":"generateKeyPairSync#8","fn":"generateKeyPairSync","args":["ed25519",null],"result":{"threw":{"t":"error","name":"TypeError","message":"Cannot destructure property 'publicKeyEncoding' of 'options' as it is null.","own":[]}}},
+ {"id":"generateKeyPairSync#9","fn":"generateKeyPairSync","args":["ed25519",1],"result":{"threw":{"t":"error","name":"TypeError","message":"The \"options\" argument must be of type object. Received type number (1)","code":"ERR_INVALID_ARG_TYPE","own":["code"]}}},
+ {"id":"generateKeyPairSync#10","fn":"generateKeyPairSync","args":["ed25519","x"],"result":{"threw":{"t":"error","name":"TypeError","message":"The \"options\" argument must be of type object. Received type string ('x')","code":"ERR_INVALID_ARG_TYPE","own":["code"]}}},
+ {"id":"generateKeyPairSync#11","fn":"generateKeyPairSync","args":["ed25519",[]],"result":{"threw":{"t":"error","name":"TypeError","message":"The \"options\" argument must be of type object. Received an instance of Array","code":"ERR_INVALID_ARG_TYPE","own":["code"]}}},
+ {"id":"generateKeyPairSync#12","fn":"generateKeyPairSync","args":["ed25519",{"$":"fn"}],"result":{"threw":{"t":"error","name":"TypeError","message":"The \"options\" argument must be of type object. Received function ","code":"ERR_INVALID_ARG_TYPE","own":["code"]}}},
+ {"id":"generateKeyPairSync#13","fn":"generateKeyPairSync","args":["ed25519",{"publicKeyEncoding":1}],"result":{"threw":{"t":"error","name":"TypeError","message":"The property 'options.publicKeyEncoding' is invalid. Received 1","code":"ERR_INVALID_ARG_VALUE","own":["code"]}}},
+ {"id":"generateKeyPairSync#14","fn":"generateKeyPairSync","args":["ed25519",{"privateKeyEncoding":"pem"}],"result":{"threw":{"t":"error","name":"TypeError","message":"The property 'options.privateKeyEncoding' is invalid. Received 'pem'","code":"ERR_INVALID_ARG_VALUE","own":["code"]}}},
+ {"id":"generateKeyPairSync#15","fn":"generateKeyPairSync","args":["ed25519",{"publicKeyEncoding":null,"privateKeyEncoding":null}],"result":{"returned":{"t":"pair","keys":["publicKey","privateKey"],"publicKey":{"t":"KeyObject","ctor":"PublicKeyObject","type":"public","akt":"ed25519","details":{}},"privateKey":{"t":"KeyObject","ctor":"PrivateKeyObject","type":"private","akt":"ed25519","details":{}}}}},
+ {"id":"generateKeyPairSync#16","fn":"generateKeyPairSync","args":["rsa"],"result":{"threw":{"t":"error","name":"TypeError","message":"The \"options\" argument must be of type object. Received undefined","code":"ERR_INVALID_ARG_TYPE","own":["code"]}}},
+ {"id":"generateKeyPairSync#17","fn":"generateKeyPairSync","args":["rsa",{}],"result":{"threw":{"t":"error","name":"TypeError","message":"The \"options.modulusLength\" property must be of type number. Received undefined","code":"ERR_INVALID_ARG_TYPE","own":["code"]}}},
+ {"id":"generateKeyPairSync#18","fn":"generateKeyPairSync","args":["rsa",{"modulusLength":"512"}],"result":{"threw":{"t":"error","name":"TypeError","message":"The \"options.modulusLength\" property must be of type number. Received type string ('512')","code":"ERR_INVALID_ARG_TYPE","own":["code"]}}},
+ {"id":"generateKeyPairSync#19","fn":"generateKeyPairSync","args":["rsa",{"modulusLength":-1}],"result":{"threw":{"t":"error","name":"RangeError","message":"The value of \"options.modulusLength\" is out of range. It must be >= 0 && <= 4294967295. Received -1","code":"ERR_OUT_OF_RANGE","own":["code"]}}},
+ {"id":"generateKeyPairSync#20","fn":"generateKeyPairSync","args":["rsa",{"modulusLength":1.5}],"result":{"threw":{"t":"error","name":"RangeError","message":"The value of \"options.modulusLength\" is out of range. It must be an integer. Received 1.5","code":"ERR_OUT_OF_RANGE","own":["code"]}}},
+ {"id":"generateKeyPairSync#21","fn":"generateKeyPairSync","args":["rsa",{"modulusLength":4294967296}],"result":{"threw":{"t":"error","name":"RangeError","message":"The value of \"options.modulusLength\" is out of range. It must be >= 0 && <= 4294967295. Received 4294967296","code":"ERR_OUT_OF_RANGE","own":["code"]}}},
+ {"id":"generateKeyPairSync#22","fn":"generateKeyPairSync","args":["rsa",{"modulusLength":0}],"result":{"threw":{"t":"error","name":"Error","message":"error:1C8000AB:Provider routines::key size too small","own":[]}}},
+ {"id":"generateKeyPairSync#23","fn":"generateKeyPairSync","args":["rsa",{"modulusLength":1}],"result":{"threw":{"t":"error","name":"Error","message":"error:1C8000AB:Provider routines::key size too small","own":[]}}},
+ {"id":"generateKeyPairSync#24","fn":"generateKeyPairSync","args":["rsa",{"modulusLength":255}],"result":{"threw":{"t":"error","name":"Error","message":"error:1C8000AB:Provider routines::key size too small","own":[]}}},
+ {"id":"generateKeyPairSync#25","fn":"generateKeyPairSync","args":["rsa",{"modulusLength":256}],"result":{"threw":{"t":"error","name":"Error","message":"error:1C8000AB:Provider routines::key size too small","own":[]}}},
+ {"id":"generateKeyPairSync#26","fn":"generateKeyPairSync","args":["rsa",{"modulusLength":511}],"result":{"threw":{"t":"error","name":"Error","message":"error:1C8000AB:Provider routines::key size too small","own":[]}}},
+ {"id":"generateKeyPairSync#27","fn":"generateKeyPairSync","args":["rsa",{"modulusLength":512}],"result":{"returned":{"t":"pair","keys":["publicKey","privateKey"],"publicKey":{"t":"KeyObject","ctor":"PublicKeyObject","type":"public","akt":"rsa","details":{"modulusLength":512,"publicExponent":"65537n"}},"privateKey":{"t":"KeyObject","ctor":"PrivateKeyObject","type":"private","akt":"rsa","details":{"modulusLength":512,"publicExponent":"65537n"}}}}},
+ {"id":"generateKeyPairSync#28","fn":"generateKeyPairSync","args":["rsa",{"modulusLength":513}],"result":{"returned":{"t":"pair","keys":["publicKey","privateKey"],"publicKey":{"t":"KeyObject","ctor":"PublicKeyObject","type":"public","akt":"rsa","details":{"modulusLength":513,"publicExponent":"65537n"}},"privateKey":{"t":"KeyObject","ctor":"PrivateKeyObject","type":"private","akt":"rsa","details":{"modulusLength":513,"publicExponent":"65537n"}}}}},
+ {"id":"generateKeyPairSync#29","fn":"generateKeyPairSync","args":["rsa",{"modulusLength":1023}],"result":{"returned":{"t":"pair","keys":["publicKey","privateKey"],"publicKey":{"t":"KeyObject","ctor":"PublicKeyObject","type":"public","akt":"rsa","details":{"modulusLength":1023,"publicExponent":"65537n"}},"privateKey":{"t":"KeyObject","ctor":"PrivateKeyObject","type":"private","akt":"rsa","details":{"modulusLength":1023,"publicExponent":"65537n"}}}}},
+ {"id":"generateKeyPairSync#30","fn":"generateKeyPairSync","args":["rsa",{"modulusLength":512,"publicExponent":"3"}],"result":{"threw":{"t":"error","name":"TypeError","message":"The \"options.publicExponent\" property must be of type number. Received type string ('3')","code":"ERR_INVALID_ARG_TYPE","own":["code"]}}},
+ {"id":"generateKeyPairSync#31","fn":"generateKeyPairSync","args":["rsa",{"modulusLength":512,"publicExponent":-1}],"result":{"threw":{"t":"error","name":"RangeError","message":"The value of \"options.publicExponent\" is out of range. It must be >= 0 && <= 4294967295. Received -1","code":"ERR_OUT_OF_RANGE","own":["code"]}}},
+ {"id":"generateKeyPairSync#32","fn":"generateKeyPairSync","args":["rsa",{"modulusLength":512,"publicExponent":0}],"result":{"threw":{"t":"error","name":"Error","message":"Key generation job failed","own":[]}}},
+ {"id":"generateKeyPairSync#33","fn":"generateKeyPairSync","args":["rsa",{"modulusLength":512,"publicExponent":1}],"result":{"threw":{"t":"error","name":"Error","message":"error:020000B2:rsa routines::pub exponent out of range","own":[]}}},
+ {"id":"generateKeyPairSync#34","fn":"generateKeyPairSync","args":["rsa",{"modulusLength":512,"publicExponent":2}],"result":{"threw":{"t":"error","name":"Error","message":"error:020000B2:rsa routines::pub exponent out of range","own":[]}}},
+ {"id":"generateKeyPairSync#35","fn":"generateKeyPairSync","args":["rsa",{"modulusLength":512,"publicExponent":3}],"result":{"returned":{"t":"pair","keys":["publicKey","privateKey"],"publicKey":{"t":"KeyObject","ctor":"PublicKeyObject","type":"public","akt":"rsa","details":{"modulusLength":512,"publicExponent":"3n"}},"privateKey":{"t":"KeyObject","ctor":"PrivateKeyObject","type":"private","akt":"rsa","details":{"modulusLength":512,"publicExponent":"3n"}}}}},
+ {"id":"generateKeyPairSync#36","fn":"generateKeyPairSync","args":["rsa",{"modulusLength":512,"publicExponent":4}],"result":{"threw":{"t":"error","name":"Error","message":"error:020000B2:rsa routines::pub exponent out of range","own":[]}}},
+ {"id":"generateKeyPairSync#37","fn":"generateKeyPairSync","args":["rsa",{"modulusLength":512,"publicExponent":5}],"result":{"returned":{"t":"pair","keys":["publicKey","privateKey"],"publicKey":{"t":"KeyObject","ctor":"PublicKeyObject","type":"public","akt":"rsa","details":{"modulusLength":512,"publicExponent":"5n"}},"privateKey":{"t":"KeyObject","ctor":"PrivateKeyObject","type":"private","akt":"rsa","details":{"modulusLength":512,"publicExponent":"5n"}}}}},
+ {"id":"generateKeyPairSync#38","fn":"generateKeyPairSync","args":["rsa",{"modulusLength":512,"publicExponent":17}],"result":{"returned":{"t":"pair","keys":["publicKey","privateKey"],"publicKey":{"t":"KeyObject","ctor":"PublicKeyObject","type":"public","akt":"rsa","details":{"modulusLength":512,"publicExponent":"17n"}},"privateKey":{"t":"KeyObject","ctor":"PrivateKeyObject","type":"private","akt":"rsa","details":{"modulusLength":512,"publicExponent":"17n"}}}}},
+ {"id":"generateKeyPairSync#39","fn":"generateKeyPairSync","args":["rsa",{"modulusLength":512,"publicExponent":65535}],"result":{"returned":{"t":"pair","keys":["publicKey","privateKey"],"publicKey":{"t":"KeyObject","ctor":"PublicKeyObject","type":"public","akt":"rsa","details":{"modulusLength":512,"publicExponent":"65535n"}},"privateKey":{"t":"KeyObject","ctor":"PrivateKeyObject","type":"private","akt":"rsa","details":{"modulusLength":512,"publicExponent":"65535n"}}}}},
+ {"id":"generateKeyPairSync#40","fn":"generateKeyPairSync","args":["rsa",{"modulusLength":512,"publicExponent":65536}],"result":{"threw":{"t":"error","name":"Error","message":"error:020000B2:rsa routines::pub exponent out of range","own":[]}}},
+ {"id":"generateKeyPairSync#41","fn":"generateKeyPairSync","args":["rsa",{"modulusLength":512,"publicExponent":65537}],"result":{"returned":{"t":"pair","keys":["publicKey","privateKey"],"publicKey":{"t":"KeyObject","ctor":"PublicKeyObject","type":"public","akt":"rsa","details":{"modulusLength":512,"publicExponent":"65537n"}},"privateKey":{"t":"KeyObject","ctor":"PrivateKeyObject","type":"private","akt":"rsa","details":{"modulusLength":512,"publicExponent":"65537n"}}}}},
+ {"id":"generateKeyPairSync#42","fn":"generateKeyPairSync","args":["rsa",{"modulusLength":512,"publicExponent":4294967295}],"result":{"returned":{"t":"pair","keys":["publicKey","privateKey"],"publicKey":{"t":"KeyObject","ctor":"PublicKeyObject","type":"public","akt":"rsa","details":{"modulusLength":512,"publicExponent":"4294967295n"}},"privateKey":{"t":"KeyObject","ctor":"PrivateKeyObject","type":"private","akt":"rsa","details":{"modulusLength":512,"publicExponent":"4294967295n"}}}}},
+ {"id":"generateKeyPairSync#43","fn":"generateKeyPairSync","args":["rsa",{"modulusLength":512,"publicExponent":4294967296}],"result":{"threw":{"t":"error","name":"RangeError","message":"The value of \"options.publicExponent\" is out of range. It must be >= 0 && <= 4294967295. Received 4294967296","code":"ERR_OUT_OF_RANGE","own":["code"]}}},
+ {"id":"generateKeyPairSync#44","fn":"generateKeyPairSync","args":["rsa",{"modulusLength":512,"publicExponent":1.5}],"result":{"threw":{"t":"error","name":"RangeError","message":"The value of \"options.publicExponent\" is out of range. It must be an integer. Received 1.5","code":"ERR_OUT_OF_RANGE","own":["code"]}}},
+ {"id":"generateKeyPairSync#45","fn":"generateKeyPairSync","args":["rsa",{"modulusLength":512,"publicExponent":null}],"result":{"returned":{"t":"pair","keys":["publicKey","privateKey"],"publicKey":{"t":"KeyObject","ctor":"PublicKeyObject","type":"public","akt":"rsa","details":{"modulusLength":512,"publicExponent":"65537n"}},"privateKey":{"t":"KeyObject","ctor":"PrivateKeyObject","type":"private","akt":"rsa","details":{"modulusLength":512,"publicExponent":"65537n"}}}}},
+ {"id":"generateKeyPairSync#46","fn":"generateKeyPairSync","args":["rsa",{"modulusLength":2048,"publicExponent":3}],"result":{"returned":{"t":"pair","keys":["publicKey","privateKey"],"publicKey":{"t":"KeyObject","ctor":"PublicKeyObject","type":"public","akt":"rsa","details":{"modulusLength":2048,"publicExponent":"3n"}},"privateKey":{"t":"KeyObject","ctor":"PrivateKeyObject","type":"private","akt":"rsa","details":{"modulusLength":2048,"publicExponent":"3n"}}}}},
+ {"id":"generateKeyPairSync#47","fn":"generateKeyPairSync","args":["rsa",{"modulusLength":512,"publicKeyEncoding":{}}],"result":{"threw":{"t":"error","name":"TypeError","message":"The property 'options.publicKeyEncoding.format' is invalid. Received undefined","code":"ERR_INVALID_ARG_VALUE","own":["code"]}}},
+ {"id":"generateKeyPairSync#48","fn":"generateKeyPairSync","args":["rsa",{"modulusLength":512,"publicKeyEncoding":{"format":"pem"}}],"result":{"threw":{"t":"error","name":"TypeError","message":"The property 'options.publicKeyEncoding.type' is invalid. Received undefined","code":"ERR_INVALID_ARG_VALUE","own":["code"]}}},
+ {"id":"generateKeyPairSync#49","fn":"generateKeyPairSync","args":["rsa",{"modulusLength":512,"publicKeyEncoding":{"type":"spki"}}],"result":{"threw":{"t":"error","name":"TypeError","message":"The property 'options.publicKeyEncoding.format' is invalid. Received undefined","code":"ERR_INVALID_ARG_VALUE","own":["code"]}}},
+ {"id":"generateKeyPairSync#50","fn":"generateKeyPairSync","args":["rsa",{"modulusLength":512,"publicKeyEncoding":{"type":"spki","format":"pem"}}],"result":{"returned":{"t":"pair","keys":["publicKey","privateKey"],"publicKey":{"t":"string","line":"-----BEGIN PUBLIC KEY-----"},"privateKey":{"t":"KeyObject","ctor":"PrivateKeyObject","type":"private","akt":"rsa","details":{"modulusLength":512,"publicExponent":"65537n"}}}}},
+ {"id":"generateKeyPairSync#51","fn":"generateKeyPairSync","args":["rsa",{"modulusLength":512,"publicKeyEncoding":{"type":"spki","format":"der"}}],"result":{"returned":{"t":"pair","keys":["publicKey","privateKey"],"publicKey":{"t":"Buffer"},"privateKey":{"t":"KeyObject","ctor":"PrivateKeyObject","type":"private","akt":"rsa","details":{"modulusLength":512,"publicExponent":"65537n"}}}}},
+ {"id":"generateKeyPairSync#52","fn":"generateKeyPairSync","args":["rsa",{"modulusLength":512,"publicKeyEncoding":{"type":"pkcs1","format":"pem"}}],"result":{"returned":{"t":"pair","keys":["publicKey","privateKey"],"publicKey":{"t":"string","line":"-----BEGIN RSA PUBLIC KEY-----"},"privateKey":{"t":"KeyObject","ctor":"PrivateKeyObject","type":"private","akt":"rsa","details":{"modulusLength":512,"publicExponent":"65537n"}}}}},
+ {"id":"generateKeyPairSync#53","fn":"generateKeyPairSync","args":["rsa",{"modulusLength":512,"publicKeyEncoding":{"type":"pkcs1","format":"der"}}],"result":{"returned":{"t":"pair","keys":["publicKey","privateKey"],"publicKey":{"t":"Buffer"},"privateKey":{"t":"KeyObject","ctor":"PrivateKeyObject","type":"private","akt":"rsa","details":{"modulusLength":512,"publicExponent":"65537n"}}}}},
+ {"id":"generateKeyPairSync#54","fn":"generateKeyPairSync","args":["rsa",{"modulusLength":512,"publicKeyEncoding":{"format":"jwk"}}],"result":{"returned":{"t":"pair","keys":["publicKey","privateKey"],"publicKey":{"t":"jwk","kty":"RSA","keys":["e","kty","n"]},"privateKey":{"t":"KeyObject","ctor":"PrivateKeyObject","type":"private","akt":"rsa","details":{"modulusLength":512,"publicExponent":"65537n"}}}}},
+ {"id":"generateKeyPairSync#55","fn":"generateKeyPairSync","args":["rsa",{"modulusLength":512,"publicKeyEncoding":{"type":"pkcs8","format":"pem"}}],"result":{"threw":{"t":"error","name":"TypeError","message":"The property 'options.publicKeyEncoding.type' is invalid. Received 'pkcs8'","code":"ERR_INVALID_ARG_VALUE","own":["code"]}}},
+ {"id":"generateKeyPairSync#56","fn":"generateKeyPairSync","args":["rsa",{"modulusLength":512,"publicKeyEncoding":{"type":"sec1","format":"pem"}}],"result":{"threw":{"t":"error","name":"TypeError","message":"The property 'options.publicKeyEncoding.type' is invalid. Received 'sec1'","code":"ERR_INVALID_ARG_VALUE","own":["code"]}}},
+ {"id":"generateKeyPairSync#57","fn":"generateKeyPairSync","args":["rsa",{"modulusLength":512,"publicKeyEncoding":{"type":"spki","format":"foo"}}],"result":{"threw":{"t":"error","name":"TypeError","message":"The property 'options.publicKeyEncoding.format' is invalid. Received 'foo'","code":"ERR_INVALID_ARG_VALUE","own":["code"]}}},
+ {"id":"generateKeyPairSync#58","fn":"generateKeyPairSync","args":["rsa",{"modulusLength":512,"publicKeyEncoding":{"type":"foo","format":"pem"}}],"result":{"threw":{"t":"error","name":"TypeError","message":"The property 'options.publicKeyEncoding.type' is invalid. Received 'foo'","code":"ERR_INVALID_ARG_VALUE","own":["code"]}}},
+ {"id":"generateKeyPairSync#59","fn":"generateKeyPairSync","args":["rsa",{"modulusLength":512,"publicKeyEncoding":{"type":"spki","format":"raw-public"}}],"result":{"threw":{"t":"error","name":"TypeError","message":"The property 'options.publicKeyEncoding.type' is invalid. Received 'spki'","code":"ERR_INVALID_ARG_VALUE","own":["code"]}}},
+ {"id":"generateKeyPairSync#60","fn":"generateKeyPairSync","args":["rsa",{"modulusLength":512,"publicKeyEncoding":{"format":"raw-public"}}],"result":{"threw":{"t":"error","name":"Error","message":"The selected key encoding is incompatible with the key type","code":"ERR_CRYPTO_INCOMPATIBLE_KEY_OPTIONS","own":["code"]}}},
+ {"id":"generateKeyPairSync#61","fn":"generateKeyPairSync","args":["rsa",{"modulusLength":512,"publicKeyEncoding":{"format":"raw-private"}}],"result":{"threw":{"t":"error","name":"TypeError","message":"The property 'options.publicKeyEncoding.format' is invalid. Received 'raw-private'","code":"ERR_INVALID_ARG_VALUE","own":["code"]}}},
+ {"id":"generateKeyPairSync#62","fn":"generateKeyPairSync","args":["rsa",{"modulusLength":512,"publicKeyEncoding":{"type":"spki","format":"pem","cipher":"aes-256-cbc","passphrase":"x"}}],"result":{"returned":{"t":"pair","keys":["publicKey","privateKey"],"publicKey":{"t":"string","line":"-----BEGIN PUBLIC KEY-----"},"privateKey":{"t":"KeyObject","ctor":"PrivateKeyObject","type":"private","akt":"rsa","details":{"modulusLength":512,"publicExponent":"65537n"}}}}},
+ {"id":"generateKeyPairSync#63","fn":"generateKeyPairSync","args":["rsa",{"modulusLength":512,"privateKeyEncoding":{}}],"result":{"threw":{"t":"error","name":"TypeError","message":"The property 'options.privateKeyEncoding.format' is invalid. Received undefined","code":"ERR_INVALID_ARG_VALUE","own":["code"]}}},
+ {"id":"generateKeyPairSync#64","fn":"generateKeyPairSync","args":["rsa",{"modulusLength":512,"privateKeyEncoding":{"format":"pem"}}],"result":{"threw":{"t":"error","name":"TypeError","message":"The property 'options.privateKeyEncoding.type' is invalid. Received undefined","code":"ERR_INVALID_ARG_VALUE","own":["code"]}}},
+ {"id":"generateKeyPairSync#65","fn":"generateKeyPairSync","args":["rsa",{"modulusLength":512,"privateKeyEncoding":{"type":"pkcs8","format":"pem"}}],"result":{"returned":{"t":"pair","keys":["publicKey","privateKey"],"publicKey":{"t":"KeyObject","ctor":"PublicKeyObject","type":"public","akt":"rsa","details":{"modulusLength":512,"publicExponent":"65537n"}},"privateKey":{"t":"string","line":"-----BEGIN PRIVATE KEY-----"}}}},
+ {"id":"generateKeyPairSync#66","fn":"generateKeyPairSync","args":["rsa",{"modulusLength":512,"privateKeyEncoding":{"type":"pkcs8","format":"der"}}],"result":{"returned":{"t":"pair","keys":["publicKey","privateKey"],"publicKey":{"t":"KeyObject","ctor":"PublicKeyObject","type":"public","akt":"rsa","details":{"modulusLength":512,"publicExponent":"65537n"}},"privateKey":{"t":"Buffer"}}}},
+ {"id":"generateKeyPairSync#67","fn":"generateKeyPairSync","args":["rsa",{"modulusLength":512,"privateKeyEncoding":{"type":"pkcs1","format":"pem"}}],"result":{"returned":{"t":"pair","keys":["publicKey","privateKey"],"publicKey":{"t":"KeyObject","ctor":"PublicKeyObject","type":"public","akt":"rsa","details":{"modulusLength":512,"publicExponent":"65537n"}},"privateKey":{"t":"string","line":"-----BEGIN RSA PRIVATE KEY-----"}}}},
+ {"id":"generateKeyPairSync#68","fn":"generateKeyPairSync","args":["rsa",{"modulusLength":512,"privateKeyEncoding":{"type":"pkcs1","format":"der"}}],"result":{"returned":{"t":"pair","keys":["publicKey","privateKey"],"publicKey":{"t":"KeyObject","ctor":"PublicKeyObject","type":"public","akt":"rsa","details":{"modulusLength":512,"publicExponent":"65537n"}},"privateKey":{"t":"Buffer"}}}},
+ {"id":"generateKeyPairSync#69","fn":"generateKeyPairSync","args":["rsa",{"modulusLength":512,"privateKeyEncoding":{"format":"jwk"}}],"result":{"returned":{"t":"pair","keys":["publicKey","privateKey"],"publicKey":{"t":"KeyObject","ctor":"PublicKeyObject","type":"public","akt":"rsa","details":{"modulusLength":512,"publicExponent":"65537n"}},"privateKey":{"t":"jwk","kty":"RSA","keys":["d","dp","dq","e","kty","n","p","q","qi"]}}}},
+ {"id":"generateKeyPairSync#70","fn":"generateKeyPairSync","args":["rsa",{"modulusLength":512,"privateKeyEncoding":{"type":"spki","format":"pem"}}],"result":{"threw":{"t":"error","name":"TypeError","message":"The property 'options.privateKeyEncoding.type' is invalid. Received 'spki'","code":"ERR_INVALID_ARG_VALUE","own":["code"]}}},
+ {"id":"generateKeyPairSync#71","fn":"generateKeyPairSync","args":["rsa",{"modulusLength":512,"privateKeyEncoding":{"type":"sec1","format":"pem"}}],"result":{"threw":{"t":"error","name":"Error","message":"The selected key encoding sec1 can only be used for EC keys.","code":"ERR_CRYPTO_INCOMPATIBLE_KEY_OPTIONS","own":["code"]}}},
+ {"id":"generateKeyPairSync#72","fn":"generateKeyPairSync","args":["rsa",{"modulusLength":512,"privateKeyEncoding":{"type":"pkcs8","format":"pem","cipher":"aes-256-cbc","passphrase":"secret"}}],"result":{"returned":{"t":"pair","keys":["publicKey","privateKey"],"publicKey":{"t":"KeyObject","ctor":"PublicKeyObject","type":"public","akt":"rsa","details":{"modulusLength":512,"publicExponent":"65537n"}},"privateKey":{"t":"string","line":"-----BEGIN ENCRYPTED PRIVATE KEY-----"}}}},
+ {"id":"generateKeyPairSync#73","fn":"generateKeyPairSync","args":["rsa",{"modulusLength":512,"privateKeyEncoding":{"type":"pkcs8","format":"der","cipher":"aes-128-cbc","passphrase":{"$":"buffer","hex":"7365"}}}],"result":{"returned":{"t":"pair","keys":["publicKey","privateKey"],"publicKey":{"t":"KeyObject","ctor":"PublicKeyObject","type":"public","akt":"rsa","details":{"modulusLength":512,"publicExponent":"65537n"}},"privateKey":{"t":"Buffer"}}}},
+ {"id":"generateKeyPairSync#74","fn":"generateKeyPairSync","args":["rsa",{"modulusLength":512,"privateKeyEncoding":{"type":"pkcs1","format":"pem","cipher":"aes-256-cbc","passphrase":"secret"}}],"result":{"returned":{"t":"pair","keys":["publicKey","privateKey"],"publicKey":{"t":"KeyObject","ctor":"PublicKeyObject","type":"public","akt":"rsa","details":{"modulusLength":512,"publicExponent":"65537n"}},"privateKey":{"t":"string","line":"-----BEGIN RSA PRIVATE KEY-----"}}}},
+ {"id":"generateKeyPairSync#75","fn":"generateKeyPairSync","args":["rsa",{"modulusLength":512,"privateKeyEncoding":{"type":"pkcs1","format":"der","cipher":"aes-256-cbc","passphrase":"secret"}}],"result":{"threw":{"t":"error","name":"Error","message":"The selected key encoding pkcs1 does not support encryption.","code":"ERR_CRYPTO_INCOMPATIBLE_KEY_OPTIONS","own":["code"]}}},
+ {"id":"generateKeyPairSync#76","fn":"generateKeyPairSync","args":["rsa",{"modulusLength":512,"privateKeyEncoding":{"type":"pkcs8","format":"pem","cipher":"aes-256-cbc"}}],"result":{"threw":{"t":"error","name":"TypeError","message":"The property 'options.privateKeyEncoding.passphrase' is invalid. Received undefined","code":"ERR_INVALID_ARG_VALUE","own":["code"]}}},
+ {"id":"generateKeyPairSync#77","fn":"generateKeyPairSync","args":["rsa",{"modulusLength":512,"privateKeyEncoding":{"type":"pkcs8","format":"pem","passphrase":"secret"}}],"result":{"threw":{"t":"error","name":"TypeError","message":"The property 'options.privateKeyEncoding.cipher' is invalid. Received undefined","code":"ERR_INVALID_ARG_VALUE","own":["code"]}}},
+ {"id":"generateKeyPairSync#78","fn":"generateKeyPairSync","args":["rsa",{"modulusLength":512,"privateKeyEncoding":{"type":"pkcs8","format":"pem","cipher":"foo","passphrase":"secret"}}],"result":{"threw":{"t":"error","name":"Error","message":"Unknown cipher","code":"ERR_CRYPTO_UNKNOWN_CIPHER","own":["code"]}}},
+ {"id":"generateKeyPairSync#79","fn":"generateKeyPairSync","args":["rsa",{"modulusLength":512,"privateKeyEncoding":{"type":"pkcs8","format":"pem","cipher":1,"passphrase":"secret"}}],"result":{"threw":{"t":"error","name":"TypeError","message":"The property 'options.privateKeyEncoding.cipher' is invalid. Received 1","code":"ERR_INVALID_ARG_VALUE","own":["code"]}}},
+ {"id":"generateKeyPairSync#80","fn":"generateKeyPairSync","args":["rsa",{"modulusLength":512,"privateKeyEncoding":{"type":"pkcs8","format":"pem","cipher":"aes-256-cbc","passphrase":1}}],"result":{"threw":{"t":"error","name":"TypeError","message":"The property 'options.privateKeyEncoding.passphrase' is invalid. Received 1","code":"ERR_INVALID_ARG_VALUE","own":["code"]}}},
+ {"id":"generateKeyPairSync#81","fn":"generateKeyPairSync","args":["rsa",{"modulusLength":512,"privateKeyEncoding":{"format":"jwk","cipher":"aes-256-cbc","passphrase":"x"}}],"result":{"returned":{"t":"pair","keys":["publicKey","privateKey"],"publicKey":{"t":"KeyObject","ctor":"PublicKeyObject","type":"public","akt":"rsa","details":{"modulusLength":512,"publicExponent":"65537n"}},"privateKey":{"t":"jwk","kty":"RSA","keys":["d","dp","dq","e","kty","n","p","q","qi"]}}}},
+ {"id":"generateKeyPairSync#82","fn":"generateKeyPairSync","args":["rsa",{"modulusLength":512,"privateKeyEncoding":{"format":"raw-private"}}],"result":{"threw":{"t":"error","name":"Error","message":"The selected key encoding is incompatible with the key type","code":"ERR_CRYPTO_INCOMPATIBLE_KEY_OPTIONS","own":["code"]}}},
+ {"id":"generateKeyPairSync#83","fn":"generateKeyPairSync","args":["rsa",{"modulusLength":512,"privateKeyEncoding":{"format":"raw-public"}}],"result":{"threw":{"t":"error","name":"TypeError","message":"The property 'options.privateKeyEncoding.format' is invalid. Received 'raw-public'","code":"ERR_INVALID_ARG_VALUE","own":["code"]}}},
+ {"id":"generateKeyPairSync#84","fn":"generateKeyPairSync","args":["rsa",{"modulusLength":512,"privateKeyEncoding":{"type":"pkcs8","format":"pem","cipher":null}}],"result":{"returned":{"t":"pair","keys":["publicKey","privateKey"],"publicKey":{"t":"KeyObject","ctor":"PublicKeyObject","type":"public","akt":"rsa","details":{"modulusLength":512,"publicExponent":"65537n"}},"privateKey":{"t":"string","line":"-----BEGIN PRIVATE KEY-----"}}}},
+ {"id":"generateKeyPairSync#85","fn":"generateKeyPairSync","args":["rsa",{"modulusLength":512,"privateKeyEncoding":{"type":"pkcs8","format":"pem","cipher":"aes-256-cbc","passphrase":""}}],"result":{"returned":{"t":"pair","keys":["publicKey","privateKey"],"publicKey":{"t":"KeyObject","ctor":"PublicKeyObject","type":"public","akt":"rsa","details":{"modulusLength":512,"publicExponent":"65537n"}},"privateKey":{"t":"string","line":"-----BEGIN ENCRYPTED PRIVATE KEY-----"}}}},
+ {"id":"generateKeyPairSync#86","fn":"generateKeyPairSync","args":["rsa",{"modulusLength":512,"publicKeyEncoding":{"type":"spki","format":"pem"},"privateKeyEncoding":{"type":"pkcs8","format":"pem"}}],"result":{"returned":{"t":"pair","keys":["publicKey","privateKey"],"publicKey":{"t":"string","line":"-----BEGIN PUBLIC KEY-----"},"privateKey":{"t":"string","line":"-----BEGIN PRIVATE KEY-----"}}}},
+ {"id":"generateKeyPairSync#87","fn":"generateKeyPairSync","args":["rsa",{"modulusLength":512,"publicKeyEncoding":{"format":"jwk"},"privateKeyEncoding":{"format":"jwk"}}],"result":{"returned":{"t":"pair","keys":["publicKey","privateKey"],"publicKey":{"t":"jwk","kty":"RSA","keys":["e","kty","n"]},"privateKey":{"t":"jwk","kty":"RSA","keys":["d","dp","dq","e","kty","n","p","q","qi"]}}}},
+ {"id":"generateKeyPairSync#88","fn":"generateKeyPairSync","args":["rsa",{"modulusLength":100,"publicKeyEncoding":{"type":"foo","format":"pem"}}],"result":{"threw":{"t":"error","name":"TypeError","message":"The property 'options.publicKeyEncoding.type' is invalid. Received 'foo'","code":"ERR_INVALID_ARG_VALUE","own":["code"]}}},
+ {"id":"generateKeyPairSync#89","fn":"generateKeyPairSync","args":["rsa",{"modulusLength":"x","publicKeyEncoding":{"type":"foo","format":"pem"}}],"result":{"threw":{"t":"error","name":"TypeError","message":"The property 'options.publicKeyEncoding.type' is invalid. Received 'foo'","code":"ERR_INVALID_ARG_VALUE","own":["code"]}}},
+ {"id":"generateKeyPairSync#90","fn":"generateKeyPairSync","args":["rsa-pss"],"result":{"threw":{"t":"error","name":"TypeError","message":"The \"options\" argument must be of type object. Received undefined","code":"ERR_INVALID_ARG_TYPE","own":["code"]}}},
+ {"id":"generateKeyPairSync#91","fn":"generateKeyPairSync","args":["rsa-pss",{"modulusLength":512}],"result":{"returned":{"t":"pair","keys":["publicKey","privateKey"],"publicKey":{"t":"KeyObject","ctor":"PublicKeyObject","type":"public","akt":"rsa-pss","details":{"modulusLength":512,"publicExponent":"65537n"}},"privateKey":{"t":"KeyObject","ctor":"PrivateKeyObject","type":"private","akt":"rsa-pss","details":{"modulusLength":512,"publicExponent":"65537n"}}}}},
+ {"id":"generateKeyPairSync#92","fn":"generateKeyPairSync","args":["rsa-pss",{"modulusLength":512,"hashAlgorithm":"sha256"}],"result":{"returned":{"t":"pair","keys":["publicKey","privateKey"],"publicKey":{"t":"KeyObject","ctor":"PublicKeyObject","type":"public","akt":"rsa-pss","details":{"modulusLength":512,"publicExponent":"65537n","hashAlgorithm":"sha256","mgf1HashAlgorithm":"sha256","saltLength":32}},"privateKey":{"t":"KeyObject","ctor":"PrivateKeyObject","type":"private","akt":"rsa-pss","details":{"modulusLength":512,"publicExponent":"65537n","hashAlgorithm":"sha256","mgf1HashAlgorithm":"sha256","saltLength":32}}}}},
+ {"id":"generateKeyPairSync#93","fn":"generateKeyPairSync","args":["rsa-pss",{"modulusLength":512,"hashAlgorithm":"sha256","mgf1HashAlgorithm":"sha1"}],"result":{"returned":{"t":"pair","keys":["publicKey","privateKey"],"publicKey":{"t":"KeyObject","ctor":"PublicKeyObject","type":"public","akt":"rsa-pss","details":{"modulusLength":512,"publicExponent":"65537n","hashAlgorithm":"sha256","mgf1HashAlgorithm":"sha1","saltLength":32}},"privateKey":{"t":"KeyObject","ctor":"PrivateKeyObject","type":"private","akt":"rsa-pss","details":{"modulusLength":512,"publicExponent":"65537n","hashAlgorithm":"sha256","mgf1HashAlgorithm":"sha1","saltLength":32}}}}},
+ {"id":"generateKeyPairSync#94","fn":"generateKeyPairSync","args":["rsa-pss",{"modulusLength":512,"hashAlgorithm":"sha256","mgf1HashAlgorithm":"sha1","saltLength":16}],"result":{"returned":{"t":"pair","keys":["publicKey","privateKey"],"publicKey":{"t":"KeyObject","ctor":"PublicKeyObject","type":"public","akt":"rsa-pss","details":{"modulusLength":512,"publicExponent":"65537n","hashAlgorithm":"sha256","mgf1HashAlgorithm":"sha1","saltLength":16}},"privateKey":{"t":"KeyObject","ctor":"PrivateKeyObject","type":"private","akt":"rsa-pss","details":{"modulusLength":512,"publicExponent":"65537n","hashAlgorithm":"sha256","mgf1HashAlgorithm":"sha1","saltLength":16}}}}},
+ {"id":"generateKeyPairSync#95","fn":"generateKeyPairSync","args":["rsa-pss",{"modulusLength":512,"mgf1HashAlgorithm":"sha256"}],"result":{"returned":{"t":"pair","keys":["publicKey","privateKey"],"publicKey":{"t":"KeyObject","ctor":"PublicKeyObject","type":"public","akt":"rsa-pss","details":{"modulusLength":512,"publicExponent":"65537n","hashAlgorithm":"sha1","mgf1HashAlgorithm":"sha256","saltLength":20}},"privateKey":{"t":"KeyObject","ctor":"PrivateKeyObject","type":"private","akt":"rsa-pss","details":{"modulusLength":512,"publicExponent":"65537n","hashAlgorithm":"sha1","mgf1HashAlgorithm":"sha256","saltLength":20}}}}},
+ {"id":"generateKeyPairSync#96","fn":"generateKeyPairSync","args":["rsa-pss",{"modulusLength":512,"saltLength":20}],"result":{"returned":{"t":"pair","keys":["publicKey","privateKey"],"publicKey":{"t":"KeyObject","ctor":"PublicKeyObject","type":"public","akt":"rsa-pss","details":{"modulusLength":512,"publicExponent":"65537n","hashAlgorithm":"sha1","mgf1HashAlgorithm":"sha1","saltLength":20}},"privateKey":{"t":"KeyObject","ctor":"PrivateKeyObject","type":"private","akt":"rsa-pss","details":{"modulusLength":512,"publicExponent":"65537n","hashAlgorithm":"sha1","mgf1HashAlgorithm":"sha1","saltLength":20}}}}},
+ {"id":"generateKeyPairSync#97","fn":"generateKeyPairSync","args":["rsa-pss",{"modulusLength":512,"saltLength":0}],"result":{"returned":{"t":"pair","keys":["publicKey","privateKey"],"publicKey":{"t":"KeyObject","ctor":"PublicKeyObject","type":"public","akt":"rsa-pss","details":{"modulusLength":512,"publicExponent":"65537n","hashAlgorithm":"sha1","mgf1HashAlgorithm":"sha1","saltLength":0}},"privateKey":{"t":"KeyObject","ctor":"PrivateKeyObject","type":"private","akt":"rsa-pss","details":{"modulusLength":512,"publicExponent":"65537n","hashAlgorithm":"sha1","mgf1HashAlgorithm":"sha1","saltLength":0}}}}},
+ {"id":"generateKeyPairSync#98","fn":"generateKeyPairSync","args":["rsa-pss",{"modulusLength":512,"hashAlgorithm":"sha512","saltLength":0}],"result":{"returned":{"t":"pair","keys":["publicKey","privateKey"],"publicKey":{"t":"KeyObject","ctor":"PublicKeyObject","type":"public","akt":"rsa-pss","details":{"modulusLength":512,"publicExponent":"65537n","hashAlgorithm":"sha512","mgf1HashAlgorithm":"sha512","saltLength":0}},"privateKey":{"t":"KeyObject","ctor":"PrivateKeyObject","type":"private","akt":"rsa-pss","details":{"modulusLength":512,"publicExponent":"65537n","hashAlgorithm":"sha512","mgf1HashAlgorithm":"sha512","saltLength":0}}}}},
+ {"id":"generateKeyPairSync#99","fn":"generateKeyPairSync","args":["rsa-pss",{"modulusLength":512,"hashAlgorithm":"SHA256"}],"result":{"returned":{"t":"pair","keys":["publicKey","privateKey"],"publicKey":{"t":"KeyObject","ctor":"PublicKeyObject","type":"public","akt":"rsa-pss","details":{"modulusLength":512,"publicExponent":"65537n","hashAlgorithm":"sha256","mgf1HashAlgorithm":"sha256","saltLength":32}},"privateKey":{"t":"KeyObject","ctor":"PrivateKeyObject","type":"private","akt":"rsa-pss","details":{"modulusLength":512,"publicExponent":"65537n","hashAlgorithm":"sha256","mgf1HashAlgorithm":"sha256","saltLength":32}}}}},
+ {"id":"generateKeyPairSync#100","fn":"generateKeyPairSync","args":["rsa-pss",{"modulusLength":512,"hashAlgorithm":"RSA-SHA256"}],"result":{"returned":{"t":"pair","keys":["publicKey","privateKey"],"publicKey":{"t":"KeyObject","ctor":"PublicKeyObject","type":"public","akt":"rsa-pss","details":{"modulusLength":512,"publicExponent":"65537n","hashAlgorithm":"sha256","mgf1HashAlgorithm":"sha256","saltLength":32}},"privateKey":{"t":"KeyObject","ctor":"PrivateKeyObject","type":"private","akt":"rsa-pss","details":{"modulusLength":512,"publicExponent":"65537n","hashAlgorithm":"sha256","mgf1HashAlgorithm":"sha256","saltLength":32}}}}},
+ {"id":"generateKeyPairSync#101","fn":"generateKeyPairSync","args":["rsa-pss",{"modulusLength":512,"hashAlgorithm":"sha-256"}],"result":{"returned":{"t":"pair","keys":["publicKey","privateKey"],"publicKey":{"t":"KeyObject","ctor":"PublicKeyObject","type":"public","akt":"rsa-pss","details":{"modulusLength":512,"publicExponent":"65537n","hashAlgorithm":"sha256","mgf1HashAlgorithm":"sha256","saltLength":32}},"privateKey":{"t":"KeyObject","ctor":"PrivateKeyObject","type":"private","akt":"rsa-pss","details":{"modulusLength":512,"publicExponent":"65537n","hashAlgorithm":"sha256","mgf1HashAlgorithm":"sha256","saltLength":32}}}}},
+ {"id":"generateKeyPairSync#102","fn":"generateKeyPairSync","args":["rsa-pss",{"modulusLength":512,"hashAlgorithm":"sha512"}],"result":{"returned":{"t":"pair","keys":["publicKey","privateKey"],"publicKey":{"t":"KeyObject","ctor":"PublicKeyObject","type":"public","akt":"rsa-pss","details":{"modulusLength":512,"publicExponent":"65537n","hashAlgorithm":"sha512","mgf1HashAlgorithm":"sha512","saltLength":64}},"privateKey":{"t":"KeyObject","ctor":"PrivateKeyObject","type":"private","akt":"rsa-pss","details":{"modulusLength":512,"publicExponent":"65537n","hashAlgorithm":"sha512","mgf1HashAlgorithm":"sha512","saltLength":64}}}}},
+ {"id":"generateKeyPairSync#103","fn":"generateKeyPairSync","args":["rsa-pss",{"modulusLength":512,"hashAlgorithm":"sha512","saltLength":64}],"result":{"returned":{"t":"pair","keys":["publicKey","privateKey"],"publicKey":{"t":"KeyObject","ctor":"PublicKeyObject","type":"public","akt":"rsa-pss","details":{"modulusLength":512,"publicExponent":"65537n","hashAlgorithm":"sha512","mgf1HashAlgorithm":"sha512","saltLength":64}},"privateKey":{"t":"KeyObject","ctor":"PrivateKeyObject","type":"private","akt":"rsa-pss","details":{"modulusLength":512,"publicExponent":"65537n","hashAlgorithm":"sha512","mgf1HashAlgorithm":"sha512","saltLength":64}}}}},
+ {"id":"generateKeyPairSync#104","fn":"generateKeyPairSync","args":["rsa-pss",{"modulusLength":512,"hashAlgorithm":"sha1","saltLength":1000}],"result":{"returned":{"t":"pair","keys":["publicKey","privateKey"],"publicKey":{"t":"KeyObject","ctor":"PublicKeyObject","type":"public","akt":"rsa-pss","details":{"modulusLength":512,"publicExponent":"65537n","hashAlgorithm":"sha1","mgf1HashAlgorithm":"sha1","saltLength":1000}},"privateKey":{"t":"KeyObject","ctor":"PrivateKeyObject","type":"private","akt":"rsa-pss","details":{"modulusLength":512,"publicExponent":"65537n","hashAlgorithm":"sha1","mgf1HashAlgorithm":"sha1","saltLength":1000}}}}},
+ {"id":"generateKeyPairSync#105","fn":"generateKeyPairSync","args":["rsa-pss",{"modulusLength":512,"hashAlgorithm":"sha3-256"}],"result":{"returned":{"t":"pair","keys":["publicKey","privateKey"],"publicKey":{"t":"KeyObject","ctor":"PublicKeyObject","type":"public","akt":"rsa-pss","details":{"modulusLength":512,"publicExponent":"65537n","hashAlgorithm":"sha1","mgf1HashAlgorithm":"sha1","saltLength":32}},"privateKey":{"t":"KeyObject","ctor":"PrivateKeyObject","type":"private","akt":"rsa-pss","details":{"modulusLength":512,"publicExponent":"65537n","hashAlgorithm":"sha1","mgf1HashAlgorithm":"sha1","saltLength":32}}}}},
+ {"id":"generateKeyPairSync#106","fn":"generateKeyPairSync","args":["rsa-pss",{"modulusLength":512,"hashAlgorithm":"sha512-256"}],"result":{"returned":{"t":"pair","keys":["publicKey","privateKey"],"publicKey":{"t":"KeyObject","ctor":"PublicKeyObject","type":"public","akt":"rsa-pss","details":{"modulusLength":512,"publicExponent":"65537n","hashAlgorithm":"sha512-256","mgf1HashAlgorithm":"sha512-256","saltLength":32}},"privateKey":{"t":"KeyObject","ctor":"PrivateKeyObject","type":"private","akt":"rsa-pss","details":{"modulusLength":512,"publicExponent":"65537n","hashAlgorithm":"sha512-256","mgf1HashAlgorithm":"sha512-256","saltLength":32}}}}},
+ {"id":"generateKeyPairSync#107","fn":"generateKeyPairSync","args":["rsa-pss",{"modulusLength":512,"hashAlgorithm":"md5"}],"result":{"returned":{"t":"pair","keys":["publicKey","privateKey"],"publicKey":{"t":"KeyObject","ctor":"PublicKeyObject","type":"public","akt":"rsa-pss","details":{"modulusLength":512,"publicExponent":"65537n","hashAlgorithm":"sha1","mgf1HashAlgorithm":"sha1","saltLength":16}},"privateKey":{"t":"KeyObject","ctor":"PrivateKeyObject","type":"private","akt":"rsa-pss","details":{"modulusLength":512,"publicExponent":"65537n","hashAlgorithm":"sha1","mgf1HashAlgorithm":"sha1","saltLength":16}}}}},
+ {"id":"generateKeyPairSync#108","fn":"generateKeyPairSync","args":["rsa-pss",{"modulusLength":512,"hashAlgorithm":"shake128"}],"result":{"returned":{"t":"pair","keys":["publicKey","privateKey"],"publicKey":{"t":"KeyObject","ctor":"PublicKeyObject","type":"public","akt":"rsa-pss","details":{"modulusLength":512,"publicExponent":"65537n","hashAlgorithm":"sha1","mgf1HashAlgorithm":"sha1","saltLength":16}},"privateKey":{"t":"KeyObject","ctor":"PrivateKeyObject","type":"private","akt":"rsa-pss","details":{"modulusLength":512,"publicExponent":"65537n","hashAlgorithm":"sha1","mgf1HashAlgorithm":"sha1","saltLength":16}}}}},
+ {"id":"generateKeyPairSync#109","fn":"generateKeyPairSync","args":["rsa-pss",{"modulusLength":512,"saltLength":-1}],"result":{"threw":{"t":"error","name":"RangeError","message":"The value of \"options.saltLength\" is out of range. It must be >= 0 && <= 2147483647. Received -1","code":"ERR_OUT_OF_RANGE","own":["code"]}}},
+ {"id":"generateKeyPairSync#110","fn":"generateKeyPairSync","args":["rsa-pss",{"modulusLength":512,"saltLength":"1"}],"result":{"threw":{"t":"error","name":"TypeError","message":"The \"options.saltLength\" property must be of type number. Received type string ('1')","code":"ERR_INVALID_ARG_TYPE","own":["code"]}}},
+ {"id":"generateKeyPairSync#111","fn":"generateKeyPairSync","args":["rsa-pss",{"modulusLength":512,"saltLength":2147483648}],"result":{"threw":{"t":"error","name":"RangeError","message":"The value of \"options.saltLength\" is out of range. It must be >= 0 && <= 2147483647. Received 2147483648","code":"ERR_OUT_OF_RANGE","own":["code"]}}},
+ {"id":"generateKeyPairSync#112","fn":"generateKeyPairSync","args":["rsa-pss",{"modulusLength":512,"saltLength":1.5}],"result":{"threw":{"t":"error","name":"RangeError","message":"The value of \"options.saltLength\" is out of range. It must be an integer. Received 1.5","code":"ERR_OUT_OF_RANGE","own":["code"]}}},
+ {"id":"generateKeyPairSync#113","fn":"generateKeyPairSync","args":["rsa-pss",{"modulusLength":512,"hashAlgorithm":1}],"result":{"threw":{"t":"error","name":"TypeError","message":"The \"options.hashAlgorithm\" property must be of type string. Received type number (1)","code":"ERR_INVALID_ARG_TYPE","own":["code"]}}},
+ {"id":"generateKeyPairSync#114","fn":"generateKeyPairSync","args":["rsa-pss",{"modulusLength":512,"mgf1HashAlgorithm":1}],"result":{"threw":{"t":"error","name":"TypeError","message":"The \"options.mgf1HashAlgorithm\" property must be of type string. Received type number (1)","code":"ERR_INVALID_ARG_TYPE","own":["code"]}}},
+ {"id":"generateKeyPairSync#115","fn":"generateKeyPairSync","args":["rsa-pss",{"modulusLength":512,"hashAlgorithm":"foo"}],"result":{"threw":{"t":"error","name":"TypeError","message":"Invalid digest: foo","code":"ERR_CRYPTO_INVALID_DIGEST","own":["code"]}}},
+ {"id":"generateKeyPairSync#116","fn":"generateKeyPairSync","args":["rsa-pss",{"modulusLength":512,"mgf1HashAlgorithm":"foo"}],"result":{"threw":{"t":"error","name":"TypeError","message":"Invalid MGF1 digest: foo","code":"ERR_CRYPTO_INVALID_DIGEST","own":["code"]}}},
+ {"id":"generateKeyPairSync#117","fn":"generateKeyPairSync","args":["rsa-pss",{"modulusLength":512,"hashAlgorithm":""}],"result":{"returned":{"t":"pair","keys":["publicKey","privateKey"],"publicKey":{"t":"KeyObject","ctor":"PublicKeyObject","type":"public","akt":"rsa-pss","details":{"modulusLength":512,"publicExponent":"65537n"}},"privateKey":{"t":"KeyObject","ctor":"PrivateKeyObject","type":"private","akt":"rsa-pss","details":{"modulusLength":512,"publicExponent":"65537n"}}}}},
+ {"id":"generateKeyPairSync#118","fn":"generateKeyPairSync","args":["rsa-pss",{"modulusLength":512,"hash":"sha256"}],"result":{"returned":{"t":"pair","keys":["publicKey","privateKey"],"publicKey":{"t":"KeyObject","ctor":"PublicKeyObject","type":"public","akt":"rsa-pss","details":{"modulusLength":512,"publicExponent":"65537n","hashAlgorithm":"sha256","mgf1HashAlgorithm":"sha256","saltLength":32}},"privateKey":{"t":"KeyObject","ctor":"PrivateKeyObject","type":"private","akt":"rsa-pss","details":{"modulusLength":512,"publicExponent":"65537n","hashAlgorithm":"sha256","mgf1HashAlgorithm":"sha256","saltLength":32}}},"warnings":[["\"options.hash\" is deprecated, use \"options.hashAlgorithm\" instead.","DeprecationWarning","DEP0154"]]}},
+ {"id":"generateKeyPairSync#119","fn":"generateKeyPairSync","args":["rsa-pss",{"modulusLength":512,"hash":1}],"result":{"threw":{"t":"error","name":"TypeError","message":"The \"options.hash\" property must be of type string. Received type number (1)","code":"ERR_INVALID_ARG_TYPE","own":["code"]},"warnings":[["\"options.hash\" is deprecated, use \"options.hashAlgorithm\" instead.","DeprecationWarning","DEP0154"]]}},
+ {"id":"generateKeyPairSync#120","fn":"generateKeyPairSync","args":["rsa-pss",{"modulusLength":512,"hash":"sha256","hashAlgorithm":"sha512"}],"result":{"threw":{"t":"error","name":"TypeError","message":"The property 'options.hash' is invalid. Received 'sha256'","code":"ERR_INVALID_ARG_VALUE","own":["code"]},"warnings":[["\"options.hash\" is deprecated, use \"options.hashAlgorithm\" instead.","DeprecationWarning","DEP0154"]]}},
+ {"id":"generateKeyPairSync#121","fn":"generateKeyPairSync","args":["rsa-pss",{"modulusLength":512,"hash":"sha256","hashAlgorithm":"sha256"}],"result":{"returned":{"t":"pair","keys":["publicKey","privateKey"],"publicKey":{"t":"KeyObject","ctor":"PublicKeyObject","type":"public","akt":"rsa-pss","details":{"modulusLength":512,"publicExponent":"65537n","hashAlgorithm":"sha256","mgf1HashAlgorithm":"sha256","saltLength":32}},"privateKey":{"t":"KeyObject","ctor":"PrivateKeyObject","type":"private","akt":"rsa-pss","details":{"modulusLength":512,"publicExponent":"65537n","hashAlgorithm":"sha256","mgf1HashAlgorithm":"sha256","saltLength":32}}},"warnings":[["\"options.hash\" is deprecated, use \"options.hashAlgorithm\" instead.","DeprecationWarning","DEP0154"]]}},
+ {"id":"generateKeyPairSync#122","fn":"generateKeyPairSync","args":["rsa-pss",{"modulusLength":512,"mgf1Hash":"sha256"}],"result":{"returned":{"t":"pair","keys":["publicKey","privateKey"],"publicKey":{"t":"KeyObject","ctor":"PublicKeyObject","type":"public","akt":"rsa-pss","details":{"modulusLength":512,"publicExponent":"65537n","hashAlgorithm":"sha1","mgf1HashAlgorithm":"sha256","saltLength":20}},"privateKey":{"t":"KeyObject","ctor":"PrivateKeyObject","type":"private","akt":"rsa-pss","details":{"modulusLength":512,"publicExponent":"65537n","hashAlgorithm":"sha1","mgf1HashAlgorithm":"sha256","saltLength":20}}},"warnings":[["\"options.mgf1Hash\" is deprecated, use \"options.mgf1HashAlgorithm\" instead.","DeprecationWarning","DEP0154"]]}},
+ {"id":"generateKeyPairSync#123","fn":"generateKeyPairSync","args":["rsa-pss",{"modulusLength":512,"mgf1Hash":1}],"result":{"threw":{"t":"error","name":"TypeError","message":"The \"options.mgf1Hash\" property must be of type string. Received type number (1)","code":"ERR_INVALID_ARG_TYPE","own":["code"]},"warnings":[["\"options.mgf1Hash\" is deprecated, use \"options.mgf1HashAlgorithm\" instead.","DeprecationWarning","DEP0154"]]}},
+ {"id":"generateKeyPairSync#124","fn":"generateKeyPairSync","args":["rsa-pss",{"modulusLength":512,"mgf1Hash":"sha256","mgf1HashAlgorithm":"sha1"}],"result":{"threw":{"t":"error","name":"TypeError","message":"The property 'options.mgf1Hash' is invalid. Received 'sha256'","code":"ERR_INVALID_ARG_VALUE","own":["code"]},"warnings":[["\"options.mgf1Hash\" is deprecated, use \"options.mgf1HashAlgorithm\" instead.","DeprecationWarning","DEP0154"]]}},
+ {"id":"generateKeyPairSync#125","fn":"generateKeyPairSync","args":["rsa-pss",{"modulusLength":512,"hash":"sha256","mgf1Hash":"sha1"}],"result":{"returned":{"t":"pair","keys":["publicKey","privateKey"],"publicKey":{"t":"KeyObject","ctor":"PublicKeyObject","type":"public","akt":"rsa-pss","details":{"modulusLength":512,"publicExponent":"65537n","hashAlgorithm":"sha256","mgf1HashAlgorithm":"sha1","saltLength":32}},"privateKey":{"t":"KeyObject","ctor":"PrivateKeyObject","type":"private","akt":"rsa-pss","details":{"modulusLength":512,"publicExponent":"65537n","hashAlgorithm":"sha256","mgf1HashAlgorithm":"sha1","saltLength":32}}},"warnings":[["\"options.hash\" is deprecated, use \"options.hashAlgorithm\" instead.","DeprecationWarning","DEP0154"],["\"options.mgf1Hash\" is deprecated, use \"options.mgf1HashAlgorithm\" instead.","DeprecationWarning","DEP0154"]]}},
+ {"id":"generateKeyPairSync#126","fn":"generateKeyPairSync","args":["rsa-pss",{"modulusLength":512,"hash":"foo"}],"result":{"threw":{"t":"error","name":"TypeError","message":"Invalid digest: foo","code":"ERR_CRYPTO_INVALID_DIGEST","own":["code"]},"warnings":[["\"options.hash\" is deprecated, use \"options.hashAlgorithm\" instead.","DeprecationWarning","DEP0154"]]}},
+ {"id":"generateKeyPairSync#127","fn":"generateKeyPairSync","args":["rsa-pss",{"modulusLength":512,"publicKeyEncoding":{"type":"pkcs1","format":"pem"}}],"result":{"threw":{"t":"error","name":"Error","message":"The selected key encoding pkcs1 can only be used for RSA keys.","code":"ERR_CRYPTO_INCOMPATIBLE_KEY_OPTIONS","own":["code"]}}},
+ {"id":"generateKeyPairSync#128","fn":"generateKeyPairSync","args":["rsa-pss",{"modulusLength":512,"privateKeyEncoding":{"type":"pkcs1","format":"pem"}}],"result":{"threw":{"t":"error","name":"Error","message":"The selected key encoding pkcs1 can only be used for RSA keys.","code":"ERR_CRYPTO_INCOMPATIBLE_KEY_OPTIONS","own":["code"]}}},
+ {"id":"generateKeyPairSync#129","fn":"generateKeyPairSync","args":["rsa-pss",{"modulusLength":512,"publicKeyEncoding":{"type":"spki","format":"pem"},"privateKeyEncoding":{"type":"pkcs8","format":"pem"}}],"result":{"returned":{"t":"pair","keys":["publicKey","privateKey"],"publicKey":{"t":"string","line":"-----BEGIN PUBLIC KEY-----"},"privateKey":{"t":"string","line":"-----BEGIN PRIVATE KEY-----"}}}},
+ {"id":"generateKeyPairSync#130","fn":"generateKeyPairSync","args":["rsa-pss",{"modulusLength":512,"publicKeyEncoding":{"format":"jwk"}}],"result":{"threw":{"t":"error","name":"Error","message":"Unsupported JWK Key Type.","code":"ERR_CRYPTO_JWK_UNSUPPORTED_KEY_TYPE","own":["code"]}}},
+ {"id":"generateKeyPairSync#131","fn":"generateKeyPairSync","args":["rsa-pss",{"modulusLength":512,"privateKeyEncoding":{"format":"jwk"}}],"result":{"threw":{"t":"error","name":"Error","message":"Unsupported JWK Key Type.","code":"ERR_CRYPTO_JWK_UNSUPPORTED_KEY_TYPE","own":["code"]}}},
+ {"id":"generateKeyPairSync#132","fn":"generateKeyPairSync","args":["rsa-pss",{"modulusLength":512,"publicExponent":3}],"result":{"returned":{"t":"pair","keys":["publicKey","privateKey"],"publicKey":{"t":"KeyObject","ctor":"PublicKeyObject","type":"public","akt":"rsa-pss","details":{"modulusLength":512,"publicExponent":"3n"}},"privateKey":{"t":"KeyObject","ctor":"PrivateKeyObject","type":"private","akt":"rsa-pss","details":{"modulusLength":512,"publicExponent":"3n"}}}}},
+ {"id":"generateKeyPairSync#133","fn":"generateKeyPairSync","args":["rsa-pss",{"modulusLength":256}],"result":{"threw":{"t":"error","name":"Error","message":"error:1C8000AB:Provider routines::key size too small","own":[]}}},
+ {"id":"generateKeyPairSync#134","fn":"generateKeyPairSync","args":["rsa-pss",{"modulusLength":512,"publicExponent":2}],"result":{"threw":{"t":"error","name":"Error","message":"error:020000B2:rsa routines::pub exponent out of range","own":[]}}},
+ {"id":"generateKeyPairSync#135","fn":"generateKeyPairSync","args":["dsa"],"result":{"threw":{"t":"error","name":"TypeError","message":"The \"options\" argument must be of type object. Received undefined","code":"ERR_INVALID_ARG_TYPE","own":["code"]}}},
+ {"id":"generateKeyPairSync#136","fn":"generateKeyPairSync","args":["dsa",{}],"result":{"threw":{"t":"error","name":"TypeError","message":"The \"options.modulusLength\" property must be of type number. Received undefined","code":"ERR_INVALID_ARG_TYPE","own":["code"]}}},
+ {"id":"generateKeyPairSync#137","fn":"generateKeyPairSync","args":["dsa",{"modulusLength":"x"}],"result":{"threw":{"t":"error","name":"TypeError","message":"The \"options.modulusLength\" property must be of type number. Received type string ('x')","code":"ERR_INVALID_ARG_TYPE","own":["code"]}}},
+ {"id":"generateKeyPairSync#138","fn":"generateKeyPairSync","args":["dsa",{"modulusLength":2048,"divisorLength":-1}],"result":{"threw":{"t":"error","name":"RangeError","message":"The value of \"options.divisorLength\" is out of range. It must be >= 0 && <= 2147483647. Received -1","code":"ERR_OUT_OF_RANGE","own":["code"]}}},
+ {"id":"generateKeyPairSync#139","fn":"generateKeyPairSync","args":["dsa",{"modulusLength":2048,"divisorLength":"x"}],"result":{"threw":{"t":"error","name":"TypeError","message":"The \"options.divisorLength\" property must be of type number. Received type string ('x')","code":"ERR_INVALID_ARG_TYPE","own":["code"]}}},
+ {"id":"generateKeyPairSync#140","fn":"generateKeyPairSync","args":["dsa",{"modulusLength":2048,"divisorLength":256}],"result":{"returned":{"t":"pair","keys":["publicKey","privateKey"],"publicKey":{"t":"KeyObject","ctor":"PublicKeyObject","type":"public","akt":"dsa","details":{"modulusLength":2048,"divisorLength":256}},"privateKey":{"t":"KeyObject","ctor":"PrivateKeyObject","type":"private","akt":"dsa","details":{"modulusLength":2048,"divisorLength":256}}}}},
+ {"id":"generateKeyPairSync#141","fn":"generateKeyPairSync","args":["ml-dsa-44"],"result":{"returned":{"t":"pair","keys":["publicKey","privateKey"],"publicKey":{"t":"KeyObject","ctor":"PublicKeyObject","type":"public","akt":"ml-dsa-44","details":{}},"privateKey":{"t":"KeyObject","ctor":"PrivateKeyObject","type":"private","akt":"ml-dsa-44","details":{}}}}},
+ {"id":"generateKeyPairSync#142","fn":"generateKeyPairSync","args":["ml-kem-512"],"result":{"returned":{"t":"pair","keys":["publicKey","privateKey"],"publicKey":{"t":"KeyObject","ctor":"PublicKeyObject","type":"public","akt":"ml-kem-512","details":{}},"privateKey":{"t":"KeyObject","ctor":"PrivateKeyObject","type":"private","akt":"ml-kem-512","details":{}}}}},
+ {"id":"generateKeyPairSync#143","fn":"generateKeyPairSync","args":["slh-dsa-sha2-128f"],"result":{"returned":{"t":"pair","keys":["publicKey","privateKey"],"publicKey":{"t":"KeyObject","ctor":"PublicKeyObject","type":"public","akt":"slh-dsa-sha2-128f","details":{}},"privateKey":{"t":"KeyObject","ctor":"PrivateKeyObject","type":"private","akt":"slh-dsa-sha2-128f","details":{}}}}},
+ {"id":"generateKeyPairSync#144","fn":"generateKeyPairSync","args":["ml-dsa-99"],"result":{"threw":{"t":"error","name":"TypeError","message":"The argument 'type' must be a supported key type. Received 'ml-dsa-99'","code":"ERR_INVALID_ARG_VALUE","own":["code"]}}},
+ {"id":"generateKeyPairSync#145","fn":"generateKeyPairSync","args":["ML-DSA-44"],"result":{"threw":{"t":"error","name":"TypeError","message":"The argument 'type' must be a supported key type. Received 'ML-DSA-44'","code":"ERR_INVALID_ARG_VALUE","own":["code"]}}},
+ {"id":"generateKeyPairSync#146","fn":"generateKeyPairSync","args":["ml-dsa-44",{"publicKeyEncoding":{"type":"foo","format":"pem"}}],"result":{"threw":{"t":"error","name":"TypeError","message":"The property 'options.publicKeyEncoding.type' is invalid. Received 'foo'","code":"ERR_INVALID_ARG_VALUE","own":["code"]}}},
+ {"id":"generateKeyPairSync#147","fn":"generateKeyPairSync","args":["ec"],"result":{"threw":{"t":"error","name":"TypeError","message":"The \"options\" argument must be of type object. Received undefined","code":"ERR_INVALID_ARG_TYPE","own":["code"]}}},
+ {"id":"generateKeyPairSync#148","fn":"generateKeyPairSync","args":["ec",{}],"result":{"threw":{"t":"error","name":"TypeError","message":"The \"options.namedCurve\" property must be of type string. Received undefined","code":"ERR_INVALID_ARG_TYPE","own":["code"]}}},
+ {"id":"generateKeyPairSync#149","fn":"generateKeyPairSync","args":["ec",{"namedCurve":1}],"result":{"threw":{"t":"error","name":"TypeError","message":"The \"options.namedCurve\" property must be of type string. Received type number (1)","code":"ERR_INVALID_ARG_TYPE","own":["code"]}}},
+ {"id":"generateKeyPairSync#150","fn":"generateKeyPairSync","args":["ec",{"namedCurve":"foo"}],"result":{"threw":{"t":"error","name":"TypeError","message":"Invalid EC curve name","code":"ERR_CRYPTO_INVALID_CURVE","own":["code"]}}},
+ {"id":"generateKeyPairSync#151","fn":"generateKeyPairSync","args":["ec",{"namedCurve":""}],"result":{"threw":{"t":"error","name":"TypeError","message":"Invalid EC curve name","code":"ERR_CRYPTO_INVALID_CURVE","own":["code"]}}},
+ {"id":"generateKeyPairSync#152","fn":"generateKeyPairSync","args":["ec",{"namedCurve":"P-256"}],"result":{"returned":{"t":"pair","keys":["publicKey","privateKey"],"publicKey":{"t":"KeyObject","ctor":"PublicKeyObject","type":"public","akt":"ec","details":{"namedCurve":"prime256v1"}},"privateKey":{"t":"KeyObject","ctor":"PrivateKeyObject","type":"private","akt":"ec","details":{"namedCurve":"prime256v1"}}}}},
+ {"id":"generateKeyPairSync#153","fn":"generateKeyPairSync","args":["ec",{"namedCurve":"prime256v1"}],"result":{"returned":{"t":"pair","keys":["publicKey","privateKey"],"publicKey":{"t":"KeyObject","ctor":"PublicKeyObject","type":"public","akt":"ec","details":{"namedCurve":"prime256v1"}},"privateKey":{"t":"KeyObject","ctor":"PrivateKeyObject","type":"private","akt":"ec","details":{"namedCurve":"prime256v1"}}}}},
+ {"id":"generateKeyPairSync#154","fn":"generateKeyPairSync","args":["ec",{"namedCurve":"secp256r1"}],"result":{"threw":{"t":"error","name":"TypeError","message":"Invalid EC curve name","code":"ERR_CRYPTO_INVALID_CURVE","own":["code"]}}},
+ {"id":"generateKeyPairSync#155","fn":"generateKeyPairSync","args":["ec",{"namedCurve":"P-384"}],"result":{"returned":{"t":"pair","keys":["publicKey","privateKey"],"publicKey":{"t":"KeyObject","ctor":"PublicKeyObject","type":"public","akt":"ec","details":{"namedCurve":"secp384r1"}},"privateKey":{"t":"KeyObject","ctor":"PrivateKeyObject","type":"private","akt":"ec","details":{"namedCurve":"secp384r1"}}}}},
+ {"id":"generateKeyPairSync#156","fn":"generateKeyPairSync","args":["ec",{"namedCurve":"secp384r1"}],"result":{"returned":{"t":"pair","keys":["publicKey","privateKey"],"publicKey":{"t":"KeyObject","ctor":"PublicKeyObject","type":"public","akt":"ec","details":{"namedCurve":"secp384r1"}},"privateKey":{"t":"KeyObject","ctor":"PrivateKeyObject","type":"private","akt":"ec","details":{"namedCurve":"secp384r1"}}}}},
+ {"id":"generateKeyPairSync#157","fn":"generateKeyPairSync","args":["ec",{"namedCurve":"P-521"}],"result":{"returned":{"t":"pair","keys":["publicKey","privateKey"],"publicKey":{"t":"KeyObject","ctor":"PublicKeyObject","type":"public","akt":"ec","details":{"namedCurve":"secp521r1"}},"privateKey":{"t":"KeyObject","ctor":"PrivateKeyObject","type":"private","akt":"ec","details":{"namedCurve":"secp521r1"}}}}},
+ {"id":"generateKeyPairSync#158","fn":"generateKeyPairSync","args":["ec",{"namedCurve":"secp521r1"}],"result":{"returned":{"t":"pair","keys":["publicKey","privateKey"],"publicKey":{"t":"KeyObject","ctor":"PublicKeyObject","type":"public","akt":"ec","details":{"namedCurve":"secp521r1"}},"privateKey":{"t":"KeyObject","ctor":"PrivateKeyObject","type":"private","akt":"ec","details":{"namedCurve":"secp521r1"}}}}},
+ {"id":"generateKeyPairSync#159","fn":"generateKeyPairSync","args":["ec",{"namedCurve":"secp256k1"}],"result":{"returned":{"t":"pair","keys":["publicKey","privateKey"],"publicKey":{"t":"KeyObject","ctor":"PublicKeyObject","type":"public","akt":"ec","details":{"namedCurve":"secp256k1"}},"privateKey":{"t":"KeyObject","ctor":"PrivateKeyObject","type":"private","akt":"ec","details":{"namedCurve":"secp256k1"}}}}},
+ {"id":"generateKeyPairSync#160","fn":"generateKeyPairSync","args":["ec",{"namedCurve":"p-256"}],"result":{"threw":{"t":"error","name":"TypeError","message":"Invalid EC curve name","code":"ERR_CRYPTO_INVALID_CURVE","own":["code"]}}},
+ {"id":"generateKeyPairSync#161","fn":"generateKeyPairSync","args":["ec",{"namedCurve":"PRIME256V1"}],"result":{"threw":{"t":"error","name":"TypeError","message":"Invalid EC curve name","code":"ERR_CRYPTO_INVALID_CURVE","own":["code"]}}},
+ {"id":"generateKeyPairSync#162","fn":"generateKeyPairSync","args":["ec",{"namedCurve":"Secp256k1"}],"result":{"threw":{"t":"error","name":"TypeError","message":"Invalid EC curve name","code":"ERR_CRYPTO_INVALID_CURVE","own":["code"]}}},
+ {"id":"generateKeyPairSync#163","fn":"generateKeyPairSync","args":["ec",{"namedCurve":"secp224r1"}],"result":{"returned":{"t":"pair","keys":["publicKey","privateKey"],"publicKey":{"t":"KeyObject","ctor":"PublicKeyObject","type":"public","akt":"ec","details":{"namedCurve":"secp224r1"}},"privateKey":{"t":"KeyObject","ctor":"PrivateKeyObject","type":"private","akt":"ec","details":{"namedCurve":"secp224r1"}}}}},
+ {"id":"generateKeyPairSync#164","fn":"generateKeyPairSync","args":["ec",{"namedCurve":"P-224"}],"result":{"returned":{"t":"pair","keys":["publicKey","privateKey"],"publicKey":{"t":"KeyObject","ctor":"PublicKeyObject","type":"public","akt":"ec","details":{"namedCurve":"secp224r1"}},"privateKey":{"t":"KeyObject","ctor":"PrivateKeyObject","type":"private","akt":"ec","details":{"namedCurve":"secp224r1"}}}}},
+ {"id":"generateKeyPairSync#165","fn":"generateKeyPairSync","args":["ec",{"namedCurve":"brainpoolP256r1"}],"result":{"returned":{"t":"pair","keys":["publicKey","privateKey"],"publicKey":{"t":"KeyObject","ctor":"PublicKeyObject","type":"public","akt":"ec","details":{"namedCurve":"brainpoolP256r1"}},"privateKey":{"t":"KeyObject","ctor":"PrivateKeyObject","type":"private","akt":"ec","details":{"namedCurve":"brainpoolP256r1"}}}}},
+ {"id":"generateKeyPairSync#166","fn":"generateKeyPairSync","args":["ec",{"namedCurve":"prime192v1"}],"result":{"returned":{"t":"pair","keys":["publicKey","privateKey"],"publicKey":{"t":"KeyObject","ctor":"PublicKeyObject","type":"public","akt":"ec","details":{"namedCurve":"prime192v1"}},"privateKey":{"t":"KeyObject","ctor":"PrivateKeyObject","type":"private","akt":"ec","details":{"namedCurve":"prime192v1"}}}}},
+ {"id":"generateKeyPairSync#167","fn":"generateKeyPairSync","args":["ec",{"namedCurve":"sect233k1"}],"result":{"returned":{"t":"pair","keys":["publicKey","privateKey"],"publicKey":{"t":"KeyObject","ctor":"PublicKeyObject","type":"public","akt":"ec","details":{"namedCurve":"sect233k1"}},"privateKey":{"t":"KeyObject","ctor":"PrivateKeyObject","type":"private","akt":"ec","details":{"namedCurve":"sect233k1"}}}}},
+ {"id":"generateKeyPairSync#168","fn":"generateKeyPairSync","args":["ec",{"namedCurve":"ed25519"}],"result":{"threw":{"t":"error","name":"TypeError","message":"Invalid EC curve name","code":"ERR_CRYPTO_INVALID_CURVE","own":["code"]}}},
+ {"id":"generateKeyPairSync#169","fn":"generateKeyPairSync","args":["ec",{"namedCurve":"X25519"}],"result":{"returned":{"t":"pair","keys":["publicKey","privateKey"],"publicKey":{"t":"KeyObject","ctor":"PublicKeyObject","type":"public","akt":"x25519","details":{}},"privateKey":{"t":"KeyObject","ctor":"PrivateKeyObject","type":"private","akt":"x25519","details":{}}}}},
+ {"id":"generateKeyPairSync#170","fn":"generateKeyPairSync","args":["ec",{"namedCurve":"SM2"}],"result":{"returned":{"t":"pair","keys":["publicKey","privateKey"],"publicKey":{"t":"KeyObject","ctor":"PublicKeyObject","type":"public","akt":"ec","details":{"namedCurve":"SM2"}},"privateKey":{"t":"KeyObject","ctor":"PrivateKeyObject","type":"private","akt":"ec","details":{"namedCurve":"SM2"}}}}},
+ {"id":"generateKeyPairSync#171","fn":"generateKeyPairSync","args":["ec",{"namedCurve":"1.2.840.10045.3.1.7"}],"result":{"threw":{"t":"error","name":"TypeError","message":"Invalid EC curve name","code":"ERR_CRYPTO_INVALID_CURVE","own":["code"]}}},
+ {"id":"generateKeyPairSync#172","fn":"generateKeyPairSync","args":["ec",{"namedCurve":"K-256"}],"result":{"threw":{"t":"error","name":"TypeError","message":"Invalid EC curve name","code":"ERR_CRYPTO_INVALID_CURVE","own":["code"]}}},
+ {"id":"generateKeyPairSync#173","fn":"generateKeyPairSync","args":["ec",{"namedCurve":"P-256K"}],"result":{"threw":{"t":"error","name":"TypeError","message":"Invalid EC curve name","code":"ERR_CRYPTO_INVALID_CURVE","own":["code"]}}},
+ {"id":"generateKeyPairSync#174","fn":"generateKeyPairSync","args":["ec",{"namedCurve":"P-256","paramEncoding":"named"}],"result":{"returned":{"t":"pair","keys":["publicKey","privateKey"],"publicKey":{"t":"KeyObject","ctor":"PublicKeyObject","type":"public","akt":"ec","details":{"namedCurve":"prime256v1"}},"privateKey":{"t":"KeyObject","ctor":"PrivateKeyObject","type":"private","akt":"ec","details":{"namedCurve":"prime256v1"}}}}},
+ {"id":"generateKeyPairSync#175","fn":"generateKeyPairSync","args":["ec",{"namedCurve":"P-256","paramEncoding":"explicit"}],"result":{"returned":{"t":"pair","keys":["publicKey","privateKey"],"publicKey":{"t":"KeyObject","ctor":"PublicKeyObject","type":"public","akt":"ec","details":{"namedCurve":"prime256v1"}},"privateKey":{"t":"KeyObject","ctor":"PrivateKeyObject","type":"private","akt":"ec","details":{"namedCurve":"prime256v1"}}}}},
+ {"id":"generateKeyPairSync#176","fn":"generateKeyPairSync","args":["ec",{"namedCurve":"P-256","paramEncoding":"foo"}],"result":{"threw":{"t":"error","name":"TypeError","message":"The property 'options.paramEncoding' is invalid. Received 'foo'","code":"ERR_INVALID_ARG_VALUE","own":["code"]}}},
+ {"id":"generateKeyPairSync#177","fn":"generateKeyPairSync","args":["ec",{"namedCurve":"P-256","paramEncoding":1}],"result":{"threw":{"t":"error","name":"TypeError","message":"The property 'options.paramEncoding' is invalid. Received 1","code":"ERR_INVALID_ARG_VALUE","own":["code"]}}},
+ {"id":"generateKeyPairSync#178","fn":"generateKeyPairSync","args":["ec",{"namedCurve":"P-256","paramEncoding":null}],"result":{"returned":{"t":"pair","keys":["publicKey","privateKey"],"publicKey":{"t":"KeyObject","ctor":"PublicKeyObject","type":"public","akt":"ec","details":{"namedCurve":"prime256v1"}},"privateKey":{"t":"KeyObject","ctor":"PrivateKeyObject","type":"private","akt":"ec","details":{"namedCurve":"prime256v1"}}}}},
+ {"id":"generateKeyPairSync#179","fn":"generateKeyPairSync","args":["ec",{"namedCurve":"P-256","paramEncoding":""}],"result":{"threw":{"t":"error","name":"TypeError","message":"The property 'options.paramEncoding' is invalid. Received ''","code":"ERR_INVALID_ARG_VALUE","own":["code"]}}},
+ {"id":"generateKeyPairSync#180","fn":"generateKeyPairSync","args":["ec",{"namedCurve":"foo","paramEncoding":"foo"}],"result":{"threw":{"t":"error","name":"TypeError","message":"The property 'options.paramEncoding' is invalid. Received 'foo'","code":"ERR_INVALID_ARG_VALUE","own":["code"]}}},
+ {"id":"generateKeyPairSync#181","fn":"generateKeyPairSync","args":["ec",{"namedCurve":"foo","publicKeyEncoding":{"type":"foo","format":"pem"}}],"result":{"threw":{"t":"error","name":"TypeError","message":"The property 'options.publicKeyEncoding.type' is invalid. Received 'foo'","code":"ERR_INVALID_ARG_VALUE","own":["code"]}}},
+ {"id":"generateKeyPairSync#182","fn":"generateKeyPairSync","args":["ec",{"namedCurve":"prime256v1","publicKeyEncoding":{"type":"spki","format":"pem"},"privateKeyEncoding":{"type":"sec1","format":"pem"}}],"result":{"returned":{"t":"pair","keys":["publicKey","privateKey"],"publicKey":{"t":"string","line":"-----BEGIN PUBLIC KEY-----"},"privateKey":{"t":"string","line":"-----BEGIN EC PRIVATE KEY-----"}}}},
+ {"id":"generateKeyPairSync#183","fn":"generateKeyPairSync","args":["ec",{"namedCurve":"prime256v1","publicKeyEncoding":{"type":"spki","format":"der"},"privateKeyEncoding":{"type":"sec1","format":"der"}}],"result":{"returned":{"t":"pair","keys":["publicKey","privateKey"],"publicKey":{"t":"Buffer"},"privateKey":{"t":"Buffer"}}}},
+ {"id":"generateKeyPairSync#184","fn":"generateKeyPairSync","args":["ec",{"namedCurve":"prime256v1","privateKeyEncoding":{"type":"pkcs8","format":"pem"}}],"result":{"returned":{"t":"pair","keys":["publicKey","privateKey"],"publicKey":{"t":"KeyObject","ctor":"PublicKeyObject","type":"public","akt":"ec","details":{"namedCurve":"prime256v1"}},"privateKey":{"t":"string","line":"-----BEGIN PRIVATE KEY-----"}}}},
+ {"id":"generateKeyPairSync#185","fn":"generateKeyPairSync","args":["ec",{"namedCurve":"prime256v1","privateKeyEncoding":{"type":"sec1","format":"pem","cipher":"aes-128-cbc","passphrase":"x"}}],"result":{"returned":{"t":"pair","keys":["publicKey","privateKey"],"publicKey":{"t":"KeyObject","ctor":"PublicKeyObject","type":"public","akt":"ec","details":{"namedCurve":"prime256v1"}},"privateKey":{"t":"string","line":"-----BEGIN EC PRIVATE KEY-----"}}}},
+ {"id":"generateKeyPairSync#186","fn":"generateKeyPairSync","args":["ec",{"namedCurve":"prime256v1","privateKeyEncoding":{"type":"sec1","format":"der","cipher":"aes-128-cbc","passphrase":"x"}}],"result":{"threw":{"t":"error","name":"Error","message":"The selected key encoding sec1 does not support encryption.","code":"ERR_CRYPTO_INCOMPATIBLE_KEY_OPTIONS","own":["code"]}}},
+ {"id":"generateKeyPairSync#187","fn":"generateKeyPairSync","args":["ec",{"namedCurve":"prime256v1","privateKeyEncoding":{"type":"pkcs8","format":"pem","cipher":"aes-128-cbc","passphrase":"x"}}],"result":{"returned":{"t":"pair","keys":["publicKey","privateKey"],"publicKey":{"t":"KeyObject","ctor":"PublicKeyObject","type":"public","akt":"ec","details":{"namedCurve":"prime256v1"}},"privateKey":{"t":"string","line":"-----BEGIN ENCRYPTED PRIVATE KEY-----"}}}},
+ {"id":"generateKeyPairSync#188","fn":"generateKeyPairSync","args":["ec",{"namedCurve":"prime256v1","publicKeyEncoding":{"type":"sec1","format":"pem"}}],"result":{"threw":{"t":"error","name":"TypeError","message":"The property 'options.publicKeyEncoding.type' is invalid. Received 'sec1'","code":"ERR_INVALID_ARG_VALUE","own":["code"]}}},
+ {"id":"generateKeyPairSync#189","fn":"generateKeyPairSync","args":["ec",{"namedCurve":"prime256v1","publicKeyEncoding":{"type":"pkcs1","format":"pem"}}],"result":{"threw":{"t":"error","name":"Error","message":"The selected key encoding pkcs1 can only be used for RSA keys.","code":"ERR_CRYPTO_INCOMPATIBLE_KEY_OPTIONS","own":["code"]}}},
+ {"id":"generateKeyPairSync#190","fn":"generateKeyPairSync","args":["ec",{"namedCurve":"prime256v1","privateKeyEncoding":{"type":"pkcs1","format":"pem"}}],"result":{"threw":{"t":"error","name":"Error","message":"The selected key encoding pkcs1 can only be used for RSA keys.","code":"ERR_CRYPTO_INCOMPATIBLE_KEY_OPTIONS","own":["code"]}}},
+ {"id":"generateKeyPairSync#191","fn":"generateKeyPairSync","args":["ec",{"namedCurve":"prime256v1","publicKeyEncoding":{"format":"jwk"},"privateKeyEncoding":{"format":"jwk"}}],"result":{"returned":{"t":"pair","keys":["publicKey","privateKey"],"publicKey":{"t":"jwk","kty":"EC","crv":"P-256","keys":["crv","kty","x","y"]},"privateKey":{"t":"jwk","kty":"EC","crv":"P-256","keys":["crv","d","kty","x","y"]}}}},
+ {"id":"generateKeyPairSync#192","fn":"generateKeyPairSync","args":["ec",{"namedCurve":"prime256v1","publicKeyEncoding":{"format":"raw-public"}}],"result":{"returned":{"t":"pair","keys":["publicKey","privateKey"],"publicKey":{"t":"Buffer"},"privateKey":{"t":"KeyObject","ctor":"PrivateKeyObject","type":"private","akt":"ec","details":{"namedCurve":"prime256v1"}}}}},
+ {"id":"generateKeyPairSync#193","fn":"generateKeyPairSync","args":["ec",{"namedCurve":"prime256v1","publicKeyEncoding":{"format":"raw-public","type":"compressed"}}],"result":{"returned":{"t":"pair","keys":["publicKey","privateKey"],"publicKey":{"t":"Buffer"},"privateKey":{"t":"KeyObject","ctor":"PrivateKeyObject","type":"private","akt":"ec","details":{"namedCurve":"prime256v1"}}}}},
+ {"id":"generateKeyPairSync#194","fn":"generateKeyPairSync","args":["ec",{"namedCurve":"prime256v1","privateKeyEncoding":{"format":"raw-private"}}],"result":{"returned":{"t":"pair","keys":["publicKey","privateKey"],"publicKey":{"t":"KeyObject","ctor":"PublicKeyObject","type":"public","akt":"ec","details":{"namedCurve":"prime256v1"}},"privateKey":{"t":"Buffer"}}}},
+ {"id":"generateKeyPairSync#195","fn":"generateKeyPairSync","args":["ec",{"namedCurve":"prime256v1","publicKeyEncoding":{"format":"raw-public","type":"spki"}}],"result":{"threw":{"t":"error","name":"TypeError","message":"The property 'options.publicKeyEncoding.type' is invalid. Received 'spki'","code":"ERR_INVALID_ARG_VALUE","own":["code"]}}},
+ {"id":"generateKeyPairSync#196","fn":"generateKeyPairSync","args":["ec",{"namedCurve":"prime256v1","privateKeyEncoding":{"format":"raw-private","type":"pkcs8"}}],"result":{"threw":{"t":"error","name":"TypeError","message":"The property 'options.privateKeyEncoding.type' is invalid. Received 'pkcs8'","code":"ERR_INVALID_ARG_VALUE","own":["code"]}}},
+ {"id":"generateKeyPairSync#197","fn":"generateKeyPairSync","args":["ec",{"namedCurve":"prime256v1","privateKeyEncoding":{"format":"raw-seed"}}],"result":{"threw":{"t":"error","name":"Error","message":"The selected key encoding is incompatible with the key type","code":"ERR_CRYPTO_INCOMPATIBLE_KEY_OPTIONS","own":["code"]}}},
+ {"id":"generateKeyPairSync#198","fn":"generateKeyPairSync","args":["ec",{"namedCurve":"prime256v1","privateKeyEncoding":{"format":"raw-private","cipher":"aes-128-cbc","passphrase":"x"}}],"result":{"threw":{"t":"error","name":"Error","message":"The selected key encoding raw format does not support encryption.","code":"ERR_CRYPTO_INCOMPATIBLE_KEY_OPTIONS","own":["code"]}}},
+ {"id":"generateKeyPairSync#199","fn":"generateKeyPairSync","args":["ec",{"namedCurve":"secp256k1","publicKeyEncoding":{"format":"jwk"},"privateKeyEncoding":{"format":"jwk"}}],"result":{"returned":{"t":"pair","keys":["publicKey","privateKey"],"publicKey":{"t":"jwk","kty":"EC","crv":"secp256k1","keys":["crv","kty","x","y"]},"privateKey":{"t":"jwk","kty":"EC","crv":"secp256k1","keys":["crv","d","kty","x","y"]}}}},
+ {"id":"generateKeyPairSync#200","fn":"generateKeyPairSync","args":["ed25519"],"result":{"returned":{"t":"pair","keys":["publicKey","privateKey"],"publicKey":{"t":"KeyObject","ctor":"PublicKeyObject","type":"public","akt":"ed25519","details":{}},"privateKey":{"t":"KeyObject","ctor":"PrivateKeyObject","type":"private","akt":"ed25519","details":{}}}}},
+ {"id":"generateKeyPairSync#201","fn":"generateKeyPairSync","args":["ed25519",{}],"result":{"returned":{"t":"pair","keys":["publicKey","privateKey"],"publicKey":{"t":"KeyObject","ctor":"PublicKeyObject","type":"public","akt":"ed25519","details":{}},"privateKey":{"t":"KeyObject","ctor":"PrivateKeyObject","type":"private","akt":"ed25519","details":{}}}}},
+ {"id":"generateKeyPairSync#202","fn":"generateKeyPairSync","args":["ed25519",{"$":"undefined"}],"result":{"returned":{"t":"pair","keys":["publicKey","privateKey"],"publicKey":{"t":"KeyObject","ctor":"PublicKeyObject","type":"public","akt":"ed25519","details":{}},"privateKey":{"t":"KeyObject","ctor":"PrivateKeyObject","type":"private","akt":"ed25519","details":{}}}}},
+ {"id":"generateKeyPairSync#203","fn":"generateKeyPairSync","args":["ed25519",{"publicKeyEncoding":{"type":"spki","format":"pem"},"privateKeyEncoding":{"type":"pkcs8","format":"pem"}}],"result":{"returned":{"t":"pair","keys":["publicKey","privateKey"],"publicKey":{"t":"string","line":"-----BEGIN PUBLIC KEY-----"},"privateKey":{"t":"string","line":"-----BEGIN PRIVATE KEY-----"}}}},
+ {"id":"generateKeyPairSync#204","fn":"generateKeyPairSync","args":["ed25519",{"publicKeyEncoding":{"format":"jwk"},"privateKeyEncoding":{"format":"jwk"}}],"result":{"returned":{"t":"pair","keys":["publicKey","privateKey"],"publicKey":{"t":"jwk","kty":"OKP","crv":"Ed25519","keys":["crv","kty","x"]},"privateKey":{"t":"jwk","kty":"OKP","crv":"Ed25519","keys":["crv","d","kty","x"]}}}},
+ {"id":"generateKeyPairSync#205","fn":"generateKeyPairSync","args":["ed25519",{"publicKeyEncoding":{"type":"spki","format":"der"},"privateKeyEncoding":{"type":"pkcs8","format":"der","cipher":"aes-256-cbc","passphrase":"x"}}],"result":{"returned":{"t":"pair","keys":["publicKey","privateKey"],"publicKey":{"t":"Buffer"},"privateKey":{"t":"Buffer"}}}},
+ {"id":"generateKeyPairSync#206","fn":"generateKeyPairSync","args":["ed25519",{"publicKeyEncoding":{"format":"raw-public"},"privateKeyEncoding":{"format":"raw-private"}}],"result":{"returned":{"t":"pair","keys":["publicKey","privateKey"],"publicKey":{"t":"Buffer"},"privateKey":{"t":"Buffer"}}}},
+ {"id":"generateKeyPairSync#207","fn":"generateKeyPairSync","args":["ed448"],"result":{"returned":{"t":"pair","keys":["publicKey","privateKey"],"publicKey":{"t":"KeyObject","ctor":"PublicKeyObject","type":"public","akt":"ed448","details":{}},"privateKey":{"t":"KeyObject","ctor":"PrivateKeyObject","type":"private","akt":"ed448","details":{}}}}},
+ {"id":"generateKeyPairSync#208","fn":"generateKeyPairSync","args":["ed448",{}],"result":{"returned":{"t":"pair","keys":["publicKey","privateKey"],"publicKey":{"t":"KeyObject","ctor":"PublicKeyObject","type":"public","akt":"ed448","details":{}},"privateKey":{"t":"KeyObject","ctor":"PrivateKeyObject","type":"private","akt":"ed448","details":{}}}}},
+ {"id":"generateKeyPairSync#209","fn":"generateKeyPairSync","args":["ed448",{"$":"undefined"}],"result":{"returned":{"t":"pair","keys":["publicKey","privateKey"],"publicKey":{"t":"KeyObject","ctor":"PublicKeyObject","type":"public","akt":"ed448","details":{}},"privateKey":{"t":"KeyObject","ctor":"PrivateKeyObject","type":"private","akt":"ed448","details":{}}}}},
+ {"id":"generateKeyPairSync#210","fn":"generateKeyPairSync","args":["ed448",{"publicKeyEncoding":{"type":"spki","format":"pem"},"privateKeyEncoding":{"type":"pkcs8","format":"pem"}}],"result":{"returned":{"t":"pair","keys":["publicKey","privateKey"],"publicKey":{"t":"string","line":"-----BEGIN PUBLIC KEY-----"},"privateKey":{"t":"string","line":"-----BEGIN PRIVATE KEY-----"}}}},
+ {"id":"generateKeyPairSync#211","fn":"generateKeyPairSync","args":["ed448",{"publicKeyEncoding":{"format":"jwk"},"privateKeyEncoding":{"format":"jwk"}}],"result":{"returned":{"t":"pair","keys":["publicKey","privateKey"],"publicKey":{"t":"jwk","kty":"OKP","crv":"Ed448","keys":["crv","kty","x"]},"privateKey":{"t":"jwk","kty":"OKP","crv":"Ed448","keys":["crv","d","kty","x"]}}}},
+ {"id":"generateKeyPairSync#212","fn":"generateKeyPairSync","args":["ed448",{"publicKeyEncoding":{"type":"spki","format":"der"},"privateKeyEncoding":{"type":"pkcs8","format":"der","cipher":"aes-256-cbc","passphrase":"x"}}],"result":{"returned":{"t":"pair","keys":["publicKey","privateKey"],"publicKey":{"t":"Buffer"},"privateKey":{"t":"Buffer"}}}},
+ {"id":"generateKeyPairSync#213","fn":"generateKeyPairSync","args":["ed448",{"publicKeyEncoding":{"format":"raw-public"},"privateKeyEncoding":{"format":"raw-private"}}],"result":{"returned":{"t":"pair","keys":["publicKey","privateKey"],"publicKey":{"t":"Buffer"},"privateKey":{"t":"Buffer"}}}},
+ {"id":"generateKeyPairSync#214","fn":"generateKeyPairSync","args":["x25519"],"result":{"returned":{"t":"pair","keys":["publicKey","privateKey"],"publicKey":{"t":"KeyObject","ctor":"PublicKeyObject","type":"public","akt":"x25519","details":{}},"privateKey":{"t":"KeyObject","ctor":"PrivateKeyObject","type":"private","akt":"x25519","details":{}}}}},
+ {"id":"generateKeyPairSync#215","fn":"generateKeyPairSync","args":["x25519",{}],"result":{"returned":{"t":"pair","keys":["publicKey","privateKey"],"publicKey":{"t":"KeyObject","ctor":"PublicKeyObject","type":"public","akt":"x25519","details":{}},"privateKey":{"t":"KeyObject","ctor":"PrivateKeyObject","type":"private","akt":"x25519","details":{}}}}},
+ {"id":"generateKeyPairSync#216","fn":"generateKeyPairSync","args":["x25519",{"$":"undefined"}],"result":{"returned":{"t":"pair","keys":["publicKey","privateKey"],"publicKey":{"t":"KeyObject","ctor":"PublicKeyObject","type":"public","akt":"x25519","details":{}},"privateKey":{"t":"KeyObject","ctor":"PrivateKeyObject","type":"private","akt":"x25519","details":{}}}}},
+ {"id":"generateKeyPairSync#217","fn":"generateKeyPairSync","args":["x25519",{"publicKeyEncoding":{"type":"spki","format":"pem"},"privateKeyEncoding":{"type":"pkcs8","format":"pem"}}],"result":{"returned":{"t":"pair","keys":["publicKey","privateKey"],"publicKey":{"t":"string","line":"-----BEGIN PUBLIC KEY-----"},"privateKey":{"t":"string","line":"-----BEGIN PRIVATE KEY-----"}}}},
+ {"id":"generateKeyPairSync#218","fn":"generateKeyPairSync","args":["x25519",{"publicKeyEncoding":{"format":"jwk"},"privateKeyEncoding":{"format":"jwk"}}],"result":{"returned":{"t":"pair","keys":["publicKey","privateKey"],"publicKey":{"t":"jwk","kty":"OKP","crv":"X25519","keys":["crv","kty","x"]},"privateKey":{"t":"jwk","kty":"OKP","crv":"X25519","keys":["crv","d","kty","x"]}}}},
+ {"id":"generateKeyPairSync#219","fn":"generateKeyPairSync","args":["x25519",{"publicKeyEncoding":{"type":"spki","format":"der"},"privateKeyEncoding":{"type":"pkcs8","format":"der","cipher":"aes-256-cbc","passphrase":"x"}}],"result":{"returned":{"t":"pair","keys":["publicKey","privateKey"],"publicKey":{"t":"Buffer"},"privateKey":{"t":"Buffer"}}}},
+ {"id":"generateKeyPairSync#220","fn":"generateKeyPairSync","args":["x25519",{"publicKeyEncoding":{"format":"raw-public"},"privateKeyEncoding":{"format":"raw-private"}}],"result":{"returned":{"t":"pair","keys":["publicKey","privateKey"],"publicKey":{"t":"Buffer"},"privateKey":{"t":"Buffer"}}}},
+ {"id":"generateKeyPairSync#221","fn":"generateKeyPairSync","args":["x448"],"result":{"returned":{"t":"pair","keys":["publicKey","privateKey"],"publicKey":{"t":"KeyObject","ctor":"PublicKeyObject","type":"public","akt":"x448","details":{}},"privateKey":{"t":"KeyObject","ctor":"PrivateKeyObject","type":"private","akt":"x448","details":{}}}}},
+ {"id":"generateKeyPairSync#222","fn":"generateKeyPairSync","args":["x448",{}],"result":{"returned":{"t":"pair","keys":["publicKey","privateKey"],"publicKey":{"t":"KeyObject","ctor":"PublicKeyObject","type":"public","akt":"x448","details":{}},"privateKey":{"t":"KeyObject","ctor":"PrivateKeyObject","type":"private","akt":"x448","details":{}}}}},
+ {"id":"generateKeyPairSync#223","fn":"generateKeyPairSync","args":["x448",{"$":"undefined"}],"result":{"returned":{"t":"pair","keys":["publicKey","privateKey"],"publicKey":{"t":"KeyObject","ctor":"PublicKeyObject","type":"public","akt":"x448","details":{}},"privateKey":{"t":"KeyObject","ctor":"PrivateKeyObject","type":"private","akt":"x448","details":{}}}}},
+ {"id":"generateKeyPairSync#224","fn":"generateKeyPairSync","args":["x448",{"publicKeyEncoding":{"type":"spki","format":"pem"},"privateKeyEncoding":{"type":"pkcs8","format":"pem"}}],"result":{"returned":{"t":"pair","keys":["publicKey","privateKey"],"publicKey":{"t":"string","line":"-----BEGIN PUBLIC KEY-----"},"privateKey":{"t":"string","line":"-----BEGIN PRIVATE KEY-----"}}}},
+ {"id":"generateKeyPairSync#225","fn":"generateKeyPairSync","args":["x448",{"publicKeyEncoding":{"format":"jwk"},"privateKeyEncoding":{"format":"jwk"}}],"result":{"returned":{"t":"pair","keys":["publicKey","privateKey"],"publicKey":{"t":"jwk","kty":"OKP","crv":"X448","keys":["crv","kty","x"]},"privateKey":{"t":"jwk","kty":"OKP","crv":"X448","keys":["crv","d","kty","x"]}}}},
+ {"id":"generateKeyPairSync#226","fn":"generateKeyPairSync","args":["x448",{"publicKeyEncoding":{"type":"spki","format":"der"},"privateKeyEncoding":{"type":"pkcs8","format":"der","cipher":"aes-256-cbc","passphrase":"x"}}],"result":{"returned":{"t":"pair","keys":["publicKey","privateKey"],"publicKey":{"t":"Buffer"},"privateKey":{"t":"Buffer"}}}},
+ {"id":"generateKeyPairSync#227","fn":"generateKeyPairSync","args":["x448",{"publicKeyEncoding":{"format":"raw-public"},"privateKeyEncoding":{"format":"raw-private"}}],"result":{"returned":{"t":"pair","keys":["publicKey","privateKey"],"publicKey":{"t":"Buffer"},"privateKey":{"t":"Buffer"}}}},
+ {"id":"generateKeyPairSync#228","fn":"generateKeyPairSync","args":["ed25519",{"publicKeyEncoding":{"type":"pkcs1","format":"pem"}}],"result":{"threw":{"t":"error","name":"Error","message":"The selected key encoding pkcs1 can only be used for RSA keys.","code":"ERR_CRYPTO_INCOMPATIBLE_KEY_OPTIONS","own":["code"]}}},
+ {"id":"generateKeyPairSync#229","fn":"generateKeyPairSync","args":["ed25519",{"privateKeyEncoding":{"type":"sec1","format":"pem"}}],"result":{"threw":{"t":"error","name":"Error","message":"The selected key encoding sec1 can only be used for EC keys.","code":"ERR_CRYPTO_INCOMPATIBLE_KEY_OPTIONS","own":["code"]}}},
+ {"id":"generateKeyPairSync#230","fn":"generateKeyPairSync","args":["ed25519",{"modulusLength":"x","namedCurve":1}],"result":{"returned":{"t":"pair","keys":["publicKey","privateKey"],"publicKey":{"t":"KeyObject","ctor":"PublicKeyObject","type":"public","akt":"ed25519","details":{}},"privateKey":{"t":"KeyObject","ctor":"PrivateKeyObject","type":"private","akt":"ed25519","details":{}}}}},
+ {"id":"generateKeyPairSync#231","fn":"generateKeyPairSync","args":["ED25519"],"result":{"threw":{"t":"error","name":"TypeError","message":"The argument 'type' must be a supported key type. Received 'ED25519'","code":"ERR_INVALID_ARG_VALUE","own":["code"]}}},
+ {"id":"generateKeyPairSync#232","fn":"generateKeyPairSync","args":["x25519",{"privateKeyEncoding":{"format":"raw-seed"}}],"result":{"threw":{"t":"error","name":"Error","message":"The selected key encoding is incompatible with the key type","code":"ERR_CRYPTO_INCOMPATIBLE_KEY_OPTIONS","own":["code"]}}},
+ {"id":"generateKeyPairSync#233","fn":"generateKeyPairSync","args":["dh"],"result":{"threw":{"t":"error","name":"TypeError","message":"The \"options\" argument must be of type object. Received undefined","code":"ERR_INVALID_ARG_TYPE","own":["code"]}}},
+ {"id":"generateKeyPairSync#234","fn":"generateKeyPairSync","args":["dh",{}],"result":{"threw":{"t":"error","name":"TypeError","message":"At least one of the group, prime, or primeLength options is required","code":"ERR_MISSING_OPTION","own":["code"]}}},
+ {"id":"generateKeyPairSync#235","fn":"generateKeyPairSync","args":["dh",{"group":1}],"result":{"threw":{"t":"error","name":"TypeError","message":"The \"options.group\" property must be of type string. Received type number (1)","code":"ERR_INVALID_ARG_TYPE","own":["code"]}}},
+ {"id":"generateKeyPairSync#236","fn":"generateKeyPairSync","args":["dh",{"group":""}],"result":{"threw":{"t":"error","name":"Error","message":"Unknown DH group","code":"ERR_CRYPTO_UNKNOWN_DH_GROUP","own":["code"]}}},
+ {"id":"generateKeyPairSync#237","fn":"generateKeyPairSync","args":["dh",{"group":"modp1"}],"result":{"returned":{"t":"pair","keys":["publicKey","privateKey"],"publicKey":{"t":"KeyObject","ctor":"PublicKeyObject","type":"public","akt":"dh","details":{}},"privateKey":{"t":"KeyObject","ctor":"PrivateKeyObject","type":"private","akt":"dh","details":{}}}}},
+ {"id":"generateKeyPairSync#238","fn":"generateKeyPairSync","args":["dh",{"group":"modp2"}],"result":{"returned":{"t":"pair","keys":["publicKey","privateKey"],"publicKey":{"t":"KeyObject","ctor":"PublicKeyObject","type":"public","akt":"dh","details":{}},"privateKey":{"t":"KeyObject","ctor":"PrivateKeyObject","type":"private","akt":"dh","details":{}}}}},
+ {"id":"generateKeyPairSync#239","fn":"generateKeyPairSync","args":["dh",{"group":"modp5"}],"result":{"returned":{"t":"pair","keys":["publicKey","privateKey"],"publicKey":{"t":"KeyObject","ctor":"PublicKeyObject","type":"public","akt":"dh","details":{}},"privateKey":{"t":"KeyObject","ctor":"PrivateKeyObject","type":"private","akt":"dh","details":{}}}}},
+ {"id":"generateKeyPairSync#240","fn":"generateKeyPairSync","args":["dh",{"group":"modp14"}],"result":{"returned":{"t":"pair","keys":["publicKey","privateKey"],"publicKey":{"t":"KeyObject","ctor":"PublicKeyObject","type":"public","akt":"dh","details":{}},"privateKey":{"t":"KeyObject","ctor":"PrivateKeyObject","type":"private","akt":"dh","details":{}}}}},
+ {"id":"generateKeyPairSync#241","fn":"generateKeyPairSync","args":["dh",{"group":"modp15"}],"result":{"returned":{"t":"pair","keys":["publicKey","privateKey"],"publicKey":{"t":"KeyObject","ctor":"PublicKeyObject","type":"public","akt":"dh","details":{}},"privateKey":{"t":"KeyObject","ctor":"PrivateKeyObject","type":"private","akt":"dh","details":{}}}}},
+ {"id":"generateKeyPairSync#242","fn":"generateKeyPairSync","args":["dh",{"group":"modp16"}],"result":{"returned":{"t":"pair","keys":["publicKey","privateKey"],"publicKey":{"t":"KeyObject","ctor":"PublicKeyObject","type":"public","akt":"dh","details":{}},"privateKey":{"t":"KeyObject","ctor":"PrivateKeyObject","type":"private","akt":"dh","details":{}}}}},
+ {"id":"generateKeyPairSync#243","fn":"generateKeyPairSync","args":["dh",{"group":"modp17"}],"result":{"returned":{"t":"pair","keys":["publicKey","privateKey"],"publicKey":{"t":"KeyObject","ctor":"PublicKeyObject","type":"public","akt":"dh","details":{}},"privateKey":{"t":"KeyObject","ctor":"PrivateKeyObject","type":"private","akt":"dh","details":{}}}}},
+ {"id":"generateKeyPairSync#244","fn":"generateKeyPairSync","args":["dh",{"group":"modp18"}],"result":{"returned":{"t":"pair","keys":["publicKey","privateKey"],"publicKey":{"t":"KeyObject","ctor":"PublicKeyObject","type":"public","akt":"dh","details":{}},"privateKey":{"t":"KeyObject","ctor":"PrivateKeyObject","type":"private","akt":"dh","details":{}}}}},
+ {"id":"generateKeyPairSync#245","fn":"generateKeyPairSync","args":["dh",{"group":"MODP14"}],"result":{"returned":{"t":"pair","keys":["publicKey","privateKey"],"publicKey":{"t":"KeyObject","ctor":"PublicKeyObject","type":"public","akt":"dh","details":{}},"privateKey":{"t":"KeyObject","ctor":"PrivateKeyObject","type":"private","akt":"dh","details":{}}}}},
+ {"id":"generateKeyPairSync#246","fn":"generateKeyPairSync","args":["dh",{"group":"ffdhe2048"}],"result":{"threw":{"t":"error","name":"Error","message":"Unknown DH group","code":"ERR_CRYPTO_UNKNOWN_DH_GROUP","own":["code"]}}},
+ {"id":"generateKeyPairSync#247","fn":"generateKeyPairSync","args":["dh",{"group":"foo"}],"result":{"threw":{"t":"error","name":"Error","message":"Unknown DH group","code":"ERR_CRYPTO_UNKNOWN_DH_GROUP","own":["code"]}}},
+ {"id":"generateKeyPairSync#248","fn":"generateKeyPairSync","args":["dh",{"group":"modp3"}],"result":{"threw":{"t":"error","name":"Error","message":"Unknown DH group","code":"ERR_CRYPTO_UNKNOWN_DH_GROUP","own":["code"]}}},
+ {"id":"generateKeyPairSync#249","fn":"generateKeyPairSync","args":["dh",{"group":"modp14","prime":{"$":"buffer","hex":"ffffffffffffffffc90fdaa22168c234c4c6628b80dc1cd129024e088a67cc74020bbea63b139b22514a08798e3404ddef9519b3cd3a431b302b0a6df25f14374fe1356d6d51c245e485b576625e7ec6f44c42e9a63a3620ffffffffffffffff"}}],"result":{"threw":{"t":"error","name":"TypeError","message":"Option \"group\" cannot be used in combination with option \"prime\"","code":"ERR_INCOMPATIBLE_OPTION_PAIR","own":["code"]}}},
+ {"id":"generateKeyPairSync#250","fn":"generateKeyPairSync","args":["dh",{"group":"modp14","primeLength":512}],"result":{"threw":{"t":"error","name":"TypeError","message":"Option \"group\" cannot be used in combination with option \"primeLength\"","code":"ERR_INCOMPATIBLE_OPTION_PAIR","own":["code"]}}},
+ {"id":"generateKeyPairSync#251","fn":"generateKeyPairSync","args":["dh",{"group":"modp14","generator":2}],"result":{"threw":{"t":"error","name":"TypeError","message":"Option \"group\" cannot be used in combination with option \"generator\"","code":"ERR_INCOMPATIBLE_OPTION_PAIR","own":["code"]}}},
+ {"id":"generateKeyPairSync#252","fn":"generateKeyPairSync","args":["dh",{"prime":{"$":"buffer","hex":"ffffffffffffffffc90fdaa22168c234c4c6628b80dc1cd129024e088a67cc74020bbea63b139b22514a08798e3404ddef9519b3cd3a431b302b0a6df25f14374fe1356d6d51c245e485b576625e7ec6f44c42e9a63a3620ffffffffffffffff"},"primeLength":512}],"result":{"threw":{"t":"error","name":"TypeError","message":"Option \"prime\" cannot be used in combination with option \"primeLength\"","code":"ERR_INCOMPATIBLE_OPTION_PAIR","own":["code"]}}},
+ {"id":"generateKeyPairSync#253","fn":"generateKeyPairSync","args":["dh",{"group":"modp14","prime":null,"primeLength":null,"generator":null}],"result":{"returned":{"t":"pair","keys":["publicKey","privateKey"],"publicKey":{"t":"KeyObject","ctor":"PublicKeyObject","type":"public","akt":"dh","details":{}},"privateKey":{"t":"KeyObject","ctor":"PrivateKeyObject","type":"private","akt":"dh","details":{}}}}},
+ {"id":"generateKeyPairSync#254","fn":"generateKeyPairSync","args":["dh",{"group":null,"prime":null,"primeLength":null}],"result":{"threw":{"t":"error","name":"TypeError","message":"At least one of the group, prime, or primeLength options is required","code":"ERR_MISSING_OPTION","own":["code"]}}},
+ {"id":"generateKeyPairSync#255","fn":"generateKeyPairSync","args":["dh",{"prime":"x"}],"result":{"threw":{"t":"error","name":"TypeError","message":"The \"options.prime\" property must be an instance of Buffer, TypedArray, or DataView. Received type string ('x')","code":"ERR_INVALID_ARG_TYPE","own":["code"]}}},
+ {"id":"generateKeyPairSync#256","fn":"generateKeyPairSync","args":["dh",{"prime":1}],"result":{"threw":{"t":"error","name":"TypeError","message":"The \"options.prime\" property must be an instance of Buffer, TypedArray, or DataView. Received type number (1)","code":"ERR_INVALID_ARG_TYPE","own":["code"]}}},
+ {"id":"generateKeyPairSync#257","fn":"generateKeyPairSync","args":["dh",{"prime":{"$":"ab","hex":"ffffffffffffffffc90fdaa22168c234c4c6628b80dc1cd129024e088a67cc74020bbea63b139b22514a08798e3404ddef9519b3cd3a431b302b0a6df25f14374fe1356d6d51c245e485b576625e7ec6f44c42e9a63a3620ffffffffffffffff"}}],"result":{"threw":{"t":"error","name":"TypeError","message":"The \"options.prime\" property must be an instance of Buffer, TypedArray, or DataView. Received an instance of ArrayBuffer","code":"ERR_INVALID_ARG_TYPE","own":["code"]}}},
+ {"id":"generateKeyPairSync#258","fn":"generateKeyPairSync","args":["dh",{"prime":{"$":"buffer","hex":"ffffffffffffffffc90fdaa22168c234c4c6628b80dc1cd129024e088a67cc74020bbea63b139b22514a08798e3404ddef9519b3cd3a431b302b0a6df25f14374fe1356d6d51c245e485b576625e7ec6f44c42e9a63a3620ffffffffffffffff"}}],"result":{"returned":{"t":"pair","keys":["publicKey","privateKey"],"publicKey":{"t":"KeyObject","ctor":"PublicKeyObject","type":"public","akt":"dh","details":{}},"privateKey":{"t":"KeyObject","ctor":"PrivateKeyObject","type":"private","akt":"dh","details":{}}}}},
+ {"id":"generateKeyPairSync#259","fn":"generateKeyPairSync","args":["dh",{"prime":{"$":"u8","hex":"ffffffffffffffffc90fdaa22168c234c4c6628b80dc1cd129024e088a67cc74020bbea63b139b22514a08798e3404ddef9519b3cd3a431b302b0a6df25f14374fe1356d6d51c245e485b576625e7ec6f44c42e9a63a3620ffffffffffffffff"}}],"result":{"returned":{"t":"pair","keys":["publicKey","privateKey"],"publicKey":{"t":"KeyObject","ctor":"PublicKeyObject","type":"public","akt":"dh","details":{}},"privateKey":{"t":"KeyObject","ctor":"PrivateKeyObject","type":"private","akt":"dh","details":{}}}}},
+ {"id":"generateKeyPairSync#260","fn":"generateKeyPairSync","args":["dh",{"prime":{"$":"dv","hex":"ffffffffffffffffc90fdaa22168c234c4c6628b80dc1cd129024e088a67cc74020bbea63b139b22514a08798e3404ddef9519b3cd3a431b302b0a6df25f14374fe1356d6d51c245e485b576625e7ec6f44c42e9a63a3620ffffffffffffffff"}}],"result":{"returned":{"t":"pair","keys":["publicKey","privateKey"],"publicKey":{"t":"KeyObject","ctor":"PublicKeyObject","type":"public","akt":"dh","details":{}},"privateKey":{"t":"KeyObject","ctor":"PrivateKeyObject","type":"private","akt":"dh","details":{}}}}},
+ {"id":"generateKeyPairSync#261","fn":"generateKeyPairSync","args":["dh",{"prime":{"$":"buffer","hex":"ffffffffffffffffc90fdaa22168c234c4c6628b80dc1cd129024e088a67cc74020bbea63b139b22514a08798e3404ddef9519b3cd3a431b302b0a6df25f14374fe1356d6d51c245e485b576625e7ec6f44c42e9a63a3620ffffffffffffffff"},"generator":5}],"result":{"returned":{"t":"pair","keys":["publicKey","privateKey"],"publicKey":{"t":"KeyObject","ctor":"PublicKeyObject","type":"public","akt":"dh","details":{}},"privateKey":{"t":"KeyObject","ctor":"PrivateKeyObject","type":"private","akt":"dh","details":{}}}}},
+ {"id":"generateKeyPairSync#262","fn":"generateKeyPairSync","args":["dh",{"prime":{"$":"buffer","hex":""}}],"result":{"threw":{"t":"error","name":"Error","message":"error:0280007E:Diffie-Hellman routines::modulus too small","own":[]}}},
+ {"id":"generateKeyPairSync#263","fn":"generateKeyPairSync","args":["dh",{"prime":{"$":"buffer","hex":"00"}}],"result":{"threw":{"t":"error","name":"Error","message":"error:0280007E:Diffie-Hellman routines::modulus too small","own":[]}}},
+ {"id":"generateKeyPairSync#264","fn":"generateKeyPairSync","args":["dh",{"prime":{"$":"buffer","hex":"0f"}}],"result":{"threw":{"t":"error","name":"Error","message":"error:0280007E:Diffie-Hellman routines::modulus too small","own":[]}}},
+ {"id":"generateKeyPairSync#265","fn":"generateKeyPairSync","args":["dh",{"prime":{"$":"buffer","hex":"17"}}],"result":{"threw":{"t":"error","name":"Error","message":"error:0280007E:Diffie-Hellman routines::modulus too small","own":[]}}},
+ {"id":"generateKeyPairSync#266","fn":"generateKeyPairSync","args":["dh",{"prime":{"$":"buffer","hex":"08"}}],"result":{"threw":{"t":"error","name":"Error","message":"error:0280007E:Diffie-Hellman routines::modulus too small","own":[]}}},
+ {"id":"generateKeyPairSync#267","fn":"generateKeyPairSync","args":["dh",{"prime":{"$":"buffer","hex":"fffffffb"}}],"result":{"threw":{"t":"error","name":"Error","message":"error:0280007E:Diffie-Hellman routines::modulus too small","own":[]}}},
+ {"id":"generateKeyPairSync#268","fn":"generateKeyPairSync","args":["dh",{"prime":{"$":"buffer","hex":"ffffffffffffffffc90fdaa22168c234c4c6628b80dc1cd129024e088a67cc74020bbea63b139b22514a08798e3404ddef9519b3cd3a431b302b0a6df25f14374fe1356d6d51c245e485b576625e7ec6f44c42e9a63a3620fffffffffffffffd"}}],"result":{"returned":{"t":"pair","keys":["publicKey","privateKey"],"publicKey":{"t":"KeyObject","ctor":"PublicKeyObject","type":"public","akt":"dh","details":{}},"privateKey":{"t":"KeyObject","ctor":"PrivateKeyObject","type":"private","akt":"dh","details":{}}}}},
+ {"id":"generateKeyPairSync#269","fn":"generateKeyPairSync","args":["dh",{"prime":{"$":"buffer","hex":"ffffffffffffffffc90fdaa22168c234c4c6628b80dc1cd129024e088a67cc74020bbea63b139b22514a08798e3404ddef9519b3cd3a431b302b0a6df25f14374fe1356d6d51c245e485b576625e7ec6f44c42e9a63a3620ffffffffffffffff"},"generator":"2"}],"result":{"threw":{"t":"error","name":"TypeError","message":"The \"options.generator\" property must be of type number. Received type string ('2')","code":"ERR_INVALID_ARG_TYPE","own":["code"]}}},
+ {"id":"generateKeyPairSync#270","fn":"generateKeyPairSync","args":["dh",{"prime":{"$":"buffer","hex":"ffffffffffffffffc90fdaa22168c234c4c6628b80dc1cd129024e088a67cc74020bbea63b139b22514a08798e3404ddef9519b3cd3a431b302b0a6df25f14374fe1356d6d51c245e485b576625e7ec6f44c42e9a63a3620ffffffffffffffff"},"generator":-1}],"result":{"threw":{"t":"error","name":"RangeError","message":"The value of \"options.generator\" is out of range. It must be >= 0 && <= 2147483647. Received -1","code":"ERR_OUT_OF_RANGE","own":["code"]}}},
+ {"id":"generateKeyPairSync#271","fn":"generateKeyPairSync","args":["dh",{"prime":{"$":"buffer","hex":"ffffffffffffffffc90fdaa22168c234c4c6628b80dc1cd129024e088a67cc74020bbea63b139b22514a08798e3404ddef9519b3cd3a431b302b0a6df25f14374fe1356d6d51c245e485b576625e7ec6f44c42e9a63a3620ffffffffffffffff"},"generator":0}],"result":{"returned":{"t":"pair","keys":["publicKey","privateKey"],"publicKey":{"t":"KeyObject","ctor":"PublicKeyObject","type":"public","akt":"dh","details":{}},"privateKey":{"t":"KeyObject","ctor":"PrivateKeyObject","type":"private","akt":"dh","details":{}}}}},
+ {"id":"generateKeyPairSync#272","fn":"generateKeyPairSync","args":["dh",{"prime":{"$":"buffer","hex":"ffffffffffffffffc90fdaa22168c234c4c6628b80dc1cd129024e088a67cc74020bbea63b139b22514a08798e3404ddef9519b3cd3a431b302b0a6df25f14374fe1356d6d51c245e485b576625e7ec6f44c42e9a63a3620ffffffffffffffff"},"generator":1}],"result":{"returned":{"t":"pair","keys":["publicKey","privateKey"],"publicKey":{"t":"KeyObject","ctor":"PublicKeyObject","type":"public","akt":"dh","details":{}},"privateKey":{"t":"KeyObject","ctor":"PrivateKeyObject","type":"private","akt":"dh","details":{}}}}},
+ {"id":"generateKeyPairSync#273","fn":"generateKeyPairSync","args":["dh",{"prime":{"$":"buffer","hex":"ffffffffffffffffc90fdaa22168c234c4c6628b80dc1cd129024e088a67cc74020bbea63b139b22514a08798e3404ddef9519b3cd3a431b302b0a6df25f14374fe1356d6d51c245e485b576625e7ec6f44c42e9a63a3620ffffffffffffffff"},"generator":2}],"result":{"returned":{"t":"pair","keys":["publicKey","privateKey"],"publicKey":{"t":"KeyObject","ctor":"PublicKeyObject","type":"public","akt":"dh","details":{}},"privateKey":{"t":"KeyObject","ctor":"PrivateKeyObject","type":"private","akt":"dh","details":{}}}}},
+ {"id":"generateKeyPairSync#274","fn":"generateKeyPairSync","args":["dh",{"prime":{"$":"buffer","hex":"ffffffffffffffffc90fdaa22168c234c4c6628b80dc1cd129024e088a67cc74020bbea63b139b22514a08798e3404ddef9519b3cd3a431b302b0a6df25f14374fe1356d6d51c245e485b576625e7ec6f44c42e9a63a3620ffffffffffffffff"},"generator":3}],"result":{"returned":{"t":"pair","keys":["publicKey","privateKey"],"publicKey":{"t":"KeyObject","ctor":"PublicKeyObject","type":"public","akt":"dh","details":{}},"privateKey":{"t":"KeyObject","ctor":"PrivateKeyObject","type":"private","akt":"dh","details":{}}}}},
+ {"id":"generateKeyPairSync#275","fn":"generateKeyPairSync","args":["dh",{"prime":{"$":"buffer","hex":"ffffffffffffffffc90fdaa22168c234c4c6628b80dc1cd129024e088a67cc74020bbea63b139b22514a08798e3404ddef9519b3cd3a431b302b0a6df25f14374fe1356d6d51c245e485b576625e7ec6f44c42e9a63a3620ffffffffffffffff"},"generator":5}],"result":{"returned":{"t":"pair","keys":["publicKey","privateKey"],"publicKey":{"t":"KeyObject","ctor":"PublicKeyObject","type":"public","akt":"dh","details":{}},"privateKey":{"t":"KeyObject","ctor":"PrivateKeyObject","type":"private","akt":"dh","details":{}}}}},
+ {"id":"generateKeyPairSync#276","fn":"generateKeyPairSync","args":["dh",{"prime":{"$":"buffer","hex":"ffffffffffffffffc90fdaa22168c234c4c6628b80dc1cd129024e088a67cc74020bbea63b139b22514a08798e3404ddef9519b3cd3a431b302b0a6df25f14374fe1356d6d51c245e485b576625e7ec6f44c42e9a63a3620ffffffffffffffff"},"generator":1.5}],"result":{"threw":{"t":"error","name":"RangeError","message":"The value of \"options.generator\" is out of range. It must be an integer. Received 1.5","code":"ERR_OUT_OF_RANGE","own":["code"]}}},
+ {"id":"generateKeyPairSync#277","fn":"generateKeyPairSync","args":["dh",{"prime":{"$":"buffer","hex":"ffffffffffffffffc90fdaa22168c234c4c6628b80dc1cd129024e088a67cc74020bbea63b139b22514a08798e3404ddef9519b3cd3a431b302b0a6df25f14374fe1356d6d51c245e485b576625e7ec6f44c42e9a63a3620ffffffffffffffff"},"generator":2147483648}],"result":{"threw":{"t":"error","name":"RangeError","message":"The value of \"options.generator\" is out of range. It must be >= 0 && <= 2147483647. Received 2147483648","code":"ERR_OUT_OF_RANGE","own":["code"]}}},
+ {"id":"generateKeyPairSync#278","fn":"generateKeyPairSync","args":["dh",{"prime":{"$":"buffer","hex":"ffffffffffffffffc90fdaa22168c234c4c6628b80dc1cd129024e088a67cc74020bbea63b139b22514a08798e3404ddef9519b3cd3a431b302b0a6df25f14374fe1356d6d51c245e485b576625e7ec6f44c42e9a63a3620ffffffffffffffff"},"generator":2147483647}],"result":{"returned":{"t":"pair","keys":["publicKey","privateKey"],"publicKey":{"t":"KeyObject","ctor":"PublicKeyObject","type":"public","akt":"dh","details":{}},"privateKey":{"t":"KeyObject","ctor":"PrivateKeyObject","type":"private","akt":"dh","details":{}}}}},
+ {"id":"generateKeyPairSync#279","fn":"generateKeyPairSync","args":["dh",{"primeLength":"512"}],"result":{"threw":{"t":"error","name":"TypeError","message":"The \"options.primeLength\" property must be of type number. Received type string ('512')","code":"ERR_INVALID_ARG_TYPE","own":["code"]}}},
+ {"id":"generateKeyPairSync#280","fn":"generateKeyPairSync","args":["dh",{"primeLength":-1}],"result":{"threw":{"t":"error","name":"RangeError","message":"The value of \"options.primeLength\" is out of range. It must be >= 0 && <= 2147483647. Received -1","code":"ERR_OUT_OF_RANGE","own":["code"]}}},
+ {"id":"generateKeyPairSync#281","fn":"generateKeyPairSync","args":["dh",{"primeLength":1.5}],"result":{"threw":{"t":"error","name":"RangeError","message":"The value of \"options.primeLength\" is out of range. It must be an integer. Received 1.5","code":"ERR_OUT_OF_RANGE","own":["code"]}}},
+ {"id":"generateKeyPairSync#282","fn":"generateKeyPairSync","args":["dh",{"primeLength":2147483648}],"result":{"threw":{"t":"error","name":"RangeError","message":"The value of \"options.primeLength\" is out of range. It must be >= 0 && <= 2147483647. Received 2147483648","code":"ERR_OUT_OF_RANGE","own":["code"]}}},
+ {"id":"generateKeyPairSync#283","fn":"generateKeyPairSync","args":["dh",{"primeLength":0}],"isolate":true,"result":{"threw":{"t":"error","name":"Error","message":"error:0280007E:Diffie-Hellman routines::modulus too small","own":[]}}},
+ {"id":"generateKeyPairSync#284","fn":"generateKeyPairSync","args":["dh",{"primeLength":1}],"isolate":true,"result":{"threw":{"t":"error","name":"Error","message":"error:0280007E:Diffie-Hellman routines::modulus too small","own":[]}}},
+ {"id":"generateKeyPairSync#285","fn":"generateKeyPairSync","args":["dh",{"primeLength":2}],"isolate":true,"result":{"threw":{"t":"error","name":"Error","message":"error:0280007E:Diffie-Hellman routines::modulus too small","own":[]}}},
+ {"id":"generateKeyPairSync#286","fn":"generateKeyPairSync","args":["dh",{"primeLength":3}],"isolate":true,"result":{"threw":{"t":"error","name":"Error","message":"error:0280007E:Diffie-Hellman routines::modulus too small","own":[]}}},
+ {"id":"generateKeyPairSync#287","fn":"generateKeyPairSync","args":["dh",{"primeLength":4}],"isolate":true,"result":{"threw":{"t":"error","name":"Error","message":"error:0280007E:Diffie-Hellman routines::modulus too small","own":[]}}},
+ {"id":"generateKeyPairSync#288","fn":"generateKeyPairSync","args":["dh",{"primeLength":5}],"isolate":true,"result":{"threw":{"t":"error","name":"Error","message":"error:0280007E:Diffie-Hellman routines::modulus too small","own":[]}}},
+ {"id":"generateKeyPairSync#289","fn":"generateKeyPairSync","args":["dh",{"primeLength":6}],"isolate":true,"result":{"threw":{"t":"error","name":"Error","message":"error:0280007E:Diffie-Hellman routines::modulus too small","own":[]}}},
+ {"id":"generateKeyPairSync#290","fn":"generateKeyPairSync","args":["dh",{"primeLength":7}],"isolate":true,"result":{"threw":{"t":"error","name":"Error","message":"error:0280007E:Diffie-Hellman routines::modulus too small","own":[]}}},
+ {"id":"generateKeyPairSync#291","fn":"generateKeyPairSync","args":["dh",{"primeLength":8}],"isolate":true,"result":{"threw":{"t":"error","name":"Error","message":"error:0280007E:Diffie-Hellman routines::modulus too small","own":[]}}},
+ {"id":"generateKeyPairSync#292","fn":"generateKeyPairSync","args":["dh",{"primeLength":16}],"isolate":true,"result":{"threw":{"t":"error","name":"Error","message":"error:0280007E:Diffie-Hellman routines::modulus too small","own":[]}}},
+ {"id":"generateKeyPairSync#293","fn":"generateKeyPairSync","args":["dh",{"primeLength":31}],"isolate":true,"result":{"threw":{"t":"error","name":"Error","message":"error:0280007E:Diffie-Hellman routines::modulus too small","own":[]}}},
+ {"id":"generateKeyPairSync#294","fn":"generateKeyPairSync","args":["dh",{"primeLength":32}],"isolate":true,"result":{"threw":{"t":"error","name":"Error","message":"error:0280007E:Diffie-Hellman routines::modulus too small","own":[]}}},
+ {"id":"generateKeyPairSync#295","fn":"generateKeyPairSync","args":["dh",{"primeLength":64}],"isolate":true,"result":{"threw":{"t":"error","name":"Error","message":"error:0280007E:Diffie-Hellman routines::modulus too small","own":[]}}},
+ {"id":"generateKeyPairSync#296","fn":"generateKeyPairSync","args":["dh",{"primeLength":128}],"isolate":true,"result":{"threw":{"t":"error","name":"Error","message":"error:0280007E:Diffie-Hellman routines::modulus too small","own":[]}}},
+ {"id":"generateKeyPairSync#297","fn":"generateKeyPairSync","args":["dh",{"primeLength":256}],"isolate":true,"result":{"threw":{"t":"error","name":"Error","message":"error:0280007E:Diffie-Hellman routines::modulus too small","own":[]}}},
+ {"id":"generateKeyPairSync#298","fn":"generateKeyPairSync","args":["dh",{"primeLength":511}],"isolate":true,"result":{"threw":{"t":"error","name":"Error","message":"error:0280007E:Diffie-Hellman routines::modulus too small","own":[]}}},
+ {"id":"generateKeyPairSync#299","fn":"generateKeyPairSync","args":["dh",{"primeLength":128,"generator":0}],"isolate":true,"result":{"threw":{"t":"error","name":"Error","message":"error:0280007E:Diffie-Hellman routines::modulus too small","own":[]}}},
+ {"id":"generateKeyPairSync#300","fn":"generateKeyPairSync","args":["dh",{"primeLength":128,"generator":1}],"isolate":true,"result":{"threw":{"t":"error","name":"Error","message":"error:0280007E:Diffie-Hellman routines::modulus too small","own":[]}}},
+ {"id":"generateKeyPairSync#301","fn":"generateKeyPairSync","args":["dh",{"primeLength":128,"generator":2}],"isolate":true,"result":{"threw":{"t":"error","name":"Error","message":"error:0280007E:Diffie-Hellman routines::modulus too small","own":[]}}},
+ {"id":"generateKeyPairSync#302","fn":"generateKeyPairSync","args":["dh",{"primeLength":128,"generator":3}],"isolate":true,"result":{"threw":{"t":"error","name":"Error","message":"error:0280007E:Diffie-Hellman routines::modulus too small","own":[]}}},
+ {"id":"generateKeyPairSync#303","fn":"generateKeyPairSync","args":["dh",{"primeLength":128,"generator":5}],"isolate":true,"result":{"threw":{"t":"error","name":"Error","message":"error:0280007E:Diffie-Hellman routines::modulus too small","own":[]}}},
+ {"id":"generateKeyPairSync#304","fn":"generateKeyPairSync","args":["dh",{"primeLength":128,"generator":7}],"isolate":true,"result":{"threw":{"t":"error","name":"Error","message":"error:0280007E:Diffie-Hellman routines::modulus too small","own":[]}}},
+ {"id":"generateKeyPairSync#305","fn":"generateKeyPairSync","args":["dh",{"group":"modp14","publicKeyEncoding":{"type":"spki","format":"pem"},"privateKeyEncoding":{"type":"pkcs8","format":"pem"}}],"result":{"returned":{"t":"pair","keys":["publicKey","privateKey"],"publicKey":{"t":"string","line":"-----BEGIN PUBLIC KEY-----"},"privateKey":{"t":"string","line":"-----BEGIN PRIVATE KEY-----"}}}},
+ {"id":"generateKeyPairSync#306","fn":"generateKeyPairSync","args":["dh",{"group":"modp14","publicKeyEncoding":{"format":"jwk"}}],"result":{"threw":{"t":"error","name":"Error","message":"Unsupported JWK Key Type.","code":"ERR_CRYPTO_JWK_UNSUPPORTED_KEY_TYPE","own":["code"]}}},
+ {"id":"generateKeyPairSync#307","fn":"generateKeyPairSync","args":["dh",{"group":"modp14","privateKeyEncoding":{"format":"jwk"}}],"result":{"threw":{"t":"error","name":"Error","message":"Unsupported JWK Key Type.","code":"ERR_CRYPTO_JWK_UNSUPPORTED_KEY_TYPE","own":["code"]}}},
+ {"id":"generateKeyPairSync#308","fn":"generateKeyPairSync","args":["dh",{"group":"modp14","publicKeyEncoding":{"type":"pkcs1","format":"pem"}}],"result":{"threw":{"t":"error","name":"Error","message":"The selected key encoding pkcs1 can only be used for RSA keys.","code":"ERR_CRYPTO_INCOMPATIBLE_KEY_OPTIONS","own":["code"]}}},
+ {"id":"generateKeyPairSync#309","fn":"generateKeyPairSync","args":["dh",{"group":"foo","publicKeyEncoding":{"type":"foo","format":"pem"}}],"result":{"threw":{"t":"error","name":"TypeError","message":"The property 'options.publicKeyEncoding.type' is invalid. Received 'foo'","code":"ERR_INVALID_ARG_VALUE","own":["code"]}}},
+ {"id":"generateKeyPair#310","fn":"generateKeyPair","args":["ed25519"],"result":{"threw":{"t":"error","name":"TypeError","message":"The \"callback\" argument must be of type function. Received undefined","code":"ERR_INVALID_ARG_TYPE","own":["code"]}}},
+ {"id":"generateKeyPair#311","fn":"generateKeyPair","args":["ed25519",{}],"result":{"threw":{"t":"error","name":"TypeError","message":"The \"callback\" argument must be of type function. Received undefined","code":"ERR_INVALID_ARG_TYPE","own":["code"]}}},
+ {"id":"generateKeyPair#312","fn":"generateKeyPair","args":["ed25519",1],"result":{"threw":{"t":"error","name":"TypeError","message":"The \"callback\" argument must be of type function. Received undefined","code":"ERR_INVALID_ARG_TYPE","own":["code"]}}},
+ {"id":"generateKeyPair#313","fn":"generateKeyPair","args":["ed25519",{},1],"result":{"threw":{"t":"error","name":"TypeError","message":"The \"callback\" argument must be of type function. Received type number (1)","code":"ERR_INVALID_ARG_TYPE","own":["code"]}}},
+ {"id":"generateKeyPair#314","fn":"generateKeyPair","args":["ed25519",{"$":"cb"}],"result":{"returned":{"t":"undefined"},"callback":{"sync":false,"this":"NidKeyPairGenJob","args":[{"t":"null"},{"t":"KeyObject","ctor":"PublicKeyObject","type":"public","akt":"ed25519","details":{}},{"t":"KeyObject","ctor":"PrivateKeyObject","type":"private","akt":"ed25519","details":{}}]}}},
+ {"id":"generateKeyPair#315","fn":"generateKeyPair","args":["ed25519",{},{"$":"cb"}],"result":{"returned":{"t":"undefined"},"callback":{"sync":false,"this":"NidKeyPairGenJob","args":[{"t":"null"},{"t":"KeyObject","ctor":"PublicKeyObject","type":"public","akt":"ed25519","details":{}},{"t":"KeyObject","ctor":"PrivateKeyObject","type":"private","akt":"ed25519","details":{}}]}}},
+ {"id":"generateKeyPair#316","fn":"generateKeyPair","args":["ed25519",{"$":"undefined"},{"$":"cb"}],"result":{"returned":{"t":"undefined"},"callback":{"sync":false,"this":"NidKeyPairGenJob","args":[{"t":"null"},{"t":"KeyObject","ctor":"PublicKeyObject","type":"public","akt":"ed25519","details":{}},{"t":"KeyObject","ctor":"PrivateKeyObject","type":"private","akt":"ed25519","details":{}}]}}},
+ {"id":"generateKeyPair#317","fn":"generateKeyPair","args":["ed25519",null,{"$":"cb"}],"result":{"threw":{"t":"error","name":"TypeError","message":"Cannot destructure property 'publicKeyEncoding' of 'options' as it is null.","own":[]}}},
+ {"id":"generateKeyPair#318","fn":"generateKeyPair","args":[1,{"$":"cb"}],"result":{"threw":{"t":"error","name":"TypeError","message":"The \"type\" argument must be of type string. Received type number (1)","code":"ERR_INVALID_ARG_TYPE","own":["code"]}}},
+ {"id":"generateKeyPair#319","fn":"generateKeyPair","args":["foo",{"$":"cb"}],"result":{"threw":{"t":"error","name":"TypeError","message":"The argument 'type' must be a supported key type. Received 'foo'","code":"ERR_INVALID_ARG_VALUE","own":["code"]}}},
+ {"id":"generateKeyPair#320","fn":"generateKeyPair","args":["foo",1],"result":{"threw":{"t":"error","name":"TypeError","message":"The \"callback\" argument must be of type function. Received undefined","code":"ERR_INVALID_ARG_TYPE","own":["code"]}}},
+ {"id":"generateKeyPair#321","fn":"generateKeyPair","args":["rsa",{"modulusLength":512},{"$":"cb"}],"result":{"returned":{"t":"undefined"},"callback":{"sync":false,"this":"RsaKeyPairGenJob","args":[{"t":"null"},{"t":"KeyObject","ctor":"PublicKeyObject","type":"public","akt":"rsa","details":{"modulusLength":512,"publicExponent":"65537n"}},{"t":"KeyObject","ctor":"PrivateKeyObject","type":"private","akt":"rsa","details":{"modulusLength":512,"publicExponent":"65537n"}}]}}},
+ {"id":"generateKeyPair#322","fn":"generateKeyPair","args":["rsa",{"modulusLength":100},{"$":"cb"}],"result":{"returned":{"t":"undefined"},"callback":{"sync":false,"this":"RsaKeyPairGenJob","args":[{"t":"error","name":"Error","message":"error:1C8000AB:Provider routines::key size too small","own":[]}]}}},
+ {"id":"generateKeyPair#323","fn":"generateKeyPair","args":["rsa",{"modulusLength":512,"publicExponent":2},{"$":"cb"}],"result":{"returned":{"t":"undefined"},"callback":{"sync":false,"this":"RsaKeyPairGenJob","args":[{"t":"error","name":"Error","message":"error:020000B2:rsa routines::pub exponent out of range","own":[]}]}}},
+ {"id":"generateKeyPair#324","fn":"generateKeyPair","args":["rsa",{},{"$":"cb"}],"result":{"threw":{"t":"error","name":"TypeError","message":"The \"options.modulusLength\" property must be of type number. Received undefined","code":"ERR_INVALID_ARG_TYPE","own":["code"]}}},
+ {"id":"generateKeyPair#325","fn":"generateKeyPair","args":["rsa",{"$":"cb"}],"result":{"threw":{"t":"error","name":"TypeError","message":"The \"options\" argument must be of type object. Received undefined","code":"ERR_INVALID_ARG_TYPE","own":["code"]}}},
+ {"id":"generateKeyPair#326","fn":"generateKeyPair","args":["rsa",{"modulusLength":512,"publicKeyEncoding":{"type":"spki","format":"pem"},"privateKeyEncoding":{"type":"pkcs8","format":"pem","cipher":"aes-256-cbc","passphrase":"x"}},{"$":"cb"}],"result":{"returned":{"t":"undefined"},"callback":{"sync":false,"this":"RsaKeyPairGenJob","args":[{"t":"null"},{"t":"string","line":"-----BEGIN PUBLIC KEY-----"},{"t":"string","line":"-----BEGIN ENCRYPTED PRIVATE KEY-----"}]}}},
+ {"id":"generateKeyPair#327","fn":"generateKeyPair","args":["rsa",{"modulusLength":512,"privateKeyEncoding":{"type":"pkcs8","format":"pem","cipher":"foo","passphrase":"x"}},{"$":"cb"}],"result":{"threw":{"t":"error","name":"Error","message":"Unknown cipher","code":"ERR_CRYPTO_UNKNOWN_CIPHER","own":["code"]}}},
+ {"id":"generateKeyPair#328","fn":"generateKeyPair","args":["rsa",{"modulusLength":512,"publicKeyEncoding":{"format":"jwk"},"privateKeyEncoding":{"format":"jwk"}},{"$":"cb"}],"result":{"returned":{"t":"undefined"},"callback":{"sync":false,"this":"RsaKeyPairGenJob","args":[{"t":"null"},{"t":"jwk","kty":"RSA","keys":["e","kty","n"]},{"t":"jwk","kty":"RSA","keys":["d","dp","dq","e","kty","n","p","q","qi"]}]}}},
+ {"id":"generateKeyPair#329","fn":"generateKeyPair","args":["rsa-pss",{"modulusLength":512,"hashAlgorithm":"foo"},{"$":"cb"}],"result":{"threw":{"t":"error","name":"TypeError","message":"Invalid digest: foo","code":"ERR_CRYPTO_INVALID_DIGEST","own":["code"]}}},
+ {"id":"generateKeyPair#330","fn":"generateKeyPair","args":["rsa-pss",{"modulusLength":512,"hashAlgorithm":"sha256"},{"$":"cb"}],"result":{"returned":{"t":"undefined"},"callback":{"sync":false,"this":"RsaKeyPairGenJob","args":[{"t":"null"},{"t":"KeyObject","ctor":"PublicKeyObject","type":"public","akt":"rsa-pss","details":{"modulusLength":512,"publicExponent":"65537n","hashAlgorithm":"sha256","mgf1HashAlgorithm":"sha256","saltLength":32}},{"t":"KeyObject","ctor":"PrivateKeyObject","type":"private","akt":"rsa-pss","details":{"modulusLength":512,"publicExponent":"65537n","hashAlgorithm":"sha256","mgf1HashAlgorithm":"sha256","saltLength":32}}]}}},
+ {"id":"generateKeyPair#331","fn":"generateKeyPair","args":["rsa-pss",{"modulusLength":512,"hash":"sha256"},{"$":"cb"}],"result":{"returned":{"t":"undefined"},"callback":{"sync":false,"this":"RsaKeyPairGenJob","args":[{"t":"null"},{"t":"KeyObject","ctor":"PublicKeyObject","type":"public","akt":"rsa-pss","details":{"modulusLength":512,"publicExponent":"65537n","hashAlgorithm":"sha256","mgf1HashAlgorithm":"sha256","saltLength":32}},{"t":"KeyObject","ctor":"PrivateKeyObject","type":"private","akt":"rsa-pss","details":{"modulusLength":512,"publicExponent":"65537n","hashAlgorithm":"sha256","mgf1HashAlgorithm":"sha256","saltLength":32}}]},"warnings":[["\"options.hash\" is deprecated, use \"options.hashAlgorithm\" instead.","DeprecationWarning","DEP0154"]]}},
+ {"id":"generateKeyPair#332","fn":"generateKeyPair","args":["ec",{"namedCurve":"foo"},{"$":"cb"}],"result":{"threw":{"t":"error","name":"TypeError","message":"Invalid EC curve name","code":"ERR_CRYPTO_INVALID_CURVE","own":["code"]}}},
+ {"id":"generateKeyPair#333","fn":"generateKeyPair","args":["ec",{"namedCurve":"P-256"},{"$":"cb"}],"result":{"returned":{"t":"undefined"},"callback":{"sync":false,"this":"EcKeyPairGenJob","args":[{"t":"null"},{"t":"KeyObject","ctor":"PublicKeyObject","type":"public","akt":"ec","details":{"namedCurve":"prime256v1"}},{"t":"KeyObject","ctor":"PrivateKeyObject","type":"private","akt":"ec","details":{"namedCurve":"prime256v1"}}]}}},
+ {"id":"generateKeyPair#334","fn":"generateKeyPair","args":["ec",{"namedCurve":"P-256","publicKeyEncoding":{"format":"jwk"},"privateKeyEncoding":{"type":"sec1","format":"pem"}},{"$":"cb"}],"result":{"returned":{"t":"undefined"},"callback":{"sync":false,"this":"EcKeyPairGenJob","args":[{"t":"null"},{"t":"jwk","kty":"EC","crv":"P-256","keys":["crv","kty","x","y"]},{"t":"string","line":"-----BEGIN EC PRIVATE KEY-----"}]}}},
+ {"id":"generateKeyPair#335","fn":"generateKeyPair","args":["x25519",{"$":"cb"}],"result":{"returned":{"t":"undefined"},"callback":{"sync":false,"this":"NidKeyPairGenJob","args":[{"t":"null"},{"t":"KeyObject","ctor":"PublicKeyObject","type":"public","akt":"x25519","details":{}},{"t":"KeyObject","ctor":"PrivateKeyObject","type":"private","akt":"x25519","details":{}}]}}},
+ {"id":"generateKeyPair#336","fn":"generateKeyPair","args":["ed448",{"publicKeyEncoding":{"type":"spki","format":"der"}},{"$":"cb"}],"result":{"returned":{"t":"undefined"},"callback":{"sync":false,"this":"NidKeyPairGenJob","args":[{"t":"null"},{"t":"Buffer"},{"t":"KeyObject","ctor":"PrivateKeyObject","type":"private","akt":"ed448","details":{}}]}}},
+ {"id":"generateKeyPair#337","fn":"generateKeyPair","args":["dh",{"group":"foo"},{"$":"cb"}],"result":{"threw":{"t":"error","name":"Error","message":"Unknown DH group","code":"ERR_CRYPTO_UNKNOWN_DH_GROUP","own":["code"]}}},
+ {"id":"generateKeyPair#338","fn":"generateKeyPair","args":["dh",{"group":"modp14"},{"$":"cb"}],"result":{"returned":{"t":"undefined"},"callback":{"sync":false,"this":"DhKeyPairGenJob","args":[{"t":"null"},{"t":"KeyObject","ctor":"PublicKeyObject","type":"public","akt":"dh","details":{}},{"t":"KeyObject","ctor":"PrivateKeyObject","type":"private","akt":"dh","details":{}}]}}},
+ {"id":"generateKeyPair#339","fn":"generateKeyPair","args":["dh",{},{"$":"cb"}],"result":{"threw":{"t":"error","name":"TypeError","message":"At least one of the group, prime, or primeLength options is required","code":"ERR_MISSING_OPTION","own":["code"]}}},
+ {"id":"generateKeyPair#340","fn":"generateKeyPair","args":["dh",{"prime":{"$":"buffer","hex":"08"}},{"$":"cb"}],"result":{"returned":{"t":"undefined"},"callback":{"sync":false,"this":"DhKeyPairGenJob","args":[{"t":"error","name":"Error","message":"error:0280007E:Diffie-Hellman routines::modulus too small","own":[]}]}}},
+ {"id":"generateKeyPair#341","fn":"generateKeyPair","args":["dh",{"primeLength":64},{"$":"cb"}],"result":{"returned":{"t":"undefined"},"callback":{"sync":false,"this":"DhKeyPairGenJob","args":[{"t":"error","name":"Error","message":"error:0280007E:Diffie-Hellman routines::modulus too small","own":[]}]}}},
+ {"id":"generateKeyPair#342","fn":"generateKeyPair","args":["dh",{"primeLength":2},{"$":"cb"}],"result":{"returned":{"t":"undefined"},"callback":{"sync":false,"this":"DhKeyPairGenJob","args":[{"t":"error","name":"Error","message":"error:0280007E:Diffie-Hellman routines::modulus too small","own":[]}]}}},
+ {"id":"generateKeyPair#343","fn":"generateKeyPair","args":["dsa",{"modulusLength":"x"},{"$":"cb"}],"result":{"threw":{"t":"error","name":"TypeError","message":"The \"options.modulusLength\" property must be of type number. Received type string ('x')","code":"ERR_INVALID_ARG_TYPE","own":["code"]}}},
+ {"id":"generateKeyPair#344","fn":"generateKeyPair","args":["ml-dsa-44",{"$":"cb"}],"result":{"returned":{"t":"undefined"},"callback":{"sync":false,"this":"NidKeyPairGenJob","args":[{"t":"null"},{"t":"KeyObject","ctor":"PublicKeyObject","type":"public","akt":"ml-dsa-44","details":{}},{"t":"KeyObject","ctor":"PrivateKeyObject","type":"private","akt":"ml-dsa-44","details":{}}]}}},
+ {"id":"generateKeySync#345","fn":"generateKeySync","args":[],"result":{"threw":{"t":"error","name":"TypeError","message":"The \"type\" argument must be of type string. Received undefined","code":"ERR_INVALID_ARG_TYPE","own":["code"]}}},
+ {"id":"generateKeySync#346","fn":"generateKeySync","args":[1],"result":{"threw":{"t":"error","name":"TypeError","message":"The \"type\" argument must be of type string. Received type number (1)","code":"ERR_INVALID_ARG_TYPE","own":["code"]}}},
+ {"id":"generateKeySync#347","fn":"generateKeySync","args":["foo"],"result":{"threw":{"t":"error","name":"TypeError","message":"The \"options\" argument must be of type object. Received undefined","code":"ERR_INVALID_ARG_TYPE","own":["code"]}}},
+ {"id":"generateKeySync#348","fn":"generateKeySync","args":["foo",{}],"result":{"threw":{"t":"error","name":"TypeError","message":"The argument 'type' must be a supported key type. Received 'foo'","code":"ERR_INVALID_ARG_VALUE","own":["code"]}}},
+ {"id":"generateKeySync#349","fn":"generateKeySync","args":["hmac"],"result":{"threw":{"t":"error","name":"TypeError","message":"The \"options\" argument must be of type object. Received undefined","code":"ERR_INVALID_ARG_TYPE","own":["code"]}}},
+ {"id":"generateKeySync#350","fn":"generateKeySync","args":["hmac",null],"result":{"threw":{"t":"error","name":"TypeError","message":"The \"options\" argument must be of type object. Received null","code":"ERR_INVALID_ARG_TYPE","own":["code"]}}},
+ {"id":"generateKeySync#351","fn":"generateKeySync","args":["hmac",1],"result":{"threw":{"t":"error","name":"TypeError","message":"The \"options\" argument must be of type object. Received type number (1)","code":"ERR_INVALID_ARG_TYPE","own":["code"]}}},
+ {"id":"generateKeySync#352","fn":"generateKeySync","args":["hmac",{}],"result":{"threw":{"t":"error","name":"TypeError","message":"The \"options.length\" property must be of type number. Received undefined","code":"ERR_INVALID_ARG_TYPE","own":["code"]}}},
+ {"id":"generateKeySync#353","fn":"generateKeySync","args":[1,1],"result":{"threw":{"t":"error","name":"TypeError","message":"The \"type\" argument must be of type string. Received type number (1)","code":"ERR_INVALID_ARG_TYPE","own":["code"]}}},
+ {"id":"generateKeySync#354","fn":"generateKeySync","args":["HMAC",{"length":8}],"result":{"threw":{"t":"error","name":"TypeError","message":"The argument 'type' must be a supported key type. Received 'HMAC'","code":"ERR_INVALID_ARG_VALUE","own":["code"]}}},
+ {"id":"generateKeySync#355","fn":"generateKeySync","args":["hmac",{"length":"8"}],"result":{"threw":{"t":"error","name":"TypeError","message":"The \"options.length\" property must be of type number. Received type string ('8')","code":"ERR_INVALID_ARG_TYPE","own":["code"]}}},
+ {"id":"generateKeySync#356","fn":"generateKeySync","args":["hmac",{"length":7}],"result":{"threw":{"t":"error","name":"RangeError","message":"The value of \"options.length\" is out of range. It must be >= 8 && <= 2147483647. Received 7","code":"ERR_OUT_OF_RANGE","own":["code"]}}},
+ {"id":"generateKeySync#357","fn":"generateKeySync","args":["hmac",{"length":0}],"result":{"threw":{"t":"error","name":"RangeError","message":"The value of \"options.length\" is out of range. It must be >= 8 && <= 2147483647. Received 0","code":"ERR_OUT_OF_RANGE","own":["code"]}}},
+ {"id":"generateKeySync#358","fn":"generateKeySync","args":["hmac",{"length":-1}],"result":{"threw":{"t":"error","name":"RangeError","message":"The value of \"options.length\" is out of range. It must be >= 8 && <= 2147483647. Received -1","code":"ERR_OUT_OF_RANGE","own":["code"]}}},
+ {"id":"generateKeySync#359","fn":"generateKeySync","args":["hmac",{"length":8}],"result":{"returned":{"t":"KeyObject","ctor":"SecretKeyObject","type":"secret","size":1}}},
+ {"id":"generateKeySync#360","fn":"generateKeySync","args":["hmac",{"length":9}],"result":{"returned":{"t":"KeyObject","ctor":"SecretKeyObject","type":"secret","size":1}}},
+ {"id":"generateKeySync#361","fn":"generateKeySync","args":["hmac",{"length":15}],"result":{"returned":{"t":"KeyObject","ctor":"SecretKeyObject","type":"secret","size":1}}},
+ {"id":"generateKeySync#362","fn":"generateKeySync","args":["hmac",{"length":16}],"result":{"returned":{"t":"KeyObject","ctor":"SecretKeyObject","type":"secret","size":2}}},
+ {"id":"generateKeySync#363","fn":"generateKeySync","args":["hmac",{"length":17}],"result":{"returned":{"t":"KeyObject","ctor":"SecretKeyObject","type":"secret","size":2}}},
+ {"id":"generateKeySync#364","fn":"generateKeySync","args":["hmac",{"length":255}],"result":{"returned":{"t":"KeyObject","ctor":"SecretKeyObject","type":"secret","size":31}}},
+ {"id":"generateKeySync#365","fn":"generateKeySync","args":["hmac",{"length":256}],"result":{"returned":{"t":"KeyObject","ctor":"SecretKeyObject","type":"secret","size":32}}},
+ {"id":"generateKeySync#366","fn":"generateKeySync","args":["hmac",{"length":257}],"result":{"returned":{"t":"KeyObject","ctor":"SecretKeyObject","type":"secret","size":32}}},
+ {"id":"generateKeySync#367","fn":"generateKeySync","args":["hmac",{"length":512}],"result":{"returned":{"t":"KeyObject","ctor":"SecretKeyObject","type":"secret","size":64}}},
+ {"id":"generateKeySync#368","fn":"generateKeySync","args":["hmac",{"length":1.5}],"result":{"threw":{"t":"error","name":"RangeError","message":"The value of \"options.length\" is out of range. It must be an integer. Received 1.5","code":"ERR_OUT_OF_RANGE","own":["code"]}}},
+ {"id":"generateKeySync#369","fn":"generateKeySync","args":["hmac",{"length":2147483648}],"result":{"threw":{"t":"error","name":"RangeError","message":"The value of \"options.length\" is out of range. It must be >= 8 && <= 2147483647. Received 2147483648","code":"ERR_OUT_OF_RANGE","own":["code"]}}},
+ {"id":"generateKeySync#370","fn":"generateKeySync","args":["hmac",{"length":null}],"result":{"threw":{"t":"error","name":"TypeError","message":"The \"options.length\" property must be of type number. Received null","code":"ERR_INVALID_ARG_TYPE","own":["code"]}}},
+ {"id":"generateKeySync#371","fn":"generateKeySync","args":["aes",{"length":128}],"result":{"returned":{"t":"KeyObject","ctor":"SecretKeyObject","type":"secret","size":16}}},
+ {"id":"generateKeySync#372","fn":"generateKeySync","args":["aes",{"length":192}],"result":{"returned":{"t":"KeyObject","ctor":"SecretKeyObject","type":"secret","size":24}}},
+ {"id":"generateKeySync#373","fn":"generateKeySync","args":["aes",{"length":256}],"result":{"returned":{"t":"KeyObject","ctor":"SecretKeyObject","type":"secret","size":32}}},
+ {"id":"generateKeySync#374","fn":"generateKeySync","args":["aes",{"length":100}],"result":{"threw":{"t":"error","name":"TypeError","message":"The property 'options.length' must be one of: 128, 192, 256. Received 100","code":"ERR_INVALID_ARG_VALUE","own":["code"]}}},
+ {"id":"generateKeySync#375","fn":"generateKeySync","args":["aes",{"length":"128"}],"result":{"threw":{"t":"error","name":"TypeError","message":"The property 'options.length' must be one of: 128, 192, 256. Received '128'","code":"ERR_INVALID_ARG_VALUE","own":["code"]}}},
+ {"id":"generateKeySync#376","fn":"generateKeySync","args":["aes",{"length":0}],"result":{"threw":{"t":"error","name":"TypeError","message":"The property 'options.length' must be one of: 128, 192, 256. Received 0","code":"ERR_INVALID_ARG_VALUE","own":["code"]}}},
+ {"id":"generateKeySync#377","fn":"generateKeySync","args":["aes",{"length":129}],"result":{"threw":{"t":"error","name":"TypeError","message":"The property 'options.length' must be one of: 128, 192, 256. Received 129","code":"ERR_INVALID_ARG_VALUE","own":["code"]}}},
+ {"id":"generateKeySync#378","fn":"generateKeySync","args":["aes",{"length":null}],"result":{"threw":{"t":"error","name":"TypeError","message":"The property 'options.length' must be one of: 128, 192, 256. Received null","code":"ERR_INVALID_ARG_VALUE","own":["code"]}}},
+ {"id":"generateKeySync#379","fn":"generateKeySync","args":["aes",{"length":128.5}],"result":{"threw":{"t":"error","name":"TypeError","message":"The property 'options.length' must be one of: 128, 192, 256. Received 128.5","code":"ERR_INVALID_ARG_VALUE","own":["code"]}}},
+ {"id":"generateKeySync#380","fn":"generateKeySync","args":["aes",{}],"result":{"threw":{"t":"error","name":"TypeError","message":"The property 'options.length' must be one of: 128, 192, 256. Received undefined","code":"ERR_INVALID_ARG_VALUE","own":["code"]}}},
+ {"id":"generateKeySync#381","fn":"generateKeySync","args":["aes"],"result":{"threw":{"t":"error","name":"TypeError","message":"The \"options\" argument must be of type object. Received undefined","code":"ERR_INVALID_ARG_TYPE","own":["code"]}}},
+ {"id":"generateKey#382","fn":"generateKey","args":["hmac",{"length":64}],"result":{"threw":{"t":"error","name":"TypeError","message":"The \"callback\" argument must be of type function. Received undefined","code":"ERR_INVALID_ARG_TYPE","own":["code"]}}},
+ {"id":"generateKey#383","fn":"generateKey","args":["hmac",{"length":64},1],"result":{"threw":{"t":"error","name":"TypeError","message":"The \"callback\" argument must be of type function. Received type number (1)","code":"ERR_INVALID_ARG_TYPE","own":["code"]}}},
+ {"id":"generateKey#384","fn":"generateKey","args":["hmac",{"$":"cb"}],"result":{"threw":{"t":"error","name":"TypeError","message":"The \"options\" argument must be of type object. Received undefined","code":"ERR_INVALID_ARG_TYPE","own":["code"]}}},
+ {"id":"generateKey#385","fn":"generateKey","args":["hmac",{"length":64},{"$":"cb"}],"result":{"returned":{"t":"undefined"},"callback":{"sync":false,"this":"SecretKeyGenJob","args":[{"t":"null"},{"t":"KeyObject","ctor":"SecretKeyObject","type":"secret","size":8}]}}},
+ {"id":"generateKey#386","fn":"generateKey","args":["hmac",{"length":7},{"$":"cb"}],"result":{"threw":{"t":"error","name":"RangeError","message":"The value of \"options.length\" is out of range. It must be >= 8 && <= 2147483647. Received 7","code":"ERR_OUT_OF_RANGE","own":["code"]}}},
+ {"id":"generateKey#387","fn":"generateKey","args":["aes",{"length":256},{"$":"cb"}],"result":{"returned":{"t":"undefined"},"callback":{"sync":false,"this":"SecretKeyGenJob","args":[{"t":"null"},{"t":"KeyObject","ctor":"SecretKeyObject","type":"secret","size":32}]}}},
+ {"id":"generateKey#388","fn":"generateKey","args":["aes",{"length":1},{"$":"cb"}],"result":{"threw":{"t":"error","name":"TypeError","message":"The property 'options.length' must be one of: 128, 192, 256. Received 1","code":"ERR_INVALID_ARG_VALUE","own":["code"]}}},
+ {"id":"generateKey#389","fn":"generateKey","args":["foo",{},{"$":"cb"}],"result":{"threw":{"t":"error","name":"TypeError","message":"The argument 'type' must be a supported key type. Received 'foo'","code":"ERR_INVALID_ARG_VALUE","own":["code"]}}},
+ {"id":"generateKey#390","fn":"generateKey","args":[1,{},{"$":"cb"}],"result":{"threw":{"t":"error","name":"TypeError","message":"The \"type\" argument must be of type string. Received type number (1)","code":"ERR_INVALID_ARG_TYPE","own":["code"]}}},
+ {"id":"generateKey#391","fn":"generateKey","args":["hmac",{"length":9},{"$":"cb"}],"result":{"returned":{"t":"undefined"},"callback":{"sync":false,"this":"SecretKeyGenJob","args":[{"t":"null"},{"t":"KeyObject","ctor":"SecretKeyObject","type":"secret","size":1}]}}},
+ {"id":"generateKey#392","fn":"generateKey","args":["hmac",null,{"$":"cb"}],"result":{"threw":{"t":"error","name":"TypeError","message":"The \"options\" argument must be of type object. Received null","code":"ERR_INVALID_ARG_TYPE","own":["code"]}}}
+ ]
+}

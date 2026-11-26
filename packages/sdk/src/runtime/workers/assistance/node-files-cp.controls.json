@@ -1,0 +1,1964 @@
+{
+ "node": "v24.18.1",
+ "recorder": "// Recorder for the node-files-*.controls.json files. Every scenario is the body of an async function of\n// (fs, h) that the test runs again, unchanged, against the emulated fs. Run with Node 24.18.1 on a tmpfs\n// (its readdir order is the byte order the file service's readdir has):\n//   docker run --rm --tmpfs /work -v \"$PWD\":/w:ro node:24.18.1-alpine node /w/record.cjs /w/sc/<set> > node-files-<set>.controls.json\nconst fs = require(\"fs\"), path = require(\"path\"), util = require(\"util\");\nconst dir = process.argv[2], out = {};\nfunction describe(e) {\n  if (!(e instanceof Error)) return { thrown: String(e) };\n  const d = { name: e.name, ctor: e.constructor.name, message: e.message };\n  for (const k of [\"code\", \"errno\", \"syscall\", \"path\", \"dest\"]) if (e[k] !== undefined) d[k] = e[k];\n  return d;\n}\nfunction helpers(warnings) {\n  return {\n    Buffer, custom: util.promisify.custom, warnings, err: describe,\n    attempt(fn) { try { return { ok: fn() }; } catch (e) { return { error: describe(e) }; } },\n    async attemptAsync(fn) { try { return { ok: await fn() }; } catch (e) { return { error: describe(e) }; } },\n    turn: () => new Promise(resolve => setImmediate(resolve)),\n    // Long enough for several polls of a 20 ms stat watcher; the replay fires its timer instead.\n    wait: () => new Promise(resolve => setTimeout(resolve, 150)),\n    dirent: d => d === null ? null : [Buffer.isBuffer(d.name) ? { hex: d.name.toString(\"hex\") } : d.name, Buffer.isBuffer(d.parentPath) ? { hex: d.parentPath.toString(\"hex\") } : d.parentPath,\n      d.isDirectory() ? \"dir\" : d.isSymbolicLink() ? \"link\" : d.isFile() ? \"file\" : \"other\"],\n    fn: f => typeof f === \"function\" ? [f.name, f.length] : typeof f,\n  };\n}\n(async () => {\n  for (const file of fs.readdirSync(dir).sort()) {\n    for (const name of fs.readdirSync(\"/work\")) fs.rmSync(\"/work/\" + name, { recursive: true, force: true });\n    process.chdir(\"/work\");\n    const warnings = [], onWarning = w => warnings.push([w.name, w.message]);\n    process.on(\"warning\", onWarning);\n    const source = fs.readFileSync(path.join(dir, file), \"utf8\");\n    const result = await new Function(\"fs\", \"h\", \"return (async () => {\" + source + \"\\n})()\")(fs, helpers(warnings));\n    process.off(\"warning\", onWarning);\n    out[file.replace(/\\.js$/, \"\")] = { source, result: JSON.parse(JSON.stringify(result)) };\n  }\n  console.log(JSON.stringify({ node: process.version, recorder: fs.readFileSync(__filename, \"utf8\"), scenarios: out }, null, 1));\n})();\n",
+ "scenarios": {
+  "matrix": {
+   "source": "const tree = root => { const out = {}; const walk = (dir, at) => { for (const e of fs.readdirSync(dir, { withFileTypes: true })) { const p = dir + \"/\" + e.name, k = at + e.name;\n  if (e.isSymbolicLink()) out[k] = \"link -> \" + fs.readlinkSync(p); else if (e.isDirectory()) { out[k] = \"dir\"; walk(p, k + \"/\"); } else out[k] = \"file:\" + fs.readFileSync(p, \"utf8\"); } }; walk(root, \"\"); return out; };\n// tmpfs lists a directory newest first, so each directory's entries are created in descending name order: Node then walks\n// them in the byte order the file service lists in.\nconst seed = root => { fs.mkdirSync(root + \"/d/sub\", { recursive: true }); fs.symlinkSync(\"a\", root + \"/d/rel\"); fs.symlinkSync(\"/work/\" + root + \"/d/sub\", root + \"/d/abs\"); fs.writeFileSync(root + \"/d/a\", \"A\"); fs.writeFileSync(root + \"/d/sub/b\", \"B\");\n  fs.writeFileSync(root + \"/f\", \"F\"); fs.symlinkSync(\"f\", root + \"/lf\"); fs.symlinkSync(\"d\", root + \"/ld\"); fs.symlinkSync(\"missing\", root + \"/dangling\"); fs.symlinkSync(\"old\", root + \"/lold\");\n  fs.writeFileSync(root + \"/old\", \"OLD\"); fs.mkdirSync(root + \"/ed/sub\", { recursive: true }); fs.writeFileSync(root + \"/ed/keep\", \"K\"); fs.writeFileSync(root + \"/ed/a\", \"old-a\");\n  fs.mkdirSync(root + \"/clash\"); fs.mkdirSync(root + \"/clash/a\"); fs.writeFileSync(root + \"/clash/sub\", \"S\"); fs.mkdirSync(root + \"/links\"); fs.symlinkSync(\"elsewhere\", root + \"/links/rel\"); fs.symlinkSync(\"/work/\" + root + \"/ed\", root + \"/links/abs\"); };\nconst calls = [];\nconst cases = {\n  fileNew: r => [r + \"/f\", r + \"/out\"], fileOverwrite: r => [r + \"/f\", r + \"/old\"], fileNoForce: r => [r + \"/f\", r + \"/old\", { force: false }],\n  fileErrorOnExist: r => [r + \"/f\", r + \"/old\", { force: false, errorOnExist: true }], fileErrorOnExistForce: r => [r + \"/f\", r + \"/old\", { errorOnExist: true }],\n  dirNoRecursive: r => [r + \"/d\", r + \"/out\"], dirRecursive: r => [r + \"/d\", r + \"/out\", { recursive: true }], dirMerge: r => [r + \"/d\", r + \"/ed\", { recursive: true }],\n  dirMergeNoForce: r => [r + \"/d\", r + \"/ed\", { recursive: true, force: false }], dirMergeErrorOnExist: r => [r + \"/d\", r + \"/ed\", { recursive: true, force: false, errorOnExist: true }],\n  dirToFile: r => [r + \"/d\", r + \"/old\", { recursive: true }], fileToDir: r => [r + \"/f\", r + \"/ed\"], same: r => [r + \"/f\", r + \"/f\"], sameDir: r => [r + \"/d\", r + \"/d\", { recursive: true }],\n  intoSelf: r => [r + \"/d\", r + \"/d/sub/copy\", { recursive: true }], intoSelfNoRecursive: r => [r + \"/d\", r + \"/d/sub/copy\"], missing: r => [r + \"/nope\", r + \"/out\"], missingRecursive: r => [r + \"/nope\", r + \"/out\", { recursive: true }],\n  nestedDest: r => [r + \"/f\", r + \"/x/y/z/out\"], nestedDestDir: r => [r + \"/d\", r + \"/x/y/out\", { recursive: true }], destUnderFile: r => [r + \"/f\", r + \"/old/out\"],\n  linkFile: r => [r + \"/lf\", r + \"/out\"], linkFileVerbatim: r => [r + \"/lf\", r + \"/out\", { verbatimSymlinks: true }], linkFileDereference: r => [r + \"/lf\", r + \"/out\", { dereference: true }],\n  linkDir: r => [r + \"/ld\", r + \"/out\"], linkDirRecursive: r => [r + \"/ld\", r + \"/out\", { recursive: true }], linkDirDereference: r => [r + \"/ld\", r + \"/out\", { recursive: true, dereference: true }],\n  dangling: r => [r + \"/dangling\", r + \"/out\"], danglingDereference: r => [r + \"/dangling\", r + \"/out\", { dereference: true }],\n  linkOverFile: r => [r + \"/lf\", r + \"/old\"], linkOverLink: r => [r + \"/lf\", r + \"/ld\"], fileOverLink: r => [r + \"/f\", r + \"/lf\"],\n  dirVerbatim: r => [r + \"/d\", r + \"/out\", { recursive: true, verbatimSymlinks: true }], dirDereference: r => [r + \"/d\", r + \"/out\", { recursive: true, dereference: true }],\n  filter: r => [r + \"/d\", r + \"/out\", { recursive: true, filter: (s, d) => { calls.push([s, d]); return !s.endsWith(\"/a\") && !s.endsWith(\"/abs\"); } }],\n  filterRoot: r => [r + \"/d\", r + \"/out\", { recursive: true, filter: () => false }], filterTruthy: r => [r + \"/f\", r + \"/out\", { filter: () => 1 }],\n  filterPromise: r => [r + \"/d\", r + \"/out\", { recursive: true, filter: () => Promise.resolve(true) }], filterPromiseFalse: r => [r + \"/d\", r + \"/out\", { recursive: true, filter: s => Promise.resolve(!s.endsWith(\"/a\")) }],\n  filterNested: r => [r + \"/d\", r + \"/out\", { recursive: true, filter: s => s.endsWith(\"/sub\") ? Promise.resolve(true) : true }], filterThrows: r => [r + \"/d\", r + \"/out\", { recursive: true, filter: () => { throw new RangeError(\"no\"); } }],\n  filterMerge: r => [r + \"/d\", r + \"/ed\", { recursive: true, filter: () => true }], filterMergeErrorOnExist: r => [r + \"/d\", r + \"/ed\", { recursive: true, force: false, errorOnExist: true, filter: () => true }],\n  modeExcl: r => [r + \"/f\", r + \"/old\", { mode: 1 }], modeExclNew: r => [r + \"/f\", r + \"/out\", { mode: 1 }], modeBad: r => [r + \"/f\", r + \"/out\", { mode: 8 }], modeText: r => [r + \"/f\", r + \"/out\", { mode: \"1\" }],\n  optionsText: r => [r + \"/f\", r + \"/out\", \"x\"], optionsNull: r => [r + \"/f\", r + \"/out\", null], recursiveText: r => [r + \"/f\", r + \"/out\", { recursive: \"yes\" }], forceNumber: r => [r + \"/f\", r + \"/out\", { force: 1 }],\n  pair: r => [r + \"/f\", r + \"/out\", { dereference: true, verbatimSymlinks: true }], filterText: r => [r + \"/f\", r + \"/out\", { filter: \"x\" }], srcType: r => [5, r + \"/out\"], destType: r => [r + \"/f\", 5], srcNul: r => [\"a\\0\", r + \"/out\"],\n  url: r => [new URL(\"file:///work/\" + r + \"/f\"), new URL(\"file:///work/\" + r + \"/out\")], buffer: r => [h.Buffer.from(r + \"/f\"), h.Buffer.from(r + \"/out\")], trailingSlash: r => [r + \"/d/\", r + \"/out/\", { recursive: true }],\n  missingDereference: r => [r + \"/nope\", r + \"/out\", { dereference: true }], derefFileOverLinkToDir: r => [r + \"/f\", r + \"/ld\", { dereference: true }], derefDirOverLinkToFile: r => [r + \"/d\", r + \"/lf\", { recursive: true, dereference: true }],\n  derefFileOverLink: r => [r + \"/f\", r + \"/lold\", { dereference: true }], derefLinkRecursive: r => [r + \"/lf\", r + \"/out\", { recursive: true, dereference: true }], derefLinkDirOverFile: r => [r + \"/ld\", r + \"/old\", { recursive: true, dereference: true }],\n  throughLink: r => [r + \"/d\", r + \"/ld/x\", { recursive: true }], overLinks: r => [r + \"/d\", r + \"/links\", { recursive: true }], overLinksNoForce: r => [r + \"/d\", r + \"/links\", { recursive: true, force: false }], overLinksVerbatim: r => [r + \"/d\", r + \"/links\", { recursive: true, verbatimSymlinks: true }],\n  clash: r => [r + \"/d\", r + \"/clash\", { recursive: true }], clashFilter: r => [r + \"/d\", r + \"/clash\", { recursive: true, filter: () => true }], overLinksFilter: r => [r + \"/d\", r + \"/links\", { recursive: true, filter: () => true }],\n  fileIntoLinkedDir: r => [r + \"/f\", r + \"/ld/new\"], noForceLink: r => [r + \"/lf\", r + \"/lold\", { force: false, errorOnExist: true }], dirErrorOnExistForce: r => [r + \"/d\", r + \"/ed\", { recursive: true, errorOnExist: true }],\n  linkToParent: r => [r + \"/ld\", r + \"/d/sub/l\", { recursive: true }],\n  dotSegments: r => [r + \"/d/../f\", r + \"/./out\"], dirOverLinkToDir: r => [r + \"/d\", r + \"/ld\", { recursive: true }],\n};\nconst out = { shapes: [h.fn(fs.cpSync), h.fn(fs.cp), h.fn(fs.promises.cp)] };\nfor (const [name, build] of Object.entries(cases)) {\n  const result = {};\n  for (const kind of [\"sync\", \"promise\"]) {\n    const root = name + \"-\" + kind; fs.mkdirSync(root); seed(root); const before = JSON.stringify(tree(root)); calls.length = 0;\n    const args = build(root);\n    const answer = kind === \"sync\" ? h.attempt(() => fs.cpSync(...args)) : await h.attemptAsync(() => fs.promises.cp(...args));\n    const after = tree(root);\n    result[kind] = { answer, tree: JSON.stringify(after) === before ? \"unchanged\" : Object.fromEntries(Object.entries(after).filter(([k, v]) => JSON.parse(before)[k] !== v)), ...(calls.length ? { calls: calls.slice() } : {}) };\n  }\n  out[name] = result;\n}\nreturn out;\n",
+   "result": {
+    "shapes": [
+     [
+      "cpSync",
+      3
+     ],
+     [
+      "cp",
+      4
+     ],
+     [
+      "cp",
+      3
+     ]
+    ],
+    "fileNew": {
+     "sync": {
+      "answer": {},
+      "tree": {
+       "out": "file:F"
+      }
+     },
+     "promise": {
+      "answer": {},
+      "tree": {
+       "out": "file:F"
+      }
+     }
+    },
+    "fileOverwrite": {
+     "sync": {
+      "answer": {},
+      "tree": {
+       "old": "file:F"
+      }
+     },
+     "promise": {
+      "answer": {},
+      "tree": {
+       "old": "file:F"
+      }
+     }
+    },
+    "fileNoForce": {
+     "sync": {
+      "answer": {},
+      "tree": "unchanged"
+     },
+     "promise": {
+      "answer": {},
+      "tree": "unchanged"
+     }
+    },
+    "fileErrorOnExist": {
+     "sync": {
+      "answer": {
+       "error": {
+        "name": "SystemError",
+        "ctor": "NodeError",
+        "message": "Target already exists: cp returned EEXIST (fileErrorOnExist-sync/old already exists) fileErrorOnExist-sync/old",
+        "code": "ERR_FS_CP_EEXIST",
+        "errno": 17,
+        "syscall": "cp",
+        "path": "fileErrorOnExist-sync/old"
+       }
+      },
+      "tree": "unchanged"
+     },
+     "promise": {
+      "answer": {
+       "error": {
+        "name": "SystemError",
+        "ctor": "NodeError",
+        "message": "Target already exists: cp returned EEXIST (fileErrorOnExist-promise/old already exists) fileErrorOnExist-promise/old",
+        "code": "ERR_FS_CP_EEXIST",
+        "errno": 17,
+        "syscall": "cp",
+        "path": "fileErrorOnExist-promise/old"
+       }
+      },
+      "tree": "unchanged"
+     }
+    },
+    "fileErrorOnExistForce": {
+     "sync": {
+      "answer": {},
+      "tree": {
+       "old": "file:F"
+      }
+     },
+     "promise": {
+      "answer": {},
+      "tree": {
+       "old": "file:F"
+      }
+     }
+    },
+    "dirNoRecursive": {
+     "sync": {
+      "answer": {
+       "error": {
+        "name": "Error",
+        "ctor": "Error",
+        "message": "Recursive option not enabled, cannot copy a directory: dirNoRecursive-sync/d/",
+        "code": "ERR_FS_EISDIR"
+       }
+      },
+      "tree": "unchanged"
+     },
+     "promise": {
+      "answer": {
+       "error": {
+        "name": "SystemError",
+        "ctor": "NodeError",
+        "message": "Path is a directory: cp returned EISDIR (dirNoRecursive-promise/d is a directory (not copied)) dirNoRecursive-promise/d",
+        "code": "ERR_FS_EISDIR",
+        "errno": 21,
+        "syscall": "cp",
+        "path": "dirNoRecursive-promise/d"
+       }
+      },
+      "tree": "unchanged"
+     }
+    },
+    "dirRecursive": {
+     "sync": {
+      "answer": {},
+      "tree": {
+       "out": "dir",
+       "out/a": "file:A",
+       "out/abs": "link -> /work/dirRecursive-sync/d/sub",
+       "out/rel": "link -> /work/dirRecursive-sync/d/a",
+       "out/sub": "dir",
+       "out/sub/b": "file:B"
+      }
+     },
+     "promise": {
+      "answer": {},
+      "tree": {
+       "out": "dir",
+       "out/a": "file:A",
+       "out/abs": "link -> /work/dirRecursive-promise/d/sub",
+       "out/rel": "link -> /work/dirRecursive-promise/d/a",
+       "out/sub": "dir",
+       "out/sub/b": "file:B"
+      }
+     }
+    },
+    "dirMerge": {
+     "sync": {
+      "answer": {},
+      "tree": {
+       "ed/a": "file:A",
+       "ed/abs": "link -> /work/dirMerge-sync/d/sub",
+       "ed/rel": "link -> /work/dirMerge-sync/d/a",
+       "ed/sub/b": "file:B"
+      }
+     },
+     "promise": {
+      "answer": {},
+      "tree": {
+       "ed/a": "file:A",
+       "ed/abs": "link -> /work/dirMerge-promise/d/sub",
+       "ed/rel": "link -> /work/dirMerge-promise/d/a",
+       "ed/sub/b": "file:B"
+      }
+     }
+    },
+    "dirMergeNoForce": {
+     "sync": {
+      "answer": {},
+      "tree": {
+       "ed/abs": "link -> /work/dirMergeNoForce-sync/d/sub",
+       "ed/rel": "link -> /work/dirMergeNoForce-sync/d/a",
+       "ed/sub/b": "file:B"
+      }
+     },
+     "promise": {
+      "answer": {},
+      "tree": {
+       "ed/abs": "link -> /work/dirMergeNoForce-promise/d/sub",
+       "ed/rel": "link -> /work/dirMergeNoForce-promise/d/a",
+       "ed/sub/b": "file:B"
+      }
+     }
+    },
+    "dirMergeErrorOnExist": {
+     "sync": {
+      "answer": {
+       "error": {
+        "name": "Error",
+        "ctor": "Error",
+        "message": "[ERR_FS_CP_EEXIST]: Target already exists: cp returned EEXIST (dirMergeErrorOnExist-sync/ed/a already exists)",
+        "code": "ERR_FS_CP_EEXIST"
+       }
+      },
+      "tree": "unchanged"
+     },
+     "promise": {
+      "answer": {
+       "error": {
+        "name": "SystemError",
+        "ctor": "NodeError",
+        "message": "Target already exists: cp returned EEXIST (dirMergeErrorOnExist-promise/ed already exists) dirMergeErrorOnExist-promise/ed",
+        "code": "ERR_FS_CP_EEXIST",
+        "errno": 17,
+        "syscall": "cp",
+        "path": "dirMergeErrorOnExist-promise/ed"
+       }
+      },
+      "tree": "unchanged"
+     }
+    },
+    "dirToFile": {
+     "sync": {
+      "answer": {
+       "error": {
+        "name": "Error",
+        "ctor": "Error",
+        "message": "Cannot overwrite non-directory dirToFile-sync/old with directory dirToFile-sync/d",
+        "code": "ERR_FS_CP_DIR_TO_NON_DIR"
+       }
+      },
+      "tree": "unchanged"
+     },
+     "promise": {
+      "answer": {
+       "error": {
+        "name": "SystemError",
+        "ctor": "NodeError",
+        "message": "Cannot overwrite non-directory with directory: cp returned EISDIR (cannot overwrite non-directory dirToFile-promise/old with directory dirToFile-promise/d) dirToFile-promise/old",
+        "code": "ERR_FS_CP_DIR_TO_NON_DIR",
+        "errno": 21,
+        "syscall": "cp",
+        "path": "dirToFile-promise/old"
+       }
+      },
+      "tree": "unchanged"
+     }
+    },
+    "fileToDir": {
+     "sync": {
+      "answer": {
+       "error": {
+        "name": "Error",
+        "ctor": "Error",
+        "message": "Cannot overwrite directory fileToDir-sync/ed with non-directory fileToDir-sync/f",
+        "code": "ERR_FS_CP_NON_DIR_TO_DIR"
+       }
+      },
+      "tree": "unchanged"
+     },
+     "promise": {
+      "answer": {
+       "error": {
+        "name": "SystemError",
+        "ctor": "NodeError",
+        "message": "Cannot overwrite directory with non-directory: cp returned ENOTDIR (cannot overwrite directory fileToDir-promise/ed with non-directory fileToDir-promise/f) fileToDir-promise/ed",
+        "code": "ERR_FS_CP_NON_DIR_TO_DIR",
+        "errno": 20,
+        "syscall": "cp",
+        "path": "fileToDir-promise/ed"
+       }
+      },
+      "tree": "unchanged"
+     }
+    },
+    "same": {
+     "sync": {
+      "answer": {
+       "error": {
+        "name": "Error",
+        "ctor": "Error",
+        "message": "src and dest cannot be the same same-sync/f",
+        "code": "ERR_FS_CP_EINVAL"
+       }
+      },
+      "tree": "unchanged"
+     },
+     "promise": {
+      "answer": {
+       "error": {
+        "name": "SystemError",
+        "ctor": "NodeError",
+        "message": "Invalid src or dest: cp returned EINVAL (src and dest cannot be the same) same-promise/f",
+        "code": "ERR_FS_CP_EINVAL",
+        "errno": 22,
+        "syscall": "cp",
+        "path": "same-promise/f"
+       }
+      },
+      "tree": "unchanged"
+     }
+    },
+    "sameDir": {
+     "sync": {
+      "answer": {
+       "error": {
+        "name": "Error",
+        "ctor": "Error",
+        "message": "src and dest cannot be the same sameDir-sync/d",
+        "code": "ERR_FS_CP_EINVAL"
+       }
+      },
+      "tree": "unchanged"
+     },
+     "promise": {
+      "answer": {
+       "error": {
+        "name": "SystemError",
+        "ctor": "NodeError",
+        "message": "Invalid src or dest: cp returned EINVAL (src and dest cannot be the same) sameDir-promise/d",
+        "code": "ERR_FS_CP_EINVAL",
+        "errno": 22,
+        "syscall": "cp",
+        "path": "sameDir-promise/d"
+       }
+      },
+      "tree": "unchanged"
+     }
+    },
+    "intoSelf": {
+     "sync": {
+      "answer": {
+       "error": {
+        "name": "Error",
+        "ctor": "Error",
+        "message": "Cannot copy intoSelf-sync/d/ to a subdirectory of self intoSelf-sync/d/sub/copy",
+        "code": "ERR_FS_CP_EINVAL"
+       }
+      },
+      "tree": "unchanged"
+     },
+     "promise": {
+      "answer": {
+       "error": {
+        "name": "SystemError",
+        "ctor": "NodeError",
+        "message": "Invalid src or dest: cp returned EINVAL (cannot copy intoSelf-promise/d to a subdirectory of self intoSelf-promise/d/sub/copy) intoSelf-promise/d/sub/copy",
+        "code": "ERR_FS_CP_EINVAL",
+        "errno": 22,
+        "syscall": "cp",
+        "path": "intoSelf-promise/d/sub/copy"
+       }
+      },
+      "tree": "unchanged"
+     }
+    },
+    "intoSelfNoRecursive": {
+     "sync": {
+      "answer": {
+       "error": {
+        "name": "Error",
+        "ctor": "Error",
+        "message": "Cannot copy intoSelfNoRecursive-sync/d/ to a subdirectory of self intoSelfNoRecursive-sync/d/sub/copy",
+        "code": "ERR_FS_CP_EINVAL"
+       }
+      },
+      "tree": "unchanged"
+     },
+     "promise": {
+      "answer": {
+       "error": {
+        "name": "SystemError",
+        "ctor": "NodeError",
+        "message": "Invalid src or dest: cp returned EINVAL (cannot copy intoSelfNoRecursive-promise/d to a subdirectory of self intoSelfNoRecursive-promise/d/sub/copy) intoSelfNoRecursive-promise/d/sub/copy",
+        "code": "ERR_FS_CP_EINVAL",
+        "errno": 22,
+        "syscall": "cp",
+        "path": "intoSelfNoRecursive-promise/d/sub/copy"
+       }
+      },
+      "tree": "unchanged"
+     }
+    },
+    "missing": {
+     "sync": {
+      "answer": {
+       "error": {
+        "name": "Error",
+        "ctor": "Error",
+        "message": "ENOENT: no such file or directory, lstat 'missing-sync/nope'",
+        "code": "ENOENT",
+        "errno": -2,
+        "syscall": "lstat",
+        "path": "missing-sync/nope"
+       }
+      },
+      "tree": "unchanged"
+     },
+     "promise": {
+      "answer": {
+       "error": {
+        "name": "Error",
+        "ctor": "Error",
+        "message": "ENOENT: no such file or directory, lstat 'missing-promise/nope'",
+        "code": "ENOENT",
+        "errno": -2,
+        "syscall": "lstat",
+        "path": "missing-promise/nope"
+       }
+      },
+      "tree": "unchanged"
+     }
+    },
+    "missingRecursive": {
+     "sync": {
+      "answer": {
+       "error": {
+        "name": "Error",
+        "ctor": "Error",
+        "message": "ENOENT: no such file or directory, lstat 'missingRecursive-sync/nope'",
+        "code": "ENOENT",
+        "errno": -2,
+        "syscall": "lstat",
+        "path": "missingRecursive-sync/nope"
+       }
+      },
+      "tree": "unchanged"
+     },
+     "promise": {
+      "answer": {
+       "error": {
+        "name": "Error",
+        "ctor": "Error",
+        "message": "ENOENT: no such file or directory, lstat 'missingRecursive-promise/nope'",
+        "code": "ENOENT",
+        "errno": -2,
+        "syscall": "lstat",
+        "path": "missingRecursive-promise/nope"
+       }
+      },
+      "tree": "unchanged"
+     }
+    },
+    "nestedDest": {
+     "sync": {
+      "answer": {},
+      "tree": {
+       "x": "dir",
+       "x/y": "dir",
+       "x/y/z": "dir",
+       "x/y/z/out": "file:F"
+      }
+     },
+     "promise": {
+      "answer": {},
+      "tree": {
+       "x": "dir",
+       "x/y": "dir",
+       "x/y/z": "dir",
+       "x/y/z/out": "file:F"
+      }
+     }
+    },
+    "nestedDestDir": {
+     "sync": {
+      "answer": {},
+      "tree": {
+       "x": "dir",
+       "x/y": "dir",
+       "x/y/out": "dir",
+       "x/y/out/a": "file:A",
+       "x/y/out/abs": "link -> /work/nestedDestDir-sync/d/sub",
+       "x/y/out/rel": "link -> /work/nestedDestDir-sync/d/a",
+       "x/y/out/sub": "dir",
+       "x/y/out/sub/b": "file:B"
+      }
+     },
+     "promise": {
+      "answer": {},
+      "tree": {
+       "x": "dir",
+       "x/y": "dir",
+       "x/y/out": "dir",
+       "x/y/out/a": "file:A",
+       "x/y/out/abs": "link -> /work/nestedDestDir-promise/d/sub",
+       "x/y/out/rel": "link -> /work/nestedDestDir-promise/d/a",
+       "x/y/out/sub": "dir",
+       "x/y/out/sub/b": "file:B"
+      }
+     }
+    },
+    "destUnderFile": {
+     "sync": {
+      "answer": {
+       "error": {
+        "name": "Error",
+        "ctor": "Error",
+        "message": "ENOTDIR: not a directory, lstat 'destUnderFile-sync/old/out'",
+        "code": "ENOTDIR",
+        "errno": -20,
+        "syscall": "lstat",
+        "path": "destUnderFile-sync/old/out"
+       }
+      },
+      "tree": "unchanged"
+     },
+     "promise": {
+      "answer": {
+       "error": {
+        "name": "Error",
+        "ctor": "Error",
+        "message": "ENOTDIR: not a directory, lstat 'destUnderFile-promise/old/out'",
+        "code": "ENOTDIR",
+        "errno": -20,
+        "syscall": "lstat",
+        "path": "destUnderFile-promise/old/out"
+       }
+      },
+      "tree": "unchanged"
+     }
+    },
+    "linkFile": {
+     "sync": {
+      "answer": {},
+      "tree": {
+       "out": "link -> /work/linkFile-sync/f"
+      }
+     },
+     "promise": {
+      "answer": {},
+      "tree": {
+       "out": "link -> /work/linkFile-promise/f"
+      }
+     }
+    },
+    "linkFileVerbatim": {
+     "sync": {
+      "answer": {},
+      "tree": {
+       "out": "link -> f"
+      }
+     },
+     "promise": {
+      "answer": {},
+      "tree": {
+       "out": "link -> f"
+      }
+     }
+    },
+    "linkFileDereference": {
+     "sync": {
+      "answer": {
+       "error": {
+        "name": "Error",
+        "ctor": "Error",
+        "message": "Recursive option not enabled, cannot copy a directory: linkFileDereference-sync/lf/",
+        "code": "ERR_FS_EISDIR"
+       }
+      },
+      "tree": "unchanged"
+     },
+     "promise": {
+      "answer": {},
+      "tree": {
+       "out": "file:F"
+      }
+     }
+    },
+    "linkDir": {
+     "sync": {
+      "answer": {
+       "error": {
+        "name": "Error",
+        "ctor": "Error",
+        "message": "Recursive option not enabled, cannot copy a directory: linkDir-sync/ld/",
+        "code": "ERR_FS_EISDIR"
+       }
+      },
+      "tree": "unchanged"
+     },
+     "promise": {
+      "answer": {},
+      "tree": {
+       "out": "link -> /work/linkDir-promise/d"
+      }
+     }
+    },
+    "linkDirRecursive": {
+     "sync": {
+      "answer": {},
+      "tree": {
+       "out": "link -> /work/linkDirRecursive-sync/d"
+      }
+     },
+     "promise": {
+      "answer": {},
+      "tree": {
+       "out": "link -> /work/linkDirRecursive-promise/d"
+      }
+     }
+    },
+    "linkDirDereference": {
+     "sync": {
+      "answer": {},
+      "tree": {
+       "out": "dir",
+       "out/a": "file:A",
+       "out/abs": "link -> /work/linkDirDereference-sync/d/sub",
+       "out/rel": "link -> /work/linkDirDereference-sync/d/a",
+       "out/sub": "dir",
+       "out/sub/b": "file:B"
+      }
+     },
+     "promise": {
+      "answer": {},
+      "tree": {
+       "out": "dir",
+       "out/a": "file:A",
+       "out/abs": "dir",
+       "out/abs/b": "file:B",
+       "out/rel": "file:A",
+       "out/sub": "dir",
+       "out/sub/b": "file:B"
+      }
+     }
+    },
+    "dangling": {
+     "sync": {
+      "answer": {
+       "error": {
+        "name": "Error",
+        "ctor": "Error",
+        "message": "ENOENT: no such file or directory, lstat 'dangling-sync/dangling'",
+        "code": "ENOENT",
+        "errno": -2,
+        "syscall": "lstat",
+        "path": "dangling-sync/dangling"
+       }
+      },
+      "tree": "unchanged"
+     },
+     "promise": {
+      "answer": {},
+      "tree": {
+       "out": "link -> /work/dangling-promise/missing"
+      }
+     }
+    },
+    "danglingDereference": {
+     "sync": {
+      "answer": {
+       "error": {
+        "name": "Error",
+        "ctor": "Error",
+        "message": "Recursive option not enabled, cannot copy a directory: danglingDereference-sync/dangling/",
+        "code": "ERR_FS_EISDIR"
+       }
+      },
+      "tree": "unchanged"
+     },
+     "promise": {
+      "answer": {
+       "error": {
+        "name": "Error",
+        "ctor": "Error",
+        "message": "ENOENT: no such file or directory, stat 'danglingDereference-promise/dangling'",
+        "code": "ENOENT",
+        "errno": -2,
+        "syscall": "stat",
+        "path": "danglingDereference-promise/dangling"
+       }
+      },
+      "tree": "unchanged"
+     }
+    },
+    "linkOverFile": {
+     "sync": {
+      "answer": {
+       "error": {
+        "name": "Error",
+        "ctor": "Error",
+        "message": "EEXIST: file already exists, symlink '/work/linkOverFile-sync/f' -> 'linkOverFile-sync/old'",
+        "code": "EEXIST",
+        "errno": -17,
+        "syscall": "symlink",
+        "path": "/work/linkOverFile-sync/f",
+        "dest": "linkOverFile-sync/old"
+       }
+      },
+      "tree": "unchanged"
+     },
+     "promise": {
+      "answer": {
+       "error": {
+        "name": "Error",
+        "ctor": "Error",
+        "message": "EEXIST: file already exists, symlink '/work/linkOverFile-promise/f' -> 'linkOverFile-promise/old'",
+        "code": "EEXIST",
+        "errno": -17,
+        "syscall": "symlink",
+        "path": "/work/linkOverFile-promise/f",
+        "dest": "linkOverFile-promise/old"
+       }
+      },
+      "tree": "unchanged"
+     }
+    },
+    "linkOverLink": {
+     "sync": {
+      "answer": {},
+      "tree": {
+       "ld": "link -> /work/linkOverLink-sync/f"
+      }
+     },
+     "promise": {
+      "answer": {},
+      "tree": {
+       "ld": "link -> /work/linkOverLink-promise/f"
+      }
+     }
+    },
+    "fileOverLink": {
+     "sync": {
+      "answer": {
+       "error": {
+        "name": "Error",
+        "ctor": "Error",
+        "message": "src and dest cannot be the same fileOverLink-sync/lf",
+        "code": "ERR_FS_CP_EINVAL"
+       }
+      },
+      "tree": "unchanged"
+     },
+     "promise": {
+      "answer": {},
+      "tree": {
+       "lf": "file:F"
+      }
+     }
+    },
+    "dirVerbatim": {
+     "sync": {
+      "answer": {},
+      "tree": {
+       "out": "dir",
+       "out/a": "file:A",
+       "out/abs": "link -> /work/dirVerbatim-sync/d/sub",
+       "out/rel": "link -> a",
+       "out/sub": "dir",
+       "out/sub/b": "file:B"
+      }
+     },
+     "promise": {
+      "answer": {},
+      "tree": {
+       "out": "dir",
+       "out/a": "file:A",
+       "out/abs": "link -> /work/dirVerbatim-promise/d/sub",
+       "out/rel": "link -> a",
+       "out/sub": "dir",
+       "out/sub/b": "file:B"
+      }
+     }
+    },
+    "dirDereference": {
+     "sync": {
+      "answer": {},
+      "tree": {
+       "out": "dir",
+       "out/a": "file:A",
+       "out/abs": "link -> /work/dirDereference-sync/d/sub",
+       "out/rel": "link -> /work/dirDereference-sync/d/a",
+       "out/sub": "dir",
+       "out/sub/b": "file:B"
+      }
+     },
+     "promise": {
+      "answer": {},
+      "tree": {
+       "out": "dir",
+       "out/a": "file:A",
+       "out/abs": "dir",
+       "out/abs/b": "file:B",
+       "out/rel": "file:A",
+       "out/sub": "dir",
+       "out/sub/b": "file:B"
+      }
+     }
+    },
+    "filter": {
+     "sync": {
+      "answer": {},
+      "tree": {
+       "out": "dir",
+       "out/rel": "link -> /work/filter-sync/d/a",
+       "out/sub": "dir",
+       "out/sub/b": "file:B"
+      },
+      "calls": [
+       [
+        "filter-sync/d",
+        "filter-sync/out"
+       ],
+       [
+        "filter-sync/d/a",
+        "filter-sync/out/a"
+       ],
+       [
+        "filter-sync/d/abs",
+        "filter-sync/out/abs"
+       ],
+       [
+        "filter-sync/d/rel",
+        "filter-sync/out/rel"
+       ],
+       [
+        "filter-sync/d/sub",
+        "filter-sync/out/sub"
+       ],
+       [
+        "filter-sync/d/sub/b",
+        "filter-sync/out/sub/b"
+       ]
+      ]
+     },
+     "promise": {
+      "answer": {},
+      "tree": {
+       "out": "dir",
+       "out/rel": "link -> /work/filter-promise/d/a",
+       "out/sub": "dir",
+       "out/sub/b": "file:B"
+      },
+      "calls": [
+       [
+        "filter-promise/d",
+        "filter-promise/out"
+       ],
+       [
+        "filter-promise/d/a",
+        "filter-promise/out/a"
+       ],
+       [
+        "filter-promise/d/abs",
+        "filter-promise/out/abs"
+       ],
+       [
+        "filter-promise/d/rel",
+        "filter-promise/out/rel"
+       ],
+       [
+        "filter-promise/d/sub",
+        "filter-promise/out/sub"
+       ],
+       [
+        "filter-promise/d/sub/b",
+        "filter-promise/out/sub/b"
+       ]
+      ]
+     }
+    },
+    "filterRoot": {
+     "sync": {
+      "answer": {},
+      "tree": "unchanged"
+     },
+     "promise": {
+      "answer": {},
+      "tree": "unchanged"
+     }
+    },
+    "filterTruthy": {
+     "sync": {
+      "answer": {},
+      "tree": {
+       "out": "file:F"
+      }
+     },
+     "promise": {
+      "answer": {},
+      "tree": {
+       "out": "file:F"
+      }
+     }
+    },
+    "filterPromise": {
+     "sync": {
+      "answer": {
+       "error": {
+        "name": "TypeError",
+        "ctor": "TypeError",
+        "message": "Expected boolean to be returned from the \"filter\" function but got an instance of Promise.",
+        "code": "ERR_INVALID_RETURN_VALUE"
+       }
+      },
+      "tree": "unchanged"
+     },
+     "promise": {
+      "answer": {},
+      "tree": {
+       "out": "dir",
+       "out/a": "file:A",
+       "out/abs": "link -> /work/filterPromise-promise/d/sub",
+       "out/rel": "link -> /work/filterPromise-promise/d/a",
+       "out/sub": "dir",
+       "out/sub/b": "file:B"
+      }
+     }
+    },
+    "filterPromiseFalse": {
+     "sync": {
+      "answer": {
+       "error": {
+        "name": "TypeError",
+        "ctor": "TypeError",
+        "message": "Expected boolean to be returned from the \"filter\" function but got an instance of Promise.",
+        "code": "ERR_INVALID_RETURN_VALUE"
+       }
+      },
+      "tree": "unchanged"
+     },
+     "promise": {
+      "answer": {},
+      "tree": {
+       "out": "dir",
+       "out/abs": "link -> /work/filterPromiseFalse-promise/d/sub",
+       "out/rel": "link -> /work/filterPromiseFalse-promise/d/a",
+       "out/sub": "dir",
+       "out/sub/b": "file:B"
+      }
+     }
+    },
+    "filterNested": {
+     "sync": {
+      "answer": {
+       "error": {
+        "name": "TypeError",
+        "ctor": "TypeError",
+        "message": "Expected boolean to be returned from the \"filter\" function but got an instance of Promise.",
+        "code": "ERR_INVALID_RETURN_VALUE"
+       }
+      },
+      "tree": {
+       "out": "dir",
+       "out/a": "file:A",
+       "out/abs": "link -> /work/filterNested-sync/d/sub",
+       "out/rel": "link -> /work/filterNested-sync/d/a"
+      }
+     },
+     "promise": {
+      "answer": {},
+      "tree": {
+       "out": "dir",
+       "out/a": "file:A",
+       "out/abs": "link -> /work/filterNested-promise/d/sub",
+       "out/rel": "link -> /work/filterNested-promise/d/a",
+       "out/sub": "dir",
+       "out/sub/b": "file:B"
+      }
+     }
+    },
+    "filterThrows": {
+     "sync": {
+      "answer": {
+       "error": {
+        "name": "RangeError",
+        "ctor": "RangeError",
+        "message": "no"
+       }
+      },
+      "tree": "unchanged"
+     },
+     "promise": {
+      "answer": {
+       "error": {
+        "name": "RangeError",
+        "ctor": "RangeError",
+        "message": "no"
+       }
+      },
+      "tree": "unchanged"
+     }
+    },
+    "filterMerge": {
+     "sync": {
+      "answer": {},
+      "tree": {
+       "ed/a": "file:A",
+       "ed/abs": "link -> /work/filterMerge-sync/d/sub",
+       "ed/rel": "link -> /work/filterMerge-sync/d/a",
+       "ed/sub/b": "file:B"
+      }
+     },
+     "promise": {
+      "answer": {},
+      "tree": {
+       "ed/a": "file:A",
+       "ed/abs": "link -> /work/filterMerge-promise/d/sub",
+       "ed/rel": "link -> /work/filterMerge-promise/d/a",
+       "ed/sub/b": "file:B"
+      }
+     }
+    },
+    "filterMergeErrorOnExist": {
+     "sync": {
+      "answer": {
+       "error": {
+        "name": "SystemError",
+        "ctor": "NodeError",
+        "message": "Target already exists: cp returned EEXIST (filterMergeErrorOnExist-sync/ed/a already exists) filterMergeErrorOnExist-sync/ed/a",
+        "code": "ERR_FS_CP_EEXIST",
+        "errno": 17,
+        "syscall": "cp",
+        "path": "filterMergeErrorOnExist-sync/ed/a"
+       }
+      },
+      "tree": "unchanged"
+     },
+     "promise": {
+      "answer": {
+       "error": {
+        "name": "SystemError",
+        "ctor": "NodeError",
+        "message": "Target already exists: cp returned EEXIST (filterMergeErrorOnExist-promise/ed already exists) filterMergeErrorOnExist-promise/ed",
+        "code": "ERR_FS_CP_EEXIST",
+        "errno": 17,
+        "syscall": "cp",
+        "path": "filterMergeErrorOnExist-promise/ed"
+       }
+      },
+      "tree": "unchanged"
+     }
+    },
+    "modeExcl": {
+     "sync": {
+      "answer": {},
+      "tree": {
+       "old": "file:F"
+      }
+     },
+     "promise": {
+      "answer": {},
+      "tree": {
+       "old": "file:F"
+      }
+     }
+    },
+    "modeExclNew": {
+     "sync": {
+      "answer": {},
+      "tree": {
+       "out": "file:F"
+      }
+     },
+     "promise": {
+      "answer": {},
+      "tree": {
+       "out": "file:F"
+      }
+     }
+    },
+    "modeBad": {
+     "sync": {
+      "answer": {
+       "error": {
+        "name": "RangeError",
+        "ctor": "RangeError",
+        "message": "The value of \"mode\" is out of range. It must be >= 0 && <= 7. Received 8",
+        "code": "ERR_OUT_OF_RANGE"
+       }
+      },
+      "tree": "unchanged"
+     },
+     "promise": {
+      "answer": {
+       "error": {
+        "name": "RangeError",
+        "ctor": "RangeError",
+        "message": "The value of \"mode\" is out of range. It must be >= 0 && <= 7. Received 8",
+        "code": "ERR_OUT_OF_RANGE"
+       }
+      },
+      "tree": "unchanged"
+     }
+    },
+    "modeText": {
+     "sync": {
+      "answer": {
+       "error": {
+        "name": "TypeError",
+        "ctor": "TypeError",
+        "message": "The \"mode\" argument must be of type number. Received type string ('1')",
+        "code": "ERR_INVALID_ARG_TYPE"
+       }
+      },
+      "tree": "unchanged"
+     },
+     "promise": {
+      "answer": {
+       "error": {
+        "name": "TypeError",
+        "ctor": "TypeError",
+        "message": "The \"mode\" argument must be of type number. Received type string ('1')",
+        "code": "ERR_INVALID_ARG_TYPE"
+       }
+      },
+      "tree": "unchanged"
+     }
+    },
+    "optionsText": {
+     "sync": {
+      "answer": {
+       "error": {
+        "name": "TypeError",
+        "ctor": "TypeError",
+        "message": "The \"options\" argument must be of type object. Received type string ('x')",
+        "code": "ERR_INVALID_ARG_TYPE"
+       }
+      },
+      "tree": "unchanged"
+     },
+     "promise": {
+      "answer": {
+       "error": {
+        "name": "TypeError",
+        "ctor": "TypeError",
+        "message": "The \"options\" argument must be of type object. Received type string ('x')",
+        "code": "ERR_INVALID_ARG_TYPE"
+       }
+      },
+      "tree": "unchanged"
+     }
+    },
+    "optionsNull": {
+     "sync": {
+      "answer": {
+       "error": {
+        "name": "TypeError",
+        "ctor": "TypeError",
+        "message": "The \"options\" argument must be of type object. Received null",
+        "code": "ERR_INVALID_ARG_TYPE"
+       }
+      },
+      "tree": "unchanged"
+     },
+     "promise": {
+      "answer": {
+       "error": {
+        "name": "TypeError",
+        "ctor": "TypeError",
+        "message": "The \"options\" argument must be of type object. Received null",
+        "code": "ERR_INVALID_ARG_TYPE"
+       }
+      },
+      "tree": "unchanged"
+     }
+    },
+    "recursiveText": {
+     "sync": {
+      "answer": {
+       "error": {
+        "name": "TypeError",
+        "ctor": "TypeError",
+        "message": "The \"options.recursive\" property must be of type boolean. Received type string ('yes')",
+        "code": "ERR_INVALID_ARG_TYPE"
+       }
+      },
+      "tree": "unchanged"
+     },
+     "promise": {
+      "answer": {
+       "error": {
+        "name": "TypeError",
+        "ctor": "TypeError",
+        "message": "The \"options.recursive\" property must be of type boolean. Received type string ('yes')",
+        "code": "ERR_INVALID_ARG_TYPE"
+       }
+      },
+      "tree": "unchanged"
+     }
+    },
+    "forceNumber": {
+     "sync": {
+      "answer": {
+       "error": {
+        "name": "TypeError",
+        "ctor": "TypeError",
+        "message": "The \"options.force\" property must be of type boolean. Received type number (1)",
+        "code": "ERR_INVALID_ARG_TYPE"
+       }
+      },
+      "tree": "unchanged"
+     },
+     "promise": {
+      "answer": {
+       "error": {
+        "name": "TypeError",
+        "ctor": "TypeError",
+        "message": "The \"options.force\" property must be of type boolean. Received type number (1)",
+        "code": "ERR_INVALID_ARG_TYPE"
+       }
+      },
+      "tree": "unchanged"
+     }
+    },
+    "pair": {
+     "sync": {
+      "answer": {
+       "error": {
+        "name": "TypeError",
+        "ctor": "TypeError",
+        "message": "Option \"dereference\" cannot be used in combination with option \"verbatimSymlinks\"",
+        "code": "ERR_INCOMPATIBLE_OPTION_PAIR"
+       }
+      },
+      "tree": "unchanged"
+     },
+     "promise": {
+      "answer": {
+       "error": {
+        "name": "TypeError",
+        "ctor": "TypeError",
+        "message": "Option \"dereference\" cannot be used in combination with option \"verbatimSymlinks\"",
+        "code": "ERR_INCOMPATIBLE_OPTION_PAIR"
+       }
+      },
+      "tree": "unchanged"
+     }
+    },
+    "filterText": {
+     "sync": {
+      "answer": {
+       "error": {
+        "name": "TypeError",
+        "ctor": "TypeError",
+        "message": "The \"options.filter\" property must be of type function. Received type string ('x')",
+        "code": "ERR_INVALID_ARG_TYPE"
+       }
+      },
+      "tree": "unchanged"
+     },
+     "promise": {
+      "answer": {
+       "error": {
+        "name": "TypeError",
+        "ctor": "TypeError",
+        "message": "The \"options.filter\" property must be of type function. Received type string ('x')",
+        "code": "ERR_INVALID_ARG_TYPE"
+       }
+      },
+      "tree": "unchanged"
+     }
+    },
+    "srcType": {
+     "sync": {
+      "answer": {
+       "error": {
+        "name": "TypeError",
+        "ctor": "TypeError",
+        "message": "The \"src\" argument must be of type string or an instance of Buffer or URL. Received type number (5)",
+        "code": "ERR_INVALID_ARG_TYPE"
+       }
+      },
+      "tree": "unchanged"
+     },
+     "promise": {
+      "answer": {
+       "error": {
+        "name": "TypeError",
+        "ctor": "TypeError",
+        "message": "The \"src\" argument must be of type string or an instance of Buffer or URL. Received type number (5)",
+        "code": "ERR_INVALID_ARG_TYPE"
+       }
+      },
+      "tree": "unchanged"
+     }
+    },
+    "destType": {
+     "sync": {
+      "answer": {
+       "error": {
+        "name": "TypeError",
+        "ctor": "TypeError",
+        "message": "The \"dest\" argument must be of type string or an instance of Buffer or URL. Received type number (5)",
+        "code": "ERR_INVALID_ARG_TYPE"
+       }
+      },
+      "tree": "unchanged"
+     },
+     "promise": {
+      "answer": {
+       "error": {
+        "name": "TypeError",
+        "ctor": "TypeError",
+        "message": "The \"dest\" argument must be of type string or an instance of Buffer or URL. Received type number (5)",
+        "code": "ERR_INVALID_ARG_TYPE"
+       }
+      },
+      "tree": "unchanged"
+     }
+    },
+    "srcNul": {
+     "sync": {
+      "answer": {
+       "error": {
+        "name": "TypeError",
+        "ctor": "TypeError",
+        "message": "The argument 'src' must be a string, Uint8Array, or URL without null bytes. Received 'a\\x00'",
+        "code": "ERR_INVALID_ARG_VALUE"
+       }
+      },
+      "tree": "unchanged"
+     },
+     "promise": {
+      "answer": {
+       "error": {
+        "name": "TypeError",
+        "ctor": "TypeError",
+        "message": "The argument 'src' must be a string, Uint8Array, or URL without null bytes. Received 'a\\x00'",
+        "code": "ERR_INVALID_ARG_VALUE"
+       }
+      },
+      "tree": "unchanged"
+     }
+    },
+    "url": {
+     "sync": {
+      "answer": {},
+      "tree": {
+       "out": "file:F"
+      }
+     },
+     "promise": {
+      "answer": {},
+      "tree": {
+       "out": "file:F"
+      }
+     }
+    },
+    "buffer": {
+     "sync": {
+      "answer": {},
+      "tree": {
+       "out": "file:F"
+      }
+     },
+     "promise": {
+      "answer": {
+       "error": {
+        "name": "TypeError",
+        "ctor": "TypeError",
+        "message": "The \"path\" argument must be of type string. Received an instance of Buffer",
+        "code": "ERR_INVALID_ARG_TYPE"
+       }
+      },
+      "tree": "unchanged"
+     }
+    },
+    "trailingSlash": {
+     "sync": {
+      "answer": {},
+      "tree": {
+       "out": "dir",
+       "out/a": "file:A",
+       "out/abs": "link -> /work/trailingSlash-sync/d/sub",
+       "out/rel": "link -> /work/trailingSlash-sync/d/a",
+       "out/sub": "dir",
+       "out/sub/b": "file:B"
+      }
+     },
+     "promise": {
+      "answer": {},
+      "tree": {
+       "out": "dir",
+       "out/a": "file:A",
+       "out/abs": "link -> /work/trailingSlash-promise/d/sub",
+       "out/rel": "link -> /work/trailingSlash-promise/d/a",
+       "out/sub": "dir",
+       "out/sub/b": "file:B"
+      }
+     }
+    },
+    "missingDereference": {
+     "sync": {
+      "answer": {
+       "error": {
+        "name": "Error",
+        "ctor": "Error",
+        "message": "ENOENT: no such file or directory, stat 'missingDereference-sync/nope'",
+        "code": "ENOENT",
+        "errno": -2,
+        "syscall": "stat",
+        "path": "missingDereference-sync/nope"
+       }
+      },
+      "tree": "unchanged"
+     },
+     "promise": {
+      "answer": {
+       "error": {
+        "name": "Error",
+        "ctor": "Error",
+        "message": "ENOENT: no such file or directory, stat 'missingDereference-promise/nope'",
+        "code": "ENOENT",
+        "errno": -2,
+        "syscall": "stat",
+        "path": "missingDereference-promise/nope"
+       }
+      },
+      "tree": "unchanged"
+     }
+    },
+    "derefFileOverLinkToDir": {
+     "sync": {
+      "answer": {
+       "error": {
+        "name": "Error",
+        "ctor": "Error",
+        "message": "Cannot overwrite directory derefFileOverLinkToDir-sync/ld with non-directory derefFileOverLinkToDir-sync/f",
+        "code": "ERR_FS_CP_NON_DIR_TO_DIR"
+       }
+      },
+      "tree": "unchanged"
+     },
+     "promise": {
+      "answer": {
+       "error": {
+        "name": "SystemError",
+        "ctor": "NodeError",
+        "message": "Cannot overwrite directory with non-directory: cp returned ENOTDIR (cannot overwrite directory derefFileOverLinkToDir-promise/ld with non-directory derefFileOverLinkToDir-promise/f) derefFileOverLinkToDir-promise/ld",
+        "code": "ERR_FS_CP_NON_DIR_TO_DIR",
+        "errno": 20,
+        "syscall": "cp",
+        "path": "derefFileOverLinkToDir-promise/ld"
+       }
+      },
+      "tree": "unchanged"
+     }
+    },
+    "derefDirOverLinkToFile": {
+     "sync": {
+      "answer": {
+       "error": {
+        "name": "Error",
+        "ctor": "Error",
+        "message": "Cannot overwrite non-directory derefDirOverLinkToFile-sync/lf with directory derefDirOverLinkToFile-sync/d",
+        "code": "ERR_FS_CP_DIR_TO_NON_DIR"
+       }
+      },
+      "tree": "unchanged"
+     },
+     "promise": {
+      "answer": {
+       "error": {
+        "name": "SystemError",
+        "ctor": "NodeError",
+        "message": "Cannot overwrite non-directory with directory: cp returned EISDIR (cannot overwrite non-directory derefDirOverLinkToFile-promise/lf with directory derefDirOverLinkToFile-promise/d) derefDirOverLinkToFile-promise/lf",
+        "code": "ERR_FS_CP_DIR_TO_NON_DIR",
+        "errno": 21,
+        "syscall": "cp",
+        "path": "derefDirOverLinkToFile-promise/lf"
+       }
+      },
+      "tree": "unchanged"
+     }
+    },
+    "derefFileOverLink": {
+     "sync": {
+      "answer": {},
+      "tree": {
+       "lold": "file:F"
+      }
+     },
+     "promise": {
+      "answer": {},
+      "tree": {
+       "lold": "file:F"
+      }
+     }
+    },
+    "derefLinkRecursive": {
+     "sync": {
+      "answer": {},
+      "tree": {
+       "out": "file:F"
+      }
+     },
+     "promise": {
+      "answer": {},
+      "tree": {
+       "out": "file:F"
+      }
+     }
+    },
+    "derefLinkDirOverFile": {
+     "sync": {
+      "answer": {
+       "error": {
+        "name": "Error",
+        "ctor": "Error",
+        "message": "Cannot overwrite non-directory derefLinkDirOverFile-sync/old with directory derefLinkDirOverFile-sync/ld",
+        "code": "ERR_FS_CP_DIR_TO_NON_DIR"
+       }
+      },
+      "tree": "unchanged"
+     },
+     "promise": {
+      "answer": {
+       "error": {
+        "name": "SystemError",
+        "ctor": "NodeError",
+        "message": "Cannot overwrite non-directory with directory: cp returned EISDIR (cannot overwrite non-directory derefLinkDirOverFile-promise/old with directory derefLinkDirOverFile-promise/ld) derefLinkDirOverFile-promise/old",
+        "code": "ERR_FS_CP_DIR_TO_NON_DIR",
+        "errno": 21,
+        "syscall": "cp",
+        "path": "derefLinkDirOverFile-promise/old"
+       }
+      },
+      "tree": "unchanged"
+     }
+    },
+    "throughLink": {
+     "sync": {
+      "answer": {
+       "error": {
+        "name": "Error",
+        "ctor": "Error",
+        "message": "Cannot copy throughLink-sync/d/ to a subdirectory of self throughLink-sync/ld/x",
+        "code": "ERR_FS_CP_EINVAL"
+       }
+      },
+      "tree": "unchanged"
+     },
+     "promise": {
+      "answer": {
+       "error": {
+        "name": "SystemError",
+        "ctor": "NodeError",
+        "message": "Invalid src or dest: cp returned EINVAL (cannot copy throughLink-promise/d to a subdirectory of self throughLink-promise/ld/x) throughLink-promise/ld/x",
+        "code": "ERR_FS_CP_EINVAL",
+        "errno": 22,
+        "syscall": "cp",
+        "path": "throughLink-promise/ld/x"
+       }
+      },
+      "tree": "unchanged"
+     }
+    },
+    "overLinks": {
+     "sync": {
+      "answer": {
+       "error": {
+        "name": "Error",
+        "ctor": "Error",
+        "message": "EEXIST, File exists 'overLinks-sync/links'",
+        "code": "EEXIST",
+        "errno": 17,
+        "syscall": "cp",
+        "path": "overLinks-sync/links"
+       }
+      },
+      "tree": {
+       "links/a": "file:A",
+       "links/abs": "link -> /work/overLinks-sync/d/sub"
+      }
+     },
+     "promise": {
+      "answer": {},
+      "tree": {
+       "links/a": "file:A",
+       "links/abs": "link -> /work/overLinks-promise/d/sub",
+       "links/rel": "link -> /work/overLinks-promise/d/a",
+       "links/sub": "dir",
+       "links/sub/b": "file:B"
+      }
+     }
+    },
+    "overLinksNoForce": {
+     "sync": {
+      "answer": {
+       "error": {
+        "name": "Error",
+        "ctor": "Error",
+        "message": "EEXIST, File exists 'overLinksNoForce-sync/links'",
+        "code": "EEXIST",
+        "errno": 17,
+        "syscall": "cp",
+        "path": "overLinksNoForce-sync/links"
+       }
+      },
+      "tree": {
+       "links/a": "file:A",
+       "links/abs": "link -> /work/overLinksNoForce-sync/d/sub"
+      }
+     },
+     "promise": {
+      "answer": {},
+      "tree": {
+       "links/a": "file:A",
+       "links/abs": "link -> /work/overLinksNoForce-promise/d/sub",
+       "links/rel": "link -> /work/overLinksNoForce-promise/d/a",
+       "links/sub": "dir",
+       "links/sub/b": "file:B"
+      }
+     }
+    },
+    "overLinksVerbatim": {
+     "sync": {
+      "answer": {
+       "error": {
+        "name": "Error",
+        "ctor": "Error",
+        "message": "EEXIST, File exists 'overLinksVerbatim-sync/links'",
+        "code": "EEXIST",
+        "errno": 17,
+        "syscall": "cp",
+        "path": "overLinksVerbatim-sync/links"
+       }
+      },
+      "tree": {
+       "links/a": "file:A"
+      }
+     },
+     "promise": {
+      "answer": {},
+      "tree": {
+       "links/a": "file:A",
+       "links/abs": "link -> /work/overLinksVerbatim-promise/d/sub",
+       "links/rel": "link -> a",
+       "links/sub": "dir",
+       "links/sub/b": "file:B"
+      }
+     }
+    },
+    "clash": {
+     "sync": {
+      "answer": {
+       "error": {
+        "name": "Error",
+        "ctor": "Error",
+        "message": "EINVAL, Invalid argument 'clash-sync/clash'",
+        "code": "EINVAL",
+        "errno": 22,
+        "syscall": "cp",
+        "path": "clash-sync/clash"
+       }
+      },
+      "tree": "unchanged"
+     },
+     "promise": {
+      "answer": {
+       "error": {
+        "name": "SystemError",
+        "ctor": "NodeError",
+        "message": "Cannot overwrite directory with non-directory: cp returned ENOTDIR (cannot overwrite directory clash-promise/clash/a with non-directory clash-promise/d/a) clash-promise/clash/a",
+        "code": "ERR_FS_CP_NON_DIR_TO_DIR",
+        "errno": 20,
+        "syscall": "cp",
+        "path": "clash-promise/clash/a"
+       }
+      },
+      "tree": "unchanged"
+     }
+    },
+    "clashFilter": {
+     "sync": {
+      "answer": {
+       "error": {
+        "name": "Error",
+        "ctor": "Error",
+        "message": "ENOTDIR: not a directory, lstat 'clashFilter-sync/clash/sub/b'",
+        "code": "ENOTDIR",
+        "errno": -20,
+        "syscall": "lstat",
+        "path": "clashFilter-sync/clash/sub/b"
+       }
+      },
+      "tree": {
+       "clash/a": "file:A",
+       "clash/abs": "link -> /work/clashFilter-sync/d/sub",
+       "clash/rel": "link -> /work/clashFilter-sync/d/a"
+      }
+     },
+     "promise": {
+      "answer": {
+       "error": {
+        "name": "SystemError",
+        "ctor": "NodeError",
+        "message": "Cannot overwrite directory with non-directory: cp returned ENOTDIR (cannot overwrite directory clashFilter-promise/clash/a with non-directory clashFilter-promise/d/a) clashFilter-promise/clash/a",
+        "code": "ERR_FS_CP_NON_DIR_TO_DIR",
+        "errno": 20,
+        "syscall": "cp",
+        "path": "clashFilter-promise/clash/a"
+       }
+      },
+      "tree": "unchanged"
+     }
+    },
+    "overLinksFilter": {
+     "sync": {
+      "answer": {
+       "error": {
+        "name": "Error",
+        "ctor": "Error",
+        "message": "ENOENT: no such file or directory, stat 'overLinksFilter-sync/links/rel'",
+        "code": "ENOENT",
+        "errno": -2,
+        "syscall": "stat",
+        "path": "overLinksFilter-sync/links/rel"
+       }
+      },
+      "tree": {
+       "links/a": "file:A",
+       "links/abs": "link -> /work/overLinksFilter-sync/d/sub"
+      }
+     },
+     "promise": {
+      "answer": {},
+      "tree": {
+       "links/a": "file:A",
+       "links/abs": "link -> /work/overLinksFilter-promise/d/sub",
+       "links/rel": "link -> /work/overLinksFilter-promise/d/a",
+       "links/sub": "dir",
+       "links/sub/b": "file:B"
+      }
+     }
+    },
+    "fileIntoLinkedDir": {
+     "sync": {
+      "answer": {},
+      "tree": {
+       "d/new": "file:F"
+      }
+     },
+     "promise": {
+      "answer": {},
+      "tree": {
+       "d/new": "file:F"
+      }
+     }
+    },
+    "noForceLink": {
+     "sync": {
+      "answer": {},
+      "tree": {
+       "lold": "link -> /work/noForceLink-sync/f"
+      }
+     },
+     "promise": {
+      "answer": {},
+      "tree": {
+       "lold": "link -> /work/noForceLink-promise/f"
+      }
+     }
+    },
+    "dirErrorOnExistForce": {
+     "sync": {
+      "answer": {},
+      "tree": {
+       "ed/a": "file:A",
+       "ed/abs": "link -> /work/dirErrorOnExistForce-sync/d/sub",
+       "ed/rel": "link -> /work/dirErrorOnExistForce-sync/d/a",
+       "ed/sub/b": "file:B"
+      }
+     },
+     "promise": {
+      "answer": {},
+      "tree": {
+       "ed/a": "file:A",
+       "ed/abs": "link -> /work/dirErrorOnExistForce-promise/d/sub",
+       "ed/rel": "link -> /work/dirErrorOnExistForce-promise/d/a",
+       "ed/sub/b": "file:B"
+      }
+     }
+    },
+    "linkToParent": {
+     "sync": {
+      "answer": {},
+      "tree": {
+       "d/sub/l": "link -> /work/linkToParent-sync/d"
+      }
+     },
+     "promise": {
+      "answer": {},
+      "tree": {
+       "d/sub/l": "link -> /work/linkToParent-promise/d"
+      }
+     }
+    },
+    "dotSegments": {
+     "sync": {
+      "answer": {},
+      "tree": {
+       "out": "file:F"
+      }
+     },
+     "promise": {
+      "answer": {},
+      "tree": {
+       "out": "file:F"
+      }
+     }
+    },
+    "dirOverLinkToDir": {
+     "sync": {
+      "answer": {
+       "error": {
+        "name": "Error",
+        "ctor": "Error",
+        "message": "src and dest cannot be the same dirOverLinkToDir-sync/ld",
+        "code": "ERR_FS_CP_EINVAL"
+       }
+      },
+      "tree": "unchanged"
+     },
+     "promise": {
+      "answer": {
+       "error": {
+        "name": "SystemError",
+        "ctor": "NodeError",
+        "message": "Cannot overwrite non-directory with directory: cp returned EISDIR (cannot overwrite non-directory dirOverLinkToDir-promise/ld with directory dirOverLinkToDir-promise/d) dirOverLinkToDir-promise/ld",
+        "code": "ERR_FS_CP_DIR_TO_NON_DIR",
+        "errno": 21,
+        "syscall": "cp",
+        "path": "dirOverLinkToDir-promise/ld"
+       }
+      },
+      "tree": "unchanged"
+     }
+    }
+   }
+  },
+  "metadata": {
+   "source": "fs.writeFileSync(\"f\", \"F\"); fs.chmodSync(\"f\", 0o640); fs.utimesSync(\"f\", 1000, 2000); fs.writeFileSync(\"ro\", \"R\"); fs.chmodSync(\"ro\", 0o444); fs.utimesSync(\"ro\", 3000, 4000);\nfs.mkdirSync(\"d/sub\", { recursive: true }); fs.writeFileSync(\"d/a\", \"A\"); fs.chmodSync(\"d/a\", 0o600); fs.utimesSync(\"d/a\", 5000, 6000); fs.chmodSync(\"d/sub\", 0o700); fs.chmodSync(\"d\", 0o750); fs.utimesSync(\"d\", 7000, 8000);\nconst meta = p => { const s = fs.statSync(p); return [(s.mode & 0o777).toString(8), s.mtimeMs / 1000 < 1e6 ? s.mtimeMs / 1000 : \"now\"]; };\nconst out = {};\nfs.cpSync(\"f\", \"plain\"); out.plain = meta(\"plain\");\nfs.cpSync(\"f\", \"kept\", { preserveTimestamps: true }); out.kept = meta(\"kept\");\nfs.cpSync(\"ro\", \"roKept\", { preserveTimestamps: true }); out.readOnly = meta(\"roKept\");\nfs.writeFileSync(\"existing\", \"old\"); fs.chmodSync(\"existing\", 0o666); fs.cpSync(\"f\", \"existing\"); out.overwritten = [meta(\"existing\")[0], fs.readFileSync(\"existing\", \"utf8\")];\nfs.writeFileSync(\"existing2\", \"old\"); fs.cpSync(\"f\", \"existing2\", { preserveTimestamps: true }); out.overwrittenKept = meta(\"existing2\");\nfs.cpSync(\"d\", \"dPlain\", { recursive: true }); out.dirPlain = [meta(\"dPlain\"), meta(\"dPlain/a\"), meta(\"dPlain/sub\")];\nfs.cpSync(\"d\", \"dKept\", { recursive: true, preserveTimestamps: true }); out.dirKept = [meta(\"dKept\"), meta(\"dKept/a\"), meta(\"dKept/sub\")];\nfs.cpSync(\"d\", \"dFiltered\", { recursive: true, preserveTimestamps: true, filter: () => true }); out.dirFiltered = [meta(\"dFiltered\"), meta(\"dFiltered/a\"), meta(\"dFiltered/sub\")];\nreturn out;\n",
+   "result": {
+    "plain": [
+     "640",
+     "now"
+    ],
+    "kept": [
+     "640",
+     2000
+    ],
+    "readOnly": [
+     "444",
+     4000
+    ],
+    "overwritten": [
+     "640",
+     "F"
+    ],
+    "overwrittenKept": [
+     "640",
+     2000
+    ],
+    "dirPlain": [
+     [
+      "755",
+      "now"
+     ],
+     [
+      "600",
+      "now"
+     ],
+     [
+      "755",
+      "now"
+     ]
+    ],
+    "dirKept": [
+     [
+      "755",
+      "now"
+     ],
+     [
+      "600",
+      6000
+     ],
+     [
+      "755",
+      "now"
+     ]
+    ],
+    "dirFiltered": [
+     [
+      "750",
+      "now"
+     ],
+     [
+      "600",
+      6000
+     ],
+     [
+      "700",
+      "now"
+     ]
+    ]
+   }
+  },
+  "promise": {
+   "source": "fs.writeFileSync(\"f\", \"F\"); fs.chmodSync(\"f\", 0o640); fs.utimesSync(\"f\", 1000, 2000); fs.writeFileSync(\"ro\", \"R\"); fs.chmodSync(\"ro\", 0o444); fs.utimesSync(\"ro\", 3000, 4000);\nfs.mkdirSync(\"d/sub\", { recursive: true }); fs.writeFileSync(\"d/a\", \"A\"); fs.chmodSync(\"d/a\", 0o600); fs.utimesSync(\"d/a\", 5000, 6000); fs.chmodSync(\"d/sub\", 0o700); fs.chmodSync(\"d\", 0o750); fs.utimesSync(\"d\", 7000, 8000);\nconst meta = p => { const s = fs.statSync(p); return [(s.mode & 0o777).toString(8), s.mtimeMs / 1000 < 1e6 ? s.mtimeMs / 1000 : \"now\"]; };\nconst out = {};\nawait fs.promises.cp(\"f\", \"pKept\", { preserveTimestamps: true }); out.promiseKept = meta(\"pKept\");\nawait fs.promises.cp(\"d\", \"pdKept\", { recursive: true, preserveTimestamps: true }); out.promiseDirKept = [meta(\"pdKept\"), meta(\"pdKept/a\"), meta(\"pdKept/sub\")];\nout.callback = await new Promise(resolve => { const order = []; const r = fs.cp(\"f\", \"viaCallback\", (...args) => { order.push(\"callback\"); resolve({ order, args, r }); }); order.push(\"returned\"); });\nout.callbackOptions = await new Promise(resolve => fs.cp(\"d\", \"viaCallbackDir\", { recursive: true }, (...args) => resolve([args, fs.readFileSync(\"viaCallbackDir/a\", \"utf8\")])));\nout.callbackError = await new Promise(resolve => fs.cp(\"nope\", \"x\", e => resolve(h.err(e))));\nout.callbackMissing = h.attempt(() => fs.cp(\"f\", \"x\")); out.callbackValidation = h.attempt(() => fs.cp(\"f\", \"x\", { recursive: 1 }, () => {}));\nreturn out;\n",
+   "result": {
+    "promiseKept": [
+     "640",
+     2000
+    ],
+    "promiseDirKept": [
+     [
+      "750",
+      "now"
+     ],
+     [
+      "600",
+      6000
+     ],
+     [
+      "700",
+      "now"
+     ]
+    ],
+    "callback": {
+     "order": [
+      "returned",
+      "callback"
+     ],
+     "args": [
+      null,
+      null
+     ]
+    },
+    "callbackOptions": [
+     [
+      null,
+      null
+     ],
+     "A"
+    ],
+    "callbackError": {
+     "name": "Error",
+     "ctor": "Error",
+     "message": "ENOENT: no such file or directory, lstat 'nope'",
+     "code": "ENOENT",
+     "errno": -2,
+     "syscall": "lstat",
+     "path": "nope"
+    },
+    "callbackMissing": {
+     "error": {
+      "name": "TypeError",
+      "ctor": "TypeError",
+      "message": "The \"cb\" argument must be of type function. Received undefined",
+      "code": "ERR_INVALID_ARG_TYPE"
+     }
+    },
+    "callbackValidation": {
+     "error": {
+      "name": "TypeError",
+      "ctor": "TypeError",
+      "message": "The \"options.recursive\" property must be of type boolean. Received type number (1)",
+      "code": "ERR_INVALID_ARG_TYPE"
+     }
+    }
+   }
+  }
+ }
+}

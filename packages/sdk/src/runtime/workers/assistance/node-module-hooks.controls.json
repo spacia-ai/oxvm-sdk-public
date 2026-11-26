@@ -1,0 +1,1403 @@
+{
+ "//": "Recorded from Node.js v24.18.1 (node:24.18.1-alpine); the command is the first line of `recorder`. `tree` holds the scenario program (entry.cjs) the test runs unchanged.",
+ "recorder": "// docker run --rm -v \"$PWD/rec-hooks.js:/rec.js:ro\" -v \"$PWD/hooks-entry.cjs:/entry.cjs:ro\" node:24.18.1-alpine node /rec.js\n// The scenarios are the program /entry.cjs (kept under \"program\"): the test runs the same text in the fast path's loader.\nconst fs = require(\"fs\"), path = require(\"path\");\nconst H = \"/workspace/h\";\nconst tree = { files: {\n  [H + \"/package.json\"]: '{\"name\":\"h\"}', [H + \"/a.js\"]: \"module.exports = 'a';\", [H + \"/b.js\"]: \"module.exports = 'b:' + require('./a.js');\", [H + \"/d.json\"]: '{\"d\":1}',\n  [H + \"/e.mjs\"]: \"export const e = 'e'; export default 'E';\", [H + \"/f.mjs\"]: \"import a from './a.js'; import { e } from './e.mjs'; import g from './g.mjs'; export const f = a + e + g;\",\n  [H + \"/g.mjs\"]: \"export default 'g';\", [H + \"/meta.mjs\"]: \"export const r = import.meta.resolve('./a.js');\",\n  [H + \"/node_modules/dep/package.json\"]: '{\"name\":\"dep\",\"main\":\"m.js\"}', [H + \"/node_modules/dep/m.js\"]: \"module.exports = 'dep';\",\n  [H + \"/c.js\"]: \"module.exports = [require('./a.js'), require('dep')];\", [H + \"/other/in-other.js\"]: \"module.exports = 'other';\",\n  [H + \"/order-one.js\"]: \"module.exports = 1;\", [H + \"/order-two.js\"]: \"module.exports = 2;\", [H + \"/order-three.js\"]: \"module.exports = 3;\",\n} };\nconst answers = [\"replace\", \"module\", \"commonjs\", \"json\", \"no-short\", \"bad-source\", \"unknown-format\", \"number-format\", \"no-format\", \"bad-return\", \"undefined-return\", \"null-source\", \"array-buffer\", \"typed-array\", \"twice\"];\nfor (const door of [\"require\", \"import\"]) for (const name of answers) {\n  tree.files[`${H}/answers/${door}-${name}.js`] = \"module.exports = 'orig';\"; tree.files[`${H}/answers/${door}-${name}.mjs`] = \"export default 'orig';\"; tree.files[`${H}/answers/${door}-${name}.json`] = '{\"orig\":true}';\n}\nconst program = fs.readFileSync(\"/entry.cjs\", \"utf8\");\ntree.files[H + \"/entry.cjs\"] = program;\nfor (const [file, text] of Object.entries(tree.files)) { fs.mkdirSync(path.dirname(file), { recursive: true }); fs.writeFileSync(file, text); }\nprocess.chdir(H);\nprocess.removeAllListeners(\"warning\"); process.on(\"warning\", () => {});\nrequire(H + \"/entry.cjs\").then(out => process.stdout.write(JSON.stringify({ tree, results: out }, null, 1)));\n",
+ "tree": {
+  "files": {
+   "/workspace/h/package.json": "{\"name\":\"h\"}",
+   "/workspace/h/a.js": "module.exports = 'a';",
+   "/workspace/h/b.js": "module.exports = 'b:' + require('./a.js');",
+   "/workspace/h/d.json": "{\"d\":1}",
+   "/workspace/h/e.mjs": "export const e = 'e'; export default 'E';",
+   "/workspace/h/f.mjs": "import a from './a.js'; import { e } from './e.mjs'; import g from './g.mjs'; export const f = a + e + g;",
+   "/workspace/h/g.mjs": "export default 'g';",
+   "/workspace/h/meta.mjs": "export const r = import.meta.resolve('./a.js');",
+   "/workspace/h/node_modules/dep/package.json": "{\"name\":\"dep\",\"main\":\"m.js\"}",
+   "/workspace/h/node_modules/dep/m.js": "module.exports = 'dep';",
+   "/workspace/h/c.js": "module.exports = [require('./a.js'), require('dep')];",
+   "/workspace/h/other/in-other.js": "module.exports = 'other';",
+   "/workspace/h/order-one.js": "module.exports = 1;",
+   "/workspace/h/order-two.js": "module.exports = 2;",
+   "/workspace/h/order-three.js": "module.exports = 3;",
+   "/workspace/h/answers/require-replace.js": "module.exports = 'orig';",
+   "/workspace/h/answers/require-replace.mjs": "export default 'orig';",
+   "/workspace/h/answers/require-replace.json": "{\"orig\":true}",
+   "/workspace/h/answers/require-module.js": "module.exports = 'orig';",
+   "/workspace/h/answers/require-module.mjs": "export default 'orig';",
+   "/workspace/h/answers/require-module.json": "{\"orig\":true}",
+   "/workspace/h/answers/require-commonjs.js": "module.exports = 'orig';",
+   "/workspace/h/answers/require-commonjs.mjs": "export default 'orig';",
+   "/workspace/h/answers/require-commonjs.json": "{\"orig\":true}",
+   "/workspace/h/answers/require-json.js": "module.exports = 'orig';",
+   "/workspace/h/answers/require-json.mjs": "export default 'orig';",
+   "/workspace/h/answers/require-json.json": "{\"orig\":true}",
+   "/workspace/h/answers/require-no-short.js": "module.exports = 'orig';",
+   "/workspace/h/answers/require-no-short.mjs": "export default 'orig';",
+   "/workspace/h/answers/require-no-short.json": "{\"orig\":true}",
+   "/workspace/h/answers/require-bad-source.js": "module.exports = 'orig';",
+   "/workspace/h/answers/require-bad-source.mjs": "export default 'orig';",
+   "/workspace/h/answers/require-bad-source.json": "{\"orig\":true}",
+   "/workspace/h/answers/require-unknown-format.js": "module.exports = 'orig';",
+   "/workspace/h/answers/require-unknown-format.mjs": "export default 'orig';",
+   "/workspace/h/answers/require-unknown-format.json": "{\"orig\":true}",
+   "/workspace/h/answers/require-number-format.js": "module.exports = 'orig';",
+   "/workspace/h/answers/require-number-format.mjs": "export default 'orig';",
+   "/workspace/h/answers/require-number-format.json": "{\"orig\":true}",
+   "/workspace/h/answers/require-no-format.js": "module.exports = 'orig';",
+   "/workspace/h/answers/require-no-format.mjs": "export default 'orig';",
+   "/workspace/h/answers/require-no-format.json": "{\"orig\":true}",
+   "/workspace/h/answers/require-bad-return.js": "module.exports = 'orig';",
+   "/workspace/h/answers/require-bad-return.mjs": "export default 'orig';",
+   "/workspace/h/answers/require-bad-return.json": "{\"orig\":true}",
+   "/workspace/h/answers/require-undefined-return.js": "module.exports = 'orig';",
+   "/workspace/h/answers/require-undefined-return.mjs": "export default 'orig';",
+   "/workspace/h/answers/require-undefined-return.json": "{\"orig\":true}",
+   "/workspace/h/answers/require-null-source.js": "module.exports = 'orig';",
+   "/workspace/h/answers/require-null-source.mjs": "export default 'orig';",
+   "/workspace/h/answers/require-null-source.json": "{\"orig\":true}",
+   "/workspace/h/answers/require-array-buffer.js": "module.exports = 'orig';",
+   "/workspace/h/answers/require-array-buffer.mjs": "export default 'orig';",
+   "/workspace/h/answers/require-array-buffer.json": "{\"orig\":true}",
+   "/workspace/h/answers/require-typed-array.js": "module.exports = 'orig';",
+   "/workspace/h/answers/require-typed-array.mjs": "export default 'orig';",
+   "/workspace/h/answers/require-typed-array.json": "{\"orig\":true}",
+   "/workspace/h/answers/require-twice.js": "module.exports = 'orig';",
+   "/workspace/h/answers/require-twice.mjs": "export default 'orig';",
+   "/workspace/h/answers/require-twice.json": "{\"orig\":true}",
+   "/workspace/h/answers/import-replace.js": "module.exports = 'orig';",
+   "/workspace/h/answers/import-replace.mjs": "export default 'orig';",
+   "/workspace/h/answers/import-replace.json": "{\"orig\":true}",
+   "/workspace/h/answers/import-module.js": "module.exports = 'orig';",
+   "/workspace/h/answers/import-module.mjs": "export default 'orig';",
+   "/workspace/h/answers/import-module.json": "{\"orig\":true}",
+   "/workspace/h/answers/import-commonjs.js": "module.exports = 'orig';",
+   "/workspace/h/answers/import-commonjs.mjs": "export default 'orig';",
+   "/workspace/h/answers/import-commonjs.json": "{\"orig\":true}",
+   "/workspace/h/answers/import-json.js": "module.exports = 'orig';",
+   "/workspace/h/answers/import-json.mjs": "export default 'orig';",
+   "/workspace/h/answers/import-json.json": "{\"orig\":true}",
+   "/workspace/h/answers/import-no-short.js": "module.exports = 'orig';",
+   "/workspace/h/answers/import-no-short.mjs": "export default 'orig';",
+   "/workspace/h/answers/import-no-short.json": "{\"orig\":true}",
+   "/workspace/h/answers/import-bad-source.js": "module.exports = 'orig';",
+   "/workspace/h/answers/import-bad-source.mjs": "export default 'orig';",
+   "/workspace/h/answers/import-bad-source.json": "{\"orig\":true}",
+   "/workspace/h/answers/import-unknown-format.js": "module.exports = 'orig';",
+   "/workspace/h/answers/import-unknown-format.mjs": "export default 'orig';",
+   "/workspace/h/answers/import-unknown-format.json": "{\"orig\":true}",
+   "/workspace/h/answers/import-number-format.js": "module.exports = 'orig';",
+   "/workspace/h/answers/import-number-format.mjs": "export default 'orig';",
+   "/workspace/h/answers/import-number-format.json": "{\"orig\":true}",
+   "/workspace/h/answers/import-no-format.js": "module.exports = 'orig';",
+   "/workspace/h/answers/import-no-format.mjs": "export default 'orig';",
+   "/workspace/h/answers/import-no-format.json": "{\"orig\":true}",
+   "/workspace/h/answers/import-bad-return.js": "module.exports = 'orig';",
+   "/workspace/h/answers/import-bad-return.mjs": "export default 'orig';",
+   "/workspace/h/answers/import-bad-return.json": "{\"orig\":true}",
+   "/workspace/h/answers/import-undefined-return.js": "module.exports = 'orig';",
+   "/workspace/h/answers/import-undefined-return.mjs": "export default 'orig';",
+   "/workspace/h/answers/import-undefined-return.json": "{\"orig\":true}",
+   "/workspace/h/answers/import-null-source.js": "module.exports = 'orig';",
+   "/workspace/h/answers/import-null-source.mjs": "export default 'orig';",
+   "/workspace/h/answers/import-null-source.json": "{\"orig\":true}",
+   "/workspace/h/answers/import-array-buffer.js": "module.exports = 'orig';",
+   "/workspace/h/answers/import-array-buffer.mjs": "export default 'orig';",
+   "/workspace/h/answers/import-array-buffer.json": "{\"orig\":true}",
+   "/workspace/h/answers/import-typed-array.js": "module.exports = 'orig';",
+   "/workspace/h/answers/import-typed-array.mjs": "export default 'orig';",
+   "/workspace/h/answers/import-typed-array.json": "{\"orig\":true}",
+   "/workspace/h/answers/import-twice.js": "module.exports = 'orig';",
+   "/workspace/h/answers/import-twice.mjs": "export default 'orig';",
+   "/workspace/h/answers/import-twice.json": "{\"orig\":true}",
+   "/workspace/h/entry.cjs": "const Module = require(\"module\");\nconst out = {}; let log = [];\nconst show = v => v === undefined ? \"<undefined>\" : v === null ? null : typeof v === \"function\" ? \"<fn>\" : ArrayBuffer.isView(v) ? { view: v.constructor.name, text: String(v) } : typeof v === \"object\" ? Object.fromEntries(Reflect.ownKeys(v).map(k => [String(k), show(v[k])])) : v;\nconst fail = e => ({ error: { name: e.constructor.name, code: e.code === undefined ? null : e.code, message: e.message } });\nconst attempt = f => { try { return { value: show(f()) }; } catch (e) { return fail(e); } };\nconst imported = s => import(s).then(m => ({ value: show({ ...m }) }), fail);\nconst tracing = () => ({\n  resolve(s, c, n) { const r = n(s, c); log.push([\"resolve\", s, show(c), show(r), arguments.length, n.length, n.name]); return r; },\n  load(u, c, n) { const r = n(u, c); log.push([\"load\", u, show(c), show(r), arguments.length, n.length, n.name]); return r; },\n});\nconst drain = () => { const seen = log; log = []; return seen; };\nmodule.exports = (async () => {\n  const H = \"/workspace/h\";\n  // 1. What the hooks receive, for require and for import.\n  let hooks = Module.registerHooks(tracing());\n  out.requireC = [attempt(() => require(\"./c.js\")), drain()];\n  out.requireCAgain = [attempt(() => require(\"./c.js\")), drain()];\n  out.requireResolve = [attempt(() => require.resolve(\"./b.js\")), drain()];\n  out.requireJson = [attempt(() => require(\"./d.json\")), drain()];\n  out.requireEsm = [attempt(() => require(\"./e.mjs\")), drain()];\n  out.importF = [await imported(H + \"/f.mjs\"), drain()];\n  out.importAgain = [await imported(H + \"/f.mjs\"), drain()];\n  out.metaResolve = [await imported(H + \"/meta.mjs\"), drain().map(entry => entry.slice(0, 2))];\n  hooks.deregister();\n  out.afterDeregister = [attempt(() => require(\"./b.js\")), drain()];\n  // 2. The last registered hook runs first.\n  const order = [];\n  const step = tag => ({ resolve(s, c, n) { order.push(\"resolve \" + tag + \" in\"); const r = n(s, c); order.push(\"resolve \" + tag + \" out\"); return r; }, load(u, c, n) { order.push(\"load \" + tag + \" in\"); const r = n(u, c); order.push(\"load \" + tag + \" out\"); return r; } });\n  const first = Module.registerHooks(step(\"first\")), second = Module.registerHooks(step(\"second\"));\n  require(\"./order-one.js\"); out.order = order.splice(0);\n  first.deregister(); require(\"./order-two.js\"); out.orderAfterDeregister = order.splice(0);\n  second.deregister(); require(\"./order-three.js\"); out.orderNone = order.splice(0);\n  // 3. Hooks that answer themselves.\n  const custom = Module.registerHooks({\n    resolve(s, c, n) {\n      if (s === \"virtual:x\") return { url: \"file://\" + H + \"/virtual-x.js\", shortCircuit: true };\n      if (s === \"virtual:esm\") return { url: \"file://\" + H + \"/virtual-e.mjs\", format: \"module\", shortCircuit: true };\n      if (s === \"alias-fs\") return { url: \"node:fs\", shortCircuit: true };\n      if (s === \"alias-path\") return n(\"node:path\", c);\n      if (s === \"alias-a\") return n(\"./a.js\", c);\n      if (s === \"./moved-parent\") return n(\"./in-other.js\", { ...c, parentURL: \"file://\" + H + \"/other/x.js\" });\n      if (s === \"no-short\") return { url: \"file://\" + H + \"/a.js\" };\n      if (s === \"false-short\") return { url: \"file://\" + H + \"/a.js\", shortCircuit: false };\n      if (s === \"bad-url\") return { url: 5, shortCircuit: true };\n      if (s === \"bad-return\") return 5;\n      if (s === \"undefined-return\") return undefined;\n      if (s === \"bad-format\") return { url: \"file://\" + H + \"/a.js\", format: 5, shortCircuit: true };\n      if (s === \"path-url\") return { url: H + \"/a.js\", shortCircuit: true };\n      if (s === \"throws\") throw new RangeError(\"hook boom\");\n      if (s === \"./typed.ts\") return { url: \"file://\" + H + \"/typed.ts\", shortCircuit: true };\n      return n(s, c);\n    },\n    load(u, c, n) {\n      if (u === \"file://\" + H + \"/virtual-x.js\") return { format: \"commonjs\", source: \"module.exports = 'virtual:' + __filename + ':' + module.id;\", shortCircuit: true };\n      if (u === \"file://\" + H + \"/virtual-e.mjs\") return { format: \"module\", source: \"export const v = import.meta.url;\", shortCircuit: true };\n      if (u === \"file://\" + H + \"/typed.ts\") return { format: \"commonjs\", source: new TextEncoder().encode(\"module.exports = 'typed';\"), shortCircuit: true };\n      return n(u, c);\n    },\n  });\n  const brief = r => r.value && r.value.readFileSync ? { value: \"<fs>\" } : r.value && r.value.sep ? { value: \"<path>\" } : r;\n  out.custom = {}; out.customImport = {};\n  for (const s of [\"virtual:x\", \"virtual:esm\", \"alias-fs\", \"alias-path\", \"alias-a\", \"./moved-parent\", \"no-short\", \"false-short\", \"bad-url\", \"bad-return\", \"undefined-return\", \"bad-format\", \"path-url\", \"throws\", \"./typed.ts\"]) out.custom[s] = brief(attempt(() => require(s)));\n  for (const s of [\"virtual:x\", \"virtual:esm\", \"alias-fs\", \"no-short\", \"bad-url\", \"bad-return\", \"path-url\", \"throws\", \"./typed.ts\"]) out.customImport[s] = brief(await imported(s));\n  custom.deregister();\n  // 4. What a load hook may answer with, per extension and loading door.\n  const answers = {\n    replace: next => ({ format: \"commonjs\", source: String(next().source).replace(\"'orig'\", \"'replaced'\") }),\n    module: () => ({ format: \"module\", source: \"export default 'esm'; export const n = 1;\", shortCircuit: true }),\n    commonjs: () => ({ format: \"commonjs\", source: \"exports.c = 1;\", shortCircuit: true }),\n    json: () => ({ format: \"json\", source: '{\"j\":1}', shortCircuit: true }),\n    \"no-short\": () => ({ format: \"commonjs\", source: \"module.exports = 1\" }),\n    \"bad-source\": () => ({ format: \"commonjs\", source: 5, shortCircuit: true }),\n    \"unknown-format\": () => ({ format: \"weird\", source: \"module.exports = 1\", shortCircuit: true }),\n    \"number-format\": () => ({ format: 5, source: \"module.exports = 1\", shortCircuit: true }),\n    \"no-format\": () => ({ source: \"module.exports = 'nf'\", shortCircuit: true }),\n    \"bad-return\": () => 7, \"undefined-return\": () => undefined,\n    \"null-source\": () => ({ format: \"commonjs\", source: null, shortCircuit: true }),\n    \"array-buffer\": () => ({ format: \"commonjs\", source: new TextEncoder().encode(\"module.exports = 'ab'\").buffer, shortCircuit: true }),\n    \"typed-array\": () => ({ format: \"module\", source: new TextEncoder().encode(\"export default 'u8'\"), shortCircuit: true }),\n    twice: next => { next(); return next(); },\n  };\n  let current;\n  const answering = Module.registerHooks({ load(u, c, n) { return u.includes(\"/h/answers/\") ? answers[current](() => n(u, c)) : n(u, c); } });\n  out.answers = { require: {}, import: {} };\n  for (const extension of [\"js\", \"mjs\", \"json\"]) for (const name of Object.keys(answers)) {\n    current = name;\n    out.answers.require[name + \".\" + extension] = attempt(() => require(\"./answers/require-\" + name + \".\" + extension));\n    out.answers.import[name + \".\" + extension] = await imported(H + \"/answers/import-\" + name + \".\" + extension);\n  }\n  answering.deregister();\n  return out;\n})();\n"
+  }
+ },
+ "results": {
+  "requireC": [
+   {
+    "value": {
+     "0": "a",
+     "1": "dep",
+     "length": 2
+    }
+   },
+   [
+    [
+     "resolve",
+     "./c.js",
+     {
+      "parentURL": "file:///workspace/h/entry.cjs",
+      "importAttributes": "<undefined>",
+      "conditions": {
+       "0": "require",
+       "1": "node",
+       "2": "node-addons",
+       "3": "module-sync",
+       "length": 4
+      }
+     },
+     {
+      "url": "file:///workspace/h/c.js",
+      "format": "<undefined>",
+      "importAttributes": "<undefined>"
+     },
+     3,
+     2,
+     "nextStep"
+    ],
+    [
+     "load",
+     "file:///workspace/h/c.js",
+     {
+      "format": "<undefined>",
+      "importAttributes": "<undefined>",
+      "conditions": {
+       "0": "require",
+       "1": "node",
+       "2": "node-addons",
+       "3": "module-sync",
+       "length": 4
+      }
+     },
+     {
+      "source": "module.exports = [require('./a.js'), require('dep')];",
+      "format": "<undefined>"
+     },
+     3,
+     2,
+     "nextStep"
+    ],
+    [
+     "resolve",
+     "./a.js",
+     {
+      "parentURL": "file:///workspace/h/c.js",
+      "importAttributes": "<undefined>",
+      "conditions": {
+       "0": "require",
+       "1": "node",
+       "2": "node-addons",
+       "3": "module-sync",
+       "length": 4
+      }
+     },
+     {
+      "url": "file:///workspace/h/a.js",
+      "format": "<undefined>",
+      "importAttributes": "<undefined>"
+     },
+     3,
+     2,
+     "nextStep"
+    ],
+    [
+     "load",
+     "file:///workspace/h/a.js",
+     {
+      "format": "<undefined>",
+      "importAttributes": "<undefined>",
+      "conditions": {
+       "0": "require",
+       "1": "node",
+       "2": "node-addons",
+       "3": "module-sync",
+       "length": 4
+      }
+     },
+     {
+      "source": "module.exports = 'a';",
+      "format": "<undefined>"
+     },
+     3,
+     2,
+     "nextStep"
+    ],
+    [
+     "resolve",
+     "dep",
+     {
+      "parentURL": "file:///workspace/h/c.js",
+      "importAttributes": "<undefined>",
+      "conditions": {
+       "0": "require",
+       "1": "node",
+       "2": "node-addons",
+       "3": "module-sync",
+       "length": 4
+      }
+     },
+     {
+      "url": "file:///workspace/h/node_modules/dep/m.js",
+      "format": "<undefined>",
+      "importAttributes": "<undefined>"
+     },
+     3,
+     2,
+     "nextStep"
+    ],
+    [
+     "load",
+     "file:///workspace/h/node_modules/dep/m.js",
+     {
+      "format": "<undefined>",
+      "importAttributes": "<undefined>",
+      "conditions": {
+       "0": "require",
+       "1": "node",
+       "2": "node-addons",
+       "3": "module-sync",
+       "length": 4
+      }
+     },
+     {
+      "source": "module.exports = 'dep';",
+      "format": "<undefined>"
+     },
+     3,
+     2,
+     "nextStep"
+    ]
+   ]
+  ],
+  "requireCAgain": [
+   {
+    "value": {
+     "0": "a",
+     "1": "dep",
+     "length": 2
+    }
+   },
+   []
+  ],
+  "requireResolve": [
+   {
+    "value": "/workspace/h/b.js"
+   },
+   [
+    [
+     "resolve",
+     "./b.js",
+     {
+      "parentURL": "file:///workspace/h/entry.cjs",
+      "importAttributes": "<undefined>",
+      "conditions": {
+       "0": "require",
+       "1": "node",
+       "2": "node-addons",
+       "3": "module-sync",
+       "length": 4
+      }
+     },
+     {
+      "url": "file:///workspace/h/b.js",
+      "format": "<undefined>",
+      "importAttributes": "<undefined>"
+     },
+     3,
+     2,
+     "nextStep"
+    ]
+   ]
+  ],
+  "requireJson": [
+   {
+    "value": {
+     "d": 1
+    }
+   },
+   [
+    [
+     "resolve",
+     "./d.json",
+     {
+      "parentURL": "file:///workspace/h/entry.cjs",
+      "importAttributes": "<undefined>",
+      "conditions": {
+       "0": "require",
+       "1": "node",
+       "2": "node-addons",
+       "3": "module-sync",
+       "length": 4
+      }
+     },
+     {
+      "url": "file:///workspace/h/d.json",
+      "format": "<undefined>",
+      "importAttributes": "<undefined>"
+     },
+     3,
+     2,
+     "nextStep"
+    ],
+    [
+     "load",
+     "file:///workspace/h/d.json",
+     {
+      "format": "json",
+      "importAttributes": "<undefined>",
+      "conditions": {
+       "0": "require",
+       "1": "node",
+       "2": "node-addons",
+       "3": "module-sync",
+       "length": 4
+      }
+     },
+     {
+      "source": "{\"d\":1}",
+      "format": "json"
+     },
+     3,
+     2,
+     "nextStep"
+    ]
+   ]
+  ],
+  "requireEsm": [
+   {
+    "value": {
+     "__esModule": true,
+     "default": "E",
+     "e": "e",
+     "Symbol(Symbol.toStringTag)": "Module"
+    }
+   },
+   [
+    [
+     "resolve",
+     "./e.mjs",
+     {
+      "parentURL": "file:///workspace/h/entry.cjs",
+      "importAttributes": "<undefined>",
+      "conditions": {
+       "0": "require",
+       "1": "node",
+       "2": "node-addons",
+       "3": "module-sync",
+       "length": 4
+      }
+     },
+     {
+      "url": "file:///workspace/h/e.mjs",
+      "format": "<undefined>",
+      "importAttributes": "<undefined>"
+     },
+     3,
+     2,
+     "nextStep"
+    ],
+    [
+     "load",
+     "file:///workspace/h/e.mjs",
+     {
+      "format": "module",
+      "importAttributes": "<undefined>",
+      "conditions": {
+       "0": "require",
+       "1": "node",
+       "2": "node-addons",
+       "3": "module-sync",
+       "length": 4
+      }
+     },
+     {
+      "source": "export const e = 'e'; export default 'E';",
+      "format": "module"
+     },
+     3,
+     2,
+     "nextStep"
+    ]
+   ]
+  ],
+  "importF": [
+   {
+    "value": {
+     "f": "aeg"
+    }
+   },
+   [
+    [
+     "resolve",
+     "/workspace/h/f.mjs",
+     {
+      "parentURL": "file:///workspace/h/entry.cjs",
+      "importAttributes": {},
+      "conditions": {
+       "0": "node",
+       "1": "import",
+       "2": "module-sync",
+       "3": "node-addons",
+       "length": 4
+      }
+     },
+     {
+      "url": "file:///workspace/h/f.mjs",
+      "format": "module",
+      "importAttributes": "<undefined>"
+     },
+     3,
+     2,
+     "nextStep"
+    ],
+    [
+     "load",
+     "file:///workspace/h/f.mjs",
+     {
+      "format": "module",
+      "importAttributes": {},
+      "conditions": {
+       "0": "node",
+       "1": "import",
+       "2": "module-sync",
+       "3": "node-addons",
+       "length": 4
+      }
+     },
+     {
+      "format": "module",
+      "responseURL": "file:///workspace/h/f.mjs",
+      "source": {
+       "view": "Buffer",
+       "text": "import a from './a.js'; import { e } from './e.mjs'; import g from './g.mjs'; export const f = a + e + g;"
+      }
+     },
+     3,
+     2,
+     "nextStep"
+    ],
+    [
+     "resolve",
+     "./a.js",
+     {
+      "parentURL": "file:///workspace/h/f.mjs",
+      "importAttributes": {},
+      "conditions": {
+       "0": "node",
+       "1": "import",
+       "2": "module-sync",
+       "3": "node-addons",
+       "length": 4
+      }
+     },
+     {
+      "url": "file:///workspace/h/a.js",
+      "format": null,
+      "importAttributes": "<undefined>"
+     },
+     3,
+     2,
+     "nextStep"
+    ],
+    [
+     "load",
+     "file:///workspace/h/a.js",
+     {
+      "format": null,
+      "importAttributes": {},
+      "conditions": {
+       "0": "node",
+       "1": "import",
+       "2": "module-sync",
+       "3": "node-addons",
+       "length": 4
+      }
+     },
+     {
+      "format": "commonjs",
+      "responseURL": "file:///workspace/h/a.js",
+      "source": {
+       "view": "Buffer",
+       "text": "module.exports = 'a';"
+      }
+     },
+     3,
+     2,
+     "nextStep"
+    ],
+    [
+     "resolve",
+     "./e.mjs",
+     {
+      "parentURL": "file:///workspace/h/f.mjs",
+      "importAttributes": {},
+      "conditions": {
+       "0": "node",
+       "1": "import",
+       "2": "module-sync",
+       "3": "node-addons",
+       "length": 4
+      }
+     },
+     {
+      "url": "file:///workspace/h/e.mjs",
+      "format": "module",
+      "importAttributes": "<undefined>"
+     },
+     3,
+     2,
+     "nextStep"
+    ],
+    [
+     "resolve",
+     "./g.mjs",
+     {
+      "parentURL": "file:///workspace/h/f.mjs",
+      "importAttributes": {},
+      "conditions": {
+       "0": "node",
+       "1": "import",
+       "2": "module-sync",
+       "3": "node-addons",
+       "length": 4
+      }
+     },
+     {
+      "url": "file:///workspace/h/g.mjs",
+      "format": "module",
+      "importAttributes": "<undefined>"
+     },
+     3,
+     2,
+     "nextStep"
+    ],
+    [
+     "load",
+     "file:///workspace/h/g.mjs",
+     {
+      "format": "module",
+      "importAttributes": {},
+      "conditions": {
+       "0": "node",
+       "1": "import",
+       "2": "module-sync",
+       "3": "node-addons",
+       "length": 4
+      }
+     },
+     {
+      "format": "module",
+      "responseURL": "file:///workspace/h/g.mjs",
+      "source": {
+       "view": "Buffer",
+       "text": "export default 'g';"
+      }
+     },
+     3,
+     2,
+     "nextStep"
+    ]
+   ]
+  ],
+  "importAgain": [
+   {
+    "value": {
+     "f": "aeg"
+    }
+   },
+   [
+    [
+     "resolve",
+     "/workspace/h/f.mjs",
+     {
+      "parentURL": "file:///workspace/h/entry.cjs",
+      "importAttributes": {},
+      "conditions": {
+       "0": "node",
+       "1": "import",
+       "2": "module-sync",
+       "3": "node-addons",
+       "length": 4
+      }
+     },
+     {
+      "url": "file:///workspace/h/f.mjs",
+      "format": "module",
+      "importAttributes": "<undefined>"
+     },
+     3,
+     2,
+     "nextStep"
+    ]
+   ]
+  ],
+  "metaResolve": [
+   {
+    "value": {
+     "r": "file:///workspace/h/a.js"
+    }
+   },
+   [
+    [
+     "resolve",
+     "/workspace/h/meta.mjs"
+    ],
+    [
+     "load",
+     "file:///workspace/h/meta.mjs"
+    ],
+    [
+     "resolve",
+     "./a.js"
+    ]
+   ]
+  ],
+  "afterDeregister": [
+   {
+    "value": "b:a"
+   },
+   []
+  ],
+  "order": [
+   "resolve second in",
+   "resolve first in",
+   "resolve first out",
+   "resolve second out",
+   "load second in",
+   "load first in",
+   "load first out",
+   "load second out"
+  ],
+  "orderAfterDeregister": [
+   "resolve second in",
+   "resolve second out",
+   "load second in",
+   "load second out"
+  ],
+  "orderNone": [],
+  "custom": {
+   "virtual:x": {
+    "value": "virtual:/workspace/h/virtual-x.js:/workspace/h/virtual-x.js"
+   },
+   "virtual:esm": {
+    "value": {
+     "v": "file:///workspace/h/virtual-e.mjs",
+     "Symbol(Symbol.toStringTag)": "Module"
+    }
+   },
+   "alias-fs": {
+    "value": "<fs>"
+   },
+   "alias-path": {
+    "error": {
+     "name": "RangeError",
+     "code": null,
+     "message": "Maximum call stack size exceeded"
+    }
+   },
+   "alias-a": {
+    "value": "a"
+   },
+   "./moved-parent": {
+    "error": {
+     "name": "Error",
+     "code": "MODULE_NOT_FOUND",
+     "message": "Cannot find module './in-other.js'\nRequire stack:\n- /workspace/h/entry.cjs\n- /rec.js"
+    }
+   },
+   "no-short": {
+    "error": {
+     "name": "TypeError",
+     "code": "ERR_INVALID_RETURN_PROPERTY_VALUE",
+     "message": "Expected true to be returned for the \"shortCircuit\" from the \"resolve\" hook but got undefined."
+    }
+   },
+   "false-short": {
+    "error": {
+     "name": "TypeError",
+     "code": "ERR_INVALID_RETURN_PROPERTY_VALUE",
+     "message": "Expected true to be returned for the \"shortCircuit\" from the \"resolve\" hook but got type boolean (false)."
+    }
+   },
+   "bad-url": {
+    "error": {
+     "name": "TypeError",
+     "code": "ERR_INVALID_RETURN_PROPERTY_VALUE",
+     "message": "Expected a URL string to be returned for the \"url\" from the \"resolve\" hook but got type number (5)."
+    }
+   },
+   "bad-return": {
+    "error": {
+     "name": "TypeError",
+     "code": "ERR_INVALID_RETURN_PROPERTY_VALUE",
+     "message": "Expected true to be returned for the \"shortCircuit\" from the \"resolve\" hook but got undefined."
+    }
+   },
+   "undefined-return": {
+    "error": {
+     "name": "TypeError",
+     "code": null,
+     "message": "Cannot read properties of undefined (reading 'shortCircuit')"
+    }
+   },
+   "bad-format": {
+    "error": {
+     "name": "TypeError",
+     "code": "ERR_INVALID_RETURN_PROPERTY_VALUE",
+     "message": "Expected a string to be returned for the \"format\" from the \"resolve\" hook but got type number (5)."
+    }
+   },
+   "path-url": {
+    "value": "a"
+   },
+   "throws": {
+    "error": {
+     "name": "RangeError",
+     "code": null,
+     "message": "hook boom"
+    }
+   },
+   "./typed.ts": {
+    "value": "typed"
+   }
+  },
+  "customImport": {
+   "virtual:x": {
+    "value": {
+     "default": "virtual:/workspace/h/virtual-x.js:/workspace/h/virtual-x.js",
+     "module.exports": "virtual:/workspace/h/virtual-x.js:/workspace/h/virtual-x.js"
+    }
+   },
+   "virtual:esm": {
+    "value": {
+     "v": "file:///workspace/h/virtual-e.mjs"
+    }
+   },
+   "alias-fs": {
+    "value": "<fs>"
+   },
+   "no-short": {
+    "error": {
+     "name": "TypeError",
+     "code": "ERR_INVALID_RETURN_PROPERTY_VALUE",
+     "message": "Expected true to be returned for the \"shortCircuit\" from the \"resolve\" hook but got undefined."
+    }
+   },
+   "bad-url": {
+    "error": {
+     "name": "TypeError",
+     "code": "ERR_INVALID_RETURN_PROPERTY_VALUE",
+     "message": "Expected a URL string to be returned for the \"url\" from the \"resolve\" hook but got type number (5)."
+    }
+   },
+   "bad-return": {
+    "error": {
+     "name": "TypeError",
+     "code": "ERR_INVALID_RETURN_PROPERTY_VALUE",
+     "message": "Expected true to be returned for the \"shortCircuit\" from the \"resolve\" hook but got undefined."
+    }
+   },
+   "path-url": {
+    "error": {
+     "name": "TypeError",
+     "code": "ERR_INVALID_URL",
+     "message": "Invalid URL"
+    }
+   },
+   "throws": {
+    "error": {
+     "name": "RangeError",
+     "code": null,
+     "message": "hook boom"
+    }
+   },
+   "./typed.ts": {
+    "value": {
+     "default": "typed",
+     "module.exports": "typed"
+    }
+   }
+  },
+  "answers": {
+   "require": {
+    "replace.js": {
+     "value": "replaced"
+    },
+    "module.js": {
+     "value": {
+      "__esModule": true,
+      "default": "esm",
+      "n": 1,
+      "Symbol(Symbol.toStringTag)": "Module"
+     }
+    },
+    "commonjs.js": {
+     "value": {
+      "c": 1
+     }
+    },
+    "json.js": {
+     "error": {
+      "name": "SyntaxError",
+      "code": null,
+      "message": "Unexpected token ':'"
+     }
+    },
+    "no-short.js": {
+     "error": {
+      "name": "TypeError",
+      "code": "ERR_INVALID_RETURN_PROPERTY_VALUE",
+      "message": "Expected true to be returned for the \"shortCircuit\" from the \"load\" hook but got undefined."
+     }
+    },
+    "bad-source.js": {
+     "error": {
+      "name": "TypeError",
+      "code": "ERR_INVALID_RETURN_PROPERTY_VALUE",
+      "message": "Expected a string, an ArrayBuffer, or a TypedArray to be returned for the \"source\" from the \"load\" hook but got type number (5)."
+     }
+    },
+    "unknown-format.js": {
+     "value": 1
+    },
+    "number-format.js": {
+     "error": {
+      "name": "TypeError",
+      "code": "ERR_INVALID_RETURN_PROPERTY_VALUE",
+      "message": "Expected a string to be returned for the \"format\" from the \"load\" hook but got type number (5)."
+     }
+    },
+    "no-format.js": {
+     "value": "nf"
+    },
+    "bad-return.js": {
+     "error": {
+      "name": "TypeError",
+      "code": "ERR_INVALID_RETURN_PROPERTY_VALUE",
+      "message": "Expected true to be returned for the \"shortCircuit\" from the \"load\" hook but got undefined."
+     }
+    },
+    "undefined-return.js": {
+     "error": {
+      "name": "TypeError",
+      "code": null,
+      "message": "Cannot read properties of undefined (reading 'shortCircuit')"
+     }
+    },
+    "null-source.js": {
+     "error": {
+      "name": "TypeError",
+      "code": "ERR_INVALID_RETURN_PROPERTY_VALUE",
+      "message": "Expected a string, an ArrayBuffer, or a TypedArray to be returned for the \"source\" from the \"load\" hook but got null."
+     }
+    },
+    "array-buffer.js": {
+     "value": "ab"
+    },
+    "typed-array.js": {
+     "value": {
+      "__esModule": true,
+      "default": "u8",
+      "Symbol(Symbol.toStringTag)": "Module"
+     }
+    },
+    "twice.js": {
+     "value": "orig"
+    },
+    "replace.mjs": {
+     "error": {
+      "name": "SyntaxError",
+      "code": null,
+      "message": "Unexpected token 'export'"
+     }
+    },
+    "module.mjs": {
+     "value": {
+      "__esModule": true,
+      "default": "esm",
+      "n": 1,
+      "Symbol(Symbol.toStringTag)": "Module"
+     }
+    },
+    "commonjs.mjs": {
+     "value": {
+      "c": 1
+     }
+    },
+    "json.mjs": {
+     "error": {
+      "name": "SyntaxError",
+      "code": null,
+      "message": "Unexpected token ':'"
+     }
+    },
+    "no-short.mjs": {
+     "error": {
+      "name": "TypeError",
+      "code": "ERR_INVALID_RETURN_PROPERTY_VALUE",
+      "message": "Expected true to be returned for the \"shortCircuit\" from the \"load\" hook but got undefined."
+     }
+    },
+    "bad-source.mjs": {
+     "error": {
+      "name": "TypeError",
+      "code": "ERR_INVALID_RETURN_PROPERTY_VALUE",
+      "message": "Expected a string, an ArrayBuffer, or a TypedArray to be returned for the \"source\" from the \"load\" hook but got type number (5)."
+     }
+    },
+    "unknown-format.mjs": {
+     "value": 1
+    },
+    "number-format.mjs": {
+     "error": {
+      "name": "TypeError",
+      "code": "ERR_INVALID_RETURN_PROPERTY_VALUE",
+      "message": "Expected a string to be returned for the \"format\" from the \"load\" hook but got type number (5)."
+     }
+    },
+    "no-format.mjs": {
+     "error": {
+      "name": "ReferenceError",
+      "code": null,
+      "message": "module is not defined in ES module scope"
+     }
+    },
+    "bad-return.mjs": {
+     "error": {
+      "name": "TypeError",
+      "code": "ERR_INVALID_RETURN_PROPERTY_VALUE",
+      "message": "Expected true to be returned for the \"shortCircuit\" from the \"load\" hook but got undefined."
+     }
+    },
+    "undefined-return.mjs": {
+     "error": {
+      "name": "TypeError",
+      "code": null,
+      "message": "Cannot read properties of undefined (reading 'shortCircuit')"
+     }
+    },
+    "null-source.mjs": {
+     "error": {
+      "name": "TypeError",
+      "code": "ERR_INVALID_RETURN_PROPERTY_VALUE",
+      "message": "Expected a string, an ArrayBuffer, or a TypedArray to be returned for the \"source\" from the \"load\" hook but got null."
+     }
+    },
+    "array-buffer.mjs": {
+     "value": "ab"
+    },
+    "typed-array.mjs": {
+     "value": {
+      "__esModule": true,
+      "default": "u8",
+      "Symbol(Symbol.toStringTag)": "Module"
+     }
+    },
+    "twice.mjs": {
+     "value": {
+      "__esModule": true,
+      "default": "orig",
+      "Symbol(Symbol.toStringTag)": "Module"
+     }
+    },
+    "replace.json": {
+     "value": {
+      "orig": true
+     }
+    },
+    "module.json": {
+     "error": {
+      "name": "SyntaxError",
+      "code": null,
+      "message": "/workspace/h/answers/require-module.json: Unexpected token 'e', \"export def\"... is not valid JSON"
+     }
+    },
+    "commonjs.json": {
+     "error": {
+      "name": "SyntaxError",
+      "code": null,
+      "message": "/workspace/h/answers/require-commonjs.json: Unexpected token 'e', \"exports.c = 1;\" is not valid JSON"
+     }
+    },
+    "json.json": {
+     "value": {
+      "j": 1
+     }
+    },
+    "no-short.json": {
+     "error": {
+      "name": "TypeError",
+      "code": "ERR_INVALID_RETURN_PROPERTY_VALUE",
+      "message": "Expected true to be returned for the \"shortCircuit\" from the \"load\" hook but got undefined."
+     }
+    },
+    "bad-source.json": {
+     "error": {
+      "name": "TypeError",
+      "code": "ERR_INVALID_RETURN_PROPERTY_VALUE",
+      "message": "Expected a string, an ArrayBuffer, or a TypedArray to be returned for the \"source\" from the \"load\" hook but got type number (5)."
+     }
+    },
+    "unknown-format.json": {
+     "error": {
+      "name": "SyntaxError",
+      "code": null,
+      "message": "/workspace/h/answers/require-unknown-format.json: Unexpected token 'm', \"module.exports = 1\" is not valid JSON"
+     }
+    },
+    "number-format.json": {
+     "error": {
+      "name": "TypeError",
+      "code": "ERR_INVALID_RETURN_PROPERTY_VALUE",
+      "message": "Expected a string to be returned for the \"format\" from the \"load\" hook but got type number (5)."
+     }
+    },
+    "no-format.json": {
+     "error": {
+      "name": "SyntaxError",
+      "code": null,
+      "message": "/workspace/h/answers/require-no-format.json: Unexpected token 'm', \"module.exp\"... is not valid JSON"
+     }
+    },
+    "bad-return.json": {
+     "error": {
+      "name": "TypeError",
+      "code": "ERR_INVALID_RETURN_PROPERTY_VALUE",
+      "message": "Expected true to be returned for the \"shortCircuit\" from the \"load\" hook but got undefined."
+     }
+    },
+    "undefined-return.json": {
+     "error": {
+      "name": "TypeError",
+      "code": null,
+      "message": "Cannot read properties of undefined (reading 'shortCircuit')"
+     }
+    },
+    "null-source.json": {
+     "error": {
+      "name": "TypeError",
+      "code": "ERR_INVALID_RETURN_PROPERTY_VALUE",
+      "message": "Expected a string, an ArrayBuffer, or a TypedArray to be returned for the \"source\" from the \"load\" hook but got null."
+     }
+    },
+    "array-buffer.json": {
+     "error": {
+      "name": "SyntaxError",
+      "code": null,
+      "message": "/workspace/h/answers/require-array-buffer.json: Unexpected token 'm', \"module.exp\"... is not valid JSON"
+     }
+    },
+    "typed-array.json": {
+     "error": {
+      "name": "SyntaxError",
+      "code": null,
+      "message": "/workspace/h/answers/require-typed-array.json: Unexpected token 'e', \"export default 'u8'\" is not valid JSON"
+     }
+    },
+    "twice.json": {
+     "value": {
+      "orig": true
+     }
+    }
+   },
+   "import": {
+    "replace.js": {
+     "value": {
+      "default": "replaced",
+      "module.exports": "replaced"
+     }
+    },
+    "module.js": {
+     "value": {
+      "default": "esm",
+      "n": 1
+     }
+    },
+    "commonjs.js": {
+     "value": {
+      "c": 1,
+      "default": {
+       "c": 1
+      },
+      "module.exports": {
+       "c": 1
+      }
+     }
+    },
+    "json.js": {
+     "value": {
+      "default": {
+       "j": 1
+      }
+     }
+    },
+    "no-short.js": {
+     "error": {
+      "name": "TypeError",
+      "code": "ERR_INVALID_RETURN_PROPERTY_VALUE",
+      "message": "Expected true to be returned for the \"shortCircuit\" from the \"load\" hook but got undefined."
+     }
+    },
+    "bad-source.js": {
+     "error": {
+      "name": "TypeError",
+      "code": "ERR_INVALID_RETURN_PROPERTY_VALUE",
+      "message": "Expected a string, an ArrayBuffer, or a TypedArray to be returned for the \"source\" from the \"load\" hook but got type number (5)."
+     }
+    },
+    "unknown-format.js": {
+     "error": {
+      "name": "RangeError",
+      "code": "ERR_UNKNOWN_MODULE_FORMAT",
+      "message": "Unknown module format: weird for URL file:///workspace/h/answers/import-unknown-format.js"
+     }
+    },
+    "number-format.js": {
+     "error": {
+      "name": "TypeError",
+      "code": "ERR_INVALID_RETURN_PROPERTY_VALUE",
+      "message": "Expected a string to be returned for the \"format\" from the \"load\" hook but got type number (5)."
+     }
+    },
+    "no-format.js": {
+     "error": {
+      "name": "RangeError",
+      "code": "ERR_UNKNOWN_MODULE_FORMAT",
+      "message": "Unknown module format: null for URL file:///workspace/h/answers/import-no-format.js"
+     }
+    },
+    "bad-return.js": {
+     "error": {
+      "name": "TypeError",
+      "code": "ERR_INVALID_RETURN_PROPERTY_VALUE",
+      "message": "Expected true to be returned for the \"shortCircuit\" from the \"load\" hook but got undefined."
+     }
+    },
+    "undefined-return.js": {
+     "error": {
+      "name": "TypeError",
+      "code": null,
+      "message": "Cannot read properties of undefined (reading 'shortCircuit')"
+     }
+    },
+    "null-source.js": {
+     "value": {
+      "default": "orig",
+      "module.exports": "orig"
+     }
+    },
+    "array-buffer.js": {
+     "value": {
+      "default": "ab",
+      "module.exports": "ab"
+     }
+    },
+    "typed-array.js": {
+     "value": {
+      "default": "u8"
+     }
+    },
+    "twice.js": {
+     "value": {
+      "default": "orig",
+      "module.exports": "orig"
+     }
+    },
+    "replace.mjs": {
+     "error": {
+      "name": "Error",
+      "code": "ERR_REQUIRE_CYCLE_MODULE",
+      "message": "Cannot require() ES Module /workspace/h/answers/import-replace.mjs in a cycle. A cycle involving require(esm) is not allowed to maintain invariants mandated by the ECMAScript specification. Try making at least part of the dependency in the graph lazily loaded."
+     }
+    },
+    "module.mjs": {
+     "value": {
+      "default": "esm",
+      "n": 1
+     }
+    },
+    "commonjs.mjs": {
+     "error": {
+      "name": "Error",
+      "code": "ERR_REQUIRE_CYCLE_MODULE",
+      "message": "Cannot require() ES Module /workspace/h/answers/import-commonjs.mjs in a cycle. A cycle involving require(esm) is not allowed to maintain invariants mandated by the ECMAScript specification. Try making at least part of the dependency in the graph lazily loaded."
+     }
+    },
+    "json.mjs": {
+     "value": {
+      "default": {
+       "j": 1
+      }
+     }
+    },
+    "no-short.mjs": {
+     "error": {
+      "name": "TypeError",
+      "code": "ERR_INVALID_RETURN_PROPERTY_VALUE",
+      "message": "Expected true to be returned for the \"shortCircuit\" from the \"load\" hook but got undefined."
+     }
+    },
+    "bad-source.mjs": {
+     "error": {
+      "name": "TypeError",
+      "code": "ERR_INVALID_RETURN_PROPERTY_VALUE",
+      "message": "Expected a string, an ArrayBuffer, or a TypedArray to be returned for the \"source\" from the \"load\" hook but got type number (5)."
+     }
+    },
+    "unknown-format.mjs": {
+     "error": {
+      "name": "RangeError",
+      "code": "ERR_UNKNOWN_MODULE_FORMAT",
+      "message": "Unknown module format: weird for URL file:///workspace/h/answers/import-unknown-format.mjs"
+     }
+    },
+    "number-format.mjs": {
+     "error": {
+      "name": "TypeError",
+      "code": "ERR_INVALID_RETURN_PROPERTY_VALUE",
+      "message": "Expected a string to be returned for the \"format\" from the \"load\" hook but got type number (5)."
+     }
+    },
+    "no-format.mjs": {
+     "error": {
+      "name": "RangeError",
+      "code": "ERR_UNKNOWN_MODULE_FORMAT",
+      "message": "Unknown module format: undefined for URL file:///workspace/h/answers/import-no-format.mjs"
+     }
+    },
+    "bad-return.mjs": {
+     "error": {
+      "name": "TypeError",
+      "code": "ERR_INVALID_RETURN_PROPERTY_VALUE",
+      "message": "Expected true to be returned for the \"shortCircuit\" from the \"load\" hook but got undefined."
+     }
+    },
+    "undefined-return.mjs": {
+     "error": {
+      "name": "TypeError",
+      "code": null,
+      "message": "Cannot read properties of undefined (reading 'shortCircuit')"
+     }
+    },
+    "null-source.mjs": {
+     "error": {
+      "name": "Error",
+      "code": "ERR_REQUIRE_CYCLE_MODULE",
+      "message": "Cannot require() ES Module /workspace/h/answers/import-null-source.mjs in a cycle. A cycle involving require(esm) is not allowed to maintain invariants mandated by the ECMAScript specification. Try making at least part of the dependency in the graph lazily loaded."
+     }
+    },
+    "array-buffer.mjs": {
+     "error": {
+      "name": "Error",
+      "code": "ERR_REQUIRE_CYCLE_MODULE",
+      "message": "Cannot require() ES Module /workspace/h/answers/import-array-buffer.mjs in a cycle. A cycle involving require(esm) is not allowed to maintain invariants mandated by the ECMAScript specification. Try making at least part of the dependency in the graph lazily loaded."
+     }
+    },
+    "typed-array.mjs": {
+     "value": {
+      "default": "u8"
+     }
+    },
+    "twice.mjs": {
+     "value": {
+      "default": "orig"
+     }
+    },
+    "replace.json": {
+     "error": {
+      "name": "TypeError",
+      "code": "ERR_IMPORT_ATTRIBUTE_MISSING",
+      "message": "Module \"file:///workspace/h/answers/import-replace.json\" needs an import attribute of \"type: json\""
+     }
+    },
+    "module.json": {
+     "value": {
+      "default": "esm",
+      "n": 1
+     }
+    },
+    "commonjs.json": {
+     "error": {
+      "name": "SyntaxError",
+      "code": null,
+      "message": "/workspace/h/answers/import-commonjs.json: Unexpected token 'e', \"exports.c = 1;\" is not valid JSON"
+     }
+    },
+    "json.json": {
+     "value": {
+      "default": {
+       "j": 1
+      }
+     }
+    },
+    "no-short.json": {
+     "error": {
+      "name": "TypeError",
+      "code": "ERR_INVALID_RETURN_PROPERTY_VALUE",
+      "message": "Expected true to be returned for the \"shortCircuit\" from the \"load\" hook but got undefined."
+     }
+    },
+    "bad-source.json": {
+     "error": {
+      "name": "TypeError",
+      "code": "ERR_INVALID_RETURN_PROPERTY_VALUE",
+      "message": "Expected a string, an ArrayBuffer, or a TypedArray to be returned for the \"source\" from the \"load\" hook but got type number (5)."
+     }
+    },
+    "unknown-format.json": {
+     "error": {
+      "name": "RangeError",
+      "code": "ERR_UNKNOWN_MODULE_FORMAT",
+      "message": "Unknown module format: weird for URL file:///workspace/h/answers/import-unknown-format.json"
+     }
+    },
+    "number-format.json": {
+     "error": {
+      "name": "TypeError",
+      "code": "ERR_INVALID_RETURN_PROPERTY_VALUE",
+      "message": "Expected a string to be returned for the \"format\" from the \"load\" hook but got type number (5)."
+     }
+    },
+    "no-format.json": {
+     "error": {
+      "name": "RangeError",
+      "code": "ERR_UNKNOWN_MODULE_FORMAT",
+      "message": "Unknown module format: undefined for URL file:///workspace/h/answers/import-no-format.json"
+     }
+    },
+    "bad-return.json": {
+     "error": {
+      "name": "TypeError",
+      "code": "ERR_INVALID_RETURN_PROPERTY_VALUE",
+      "message": "Expected true to be returned for the \"shortCircuit\" from the \"load\" hook but got undefined."
+     }
+    },
+    "undefined-return.json": {
+     "error": {
+      "name": "TypeError",
+      "code": null,
+      "message": "Cannot read properties of undefined (reading 'shortCircuit')"
+     }
+    },
+    "null-source.json": {
+     "value": {
+      "default": {
+       "orig": true
+      },
+      "module.exports": {
+       "orig": true
+      }
+     }
+    },
+    "array-buffer.json": {
+     "error": {
+      "name": "SyntaxError",
+      "code": null,
+      "message": "/workspace/h/answers/import-array-buffer.json: Unexpected token 'm', \"module.exp\"... is not valid JSON"
+     }
+    },
+    "typed-array.json": {
+     "value": {
+      "default": "u8"
+     }
+    },
+    "twice.json": {
+     "error": {
+      "name": "TypeError",
+      "code": "ERR_IMPORT_ATTRIBUTE_MISSING",
+      "message": "Module \"file:///workspace/h/answers/import-twice.json\" needs an import attribute of \"type: json\""
+     }
+    }
+   }
+  }
+ }
+}

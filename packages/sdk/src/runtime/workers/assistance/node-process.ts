@@ -123,6 +123,8 @@ export class NodeProcess extends EventEmitter {
   }
   #code: number | undefined;
   #exiting = false;
+  /** Node's `process._exiting`: true from the first 'exit' on, and a program may assign it. */
+  #leaving = false;
   readonly #now: () => number;
   readonly #terminate: (code: number) => never;
   readonly version: string;
@@ -149,6 +151,9 @@ export class NodeProcess extends EventEmitter {
     const status = Object.getOwnPropertyDescriptor(NodeProcess.prototype, "exitCode");
     if (status === undefined) throw new TypeError("Missing process exit-code descriptor");
     Object.defineProperty(this, "exitCode", { ...status, enumerable: true });
+    Object.defineProperty(this, "_exiting", { enumerable: true, configurable: true,
+      get: Object.defineProperty((): boolean => this.#leaving, "name", { value: "get" }),
+      set: Object.defineProperty((value: unknown): void => { this.#leaving = Boolean(value); }, "name", { value: "set" }) });
     // Node 24.18.1: an own, enumerable binding that ends the process at once with its argument as a 32-bit integer,
     // without the 'exit' event. signal-exit replaces it to see every process.exit().
     const terminateNow = this.#terminate;
@@ -157,6 +162,7 @@ export class NodeProcess extends EventEmitter {
     }, enumerable: true, writable: true, configurable: true });
   }
   #emitExit(): void {
+    this.#leaving = true;
     if (this.#exiting) return;
     this.#exiting = true;
     this.emit("exit", this.#code ?? 0);

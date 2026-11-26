@@ -2,10 +2,14 @@ import { VMError } from "../../errors.ts";
 import type { ProcessRuntimeIO } from "./process-io.js";
 import { linuxSignalConstants } from "../../process-signals.js";
 import { linuxErrnoConstants } from "../../linux-errno.js";
+import { createOsExtras } from "./node-os-extras.js";
+import { nodeUtil } from "./node-util.js";
+
+const monotonicNow = performance.now.bind(performance);
 
 /** Linux remains the resource authority. No browser hardware or cached snapshot
  * participates in Next's worker sizing or memory decisions. */
-export function createNodeOs(files: LinuxFiles, env: Readonly<Record<string, string>>, interfaces?: ProcessRuntimeIO["networkInterfaces"]) {
+export function createNodeOs(files: LinuxFiles, env: Readonly<Record<string, string>>, interfaces?: ProcessRuntimeIO["networkInterfaces"], now: () => number = monotonicNow) {
   const read = (path: string) => readLinuxText(files, path);
   function optional(path: string): string | undefined {
     try { return read(path); }
@@ -31,6 +35,8 @@ export function createNodeOs(files: LinuxFiles, env: Readonly<Record<string, str
     });
   }
   return {
+    // userInfo, uptime, loadavg, getPriority and setPriority: the Linux task's own identity and files.
+    ...createOsExtras(files, { now, identity: createProcessIdentity(files), inspect: (value, options) => nodeUtil.inspect(value, options) }),
     constants: { signals: linuxSignalConstants(), errno: { ...linuxErrnoConstants } },
     EOL: "\n", devNull: "/dev/null",
     arch: () => "x64", platform: () => "linux", type: () => "Linux", machine: () => "x86_64", endianness: () => "LE",
@@ -108,5 +114,14 @@ export function createProcessIdentity(files: LinuxFiles) {
     get pid() { return value("Pid"); }, get ppid() { return value("PPid"); },
     getuid: () => value("Uid"), geteuid: () => value("Uid", 1),
     getgid: () => value("Gid"), getegid: () => value("Gid", 1),
+    /** The supplementary groups, then the effective group when it is not one of them, as Node reports them. */
+    getgroups(): number[] {
+      const lines = readLinuxText(files, "/proc/self/status").split("\n").filter(line => line.startsWith("Groups:"));
+      if (lines.length !== 1) throw new TypeError("Invalid Linux Groups field");
+      const groups = (lines[0] ?? "").slice("Groups:".length).trim().split(/\s+/u).filter(part => part !== "").map(part => integer(part, "Groups"));
+      if (groups.some(group => group > 0xffff_ffff)) throw new TypeError("Invalid Linux Groups range");
+      const effective = value("Gid", 1);
+      return groups.includes(effective) ? groups : [...groups, effective];
+    },
   };
 }

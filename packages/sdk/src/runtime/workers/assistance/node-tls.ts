@@ -10,20 +10,67 @@ import type { ProcessScheduler } from "./process-scheduler.js";
 import { copyOptions, present, refuseSetOptions, truthy, UNSUPPORTED_CONNECT_OPTIONS, type SetTests } from "./node-connect-options.js";
 import { tlsGuestArguments } from "./node-tls-guest.js";
 import { readTlsFrame, tlsControl, tlsData, type TlsAddressInfo, type TlsControl, type TlsFrame, type TlsSecureInfo } from "./node-tls-wire.js";
+import { unavailableNodeApi } from "./node-capability.ts";
+import { createTlsCertificates, type TlsCertificatePorts } from "./node-tls-certificates.ts";
+import { convertALPNProtocols, createSecureContext, SecureContext, secureContextOptions, TLS_CIPHERS, TLS_DEFAULTS } from "./node-tls-context.ts";
+import { checkServerIdentity } from "./node-tls-identity.ts";
+import type { TlsPeerCertificate } from "./node-tls-server-wire.ts";
 
 type Completion = (error?: Error | null) => void;
 export type TlsSocket = NodeSocket & {
   readonly encrypted: true; readonly authorized: boolean; readonly authorizationError: string | null;
   readonly alpnProtocol: string | false; readonly servername: string | false | null;
   getProtocol(): string | null; getCipher(): TlsSecureInfo["cipher"] | undefined;
+  getPeerCertificate(detailed?: unknown): object;
 };
+
+/** What a server-side socket asks of the TLS server that accepted its connection. */
+export type TlsServerLink = {
+  /** Resolves when the guest's TLS stream has taken the bytes. */
+  write(bytes: Uint8Array): Promise<void>;
+  /** Resolves when the guest's TLS stream has finished its writable side. */
+  finish(): Promise<void>;
+  /** The program took `count` bytes: the guest may read as many more. */
+  acknowledge(count: number): void;
+  command(control: Extract<TlsControl, { kind: "no-delay" | "keep-alive" | "timeout" }>): void;
+  destroy(): void;
+};
+export type TlsServerSide = { readonly socket: TlsSocket; data(bytes: Buffer | null): void; timeout(): void };
+/** Builds the TLSSocket of an accepted connection; without `secure` the handshake failed and the socket is only an event argument. */
+export type TlsServerAccept = (link: TlsServerLink, info: { readonly secure?: TlsSecureInfo; readonly peer: TlsPeerCertificate | null; readonly allowHalfOpen: boolean; readonly server: object }) => TlsServerSide;
+const SERVER_SIDE = Symbol("server-side TLS socket");
+const accepting = new WeakMap<object, TlsServerAccept>();
+/** The server-side constructor of a `tls` module's TLSSocket class. It is not an export of the module. */
+export function tlsServerSockets(tls: { readonly TLSSocket: object }): TlsServerAccept {
+  const accept = accepting.get(tls.TLSSocket);
+  if (accept === undefined) throw new VMError("INVALID_ARGUMENT", "Not the assisted TLSSocket class");
+  return accept;
+}
 
 /** Linux Node owns TLS and certificate validation. Its stdout carries bounded
  * plaintext frames, stderr carries control frames, and the pinned Duplex owns
  * application buffering. Paused reads never obstruct write acknowledgements. */
-export function createNodeTls(children: Pick<ReturnType<typeof createNativeChildren>, "spawnService">, context: AsyncContext, retain: () => () => void, scheduler?: ProcessScheduler): {
+export type NodeTls = {
   connect: (...args: unknown[]) => TlsSocket; TLSSocket: new (...args: unknown[]) => TlsSocket;
-} {
+  CLIENT_RENEG_LIMIT: number; CLIENT_RENEG_WINDOW: number; DEFAULT_CIPHERS: string; DEFAULT_ECDH_CURVE: string; DEFAULT_MIN_VERSION: string; DEFAULT_MAX_VERSION: string;
+  getCiphers: () => string[]; readonly rootCertificates: readonly string[];
+  getCACertificates: (type?: unknown) => readonly string[]; setDefaultCACertificates: (certs: unknown) => void;
+  convertALPNProtocols: typeof convertALPNProtocols; checkServerIdentity: typeof checkServerIdentity;
+  createSecureContext: typeof createSecureContext; SecureContext: typeof SecureContext;
+};
+/** Without ports there is no image to read a CA bundle from: the lists are empty. */
+const NO_CERTIFICATES: TlsCertificatePorts = { readFile: () => undefined, env: () => ({}) };
+export function createNodeTls(children: Pick<ReturnType<typeof createNativeChildren>, "spawnService">, context: AsyncContext, retain: () => () => void, scheduler?: ProcessScheduler, ports: TlsCertificatePorts = NO_CERTIFICATES): NodeTls {
+  const certificates = createTlsCertificates(ports);
+  /** The CA list a program installed with setDefaultCACertificates, as the `ca` of a connection that names none. */
+  const installed = (): string | undefined => {
+    const list = certificates.userCertificates();
+    if (list === undefined) return undefined;
+    const bundle = list.join("");
+    // The guest helper takes a ca of at most 64 KiB; a larger installed list cannot be honored, so it is refused.
+    if (Buffer.byteLength(bundle) > 65536) unavailableNodeApi("tls.setDefaultCACertificates with more than 64 KiB of certificates");
+    return bundle === "" ? "\n" : bundle;
+  };
   class TLSSocket extends Duplex {
     readonly encrypted = true;
     #applicationFailed = false;
@@ -50,11 +97,26 @@ export function createNodeTls(children: Pick<ReturnType<typeof createNativeChild
     #finishReply: PromiseWithResolvers<undefined> | undefined;
     #writtenBytes = 0;
     #readBytes = 0;
+    #link: TlsServerLink | undefined;
+    #peer: TlsPeerCertificate | null = null;
+    #unacknowledged = 0;
     timeout: number | undefined;
+    static {
+      const read: unknown = Reflect.get(TLSSocket.prototype, "getPeerCertificate");
+      if (typeof read === "function") Object.defineProperty(read, "length", { value: 1, configurable: true });
+      accepting.set(TLSSocket, (link, info) => {
+        const socket = new TLSSocket(SERVER_SIDE, info.allowHalfOpen);
+        socket.#link = link; socket.#address = info.secure; socket.#secure = info.secure; socket.#peer = info.peer;
+        Object.defineProperty(socket, "server", { value: info.server, writable: true, enumerable: true, configurable: true });
+        if (info.secure === undefined) socket.destroy();
+        else { socket.#ready.resolve(undefined); socket.#release = retain(); }
+        return { socket, data: bytes => { socket.#incoming(bytes); }, timeout: () => { if (!socket.destroyed) socket.emit("timeout"); } };
+      });
+    }
     constructor(...args: unknown[]) {
-      if (args.length !== 0) throw new VMError("FEATURE_NOT_AVAILABLE", "tls.TLSSocket wrapping an existing socket is unavailable", { api: "tls.TLSSocket" });
-      super({ highWaterMark: ASSISTANCE_LIMITS.chunk, autoDestroy: true, allowHalfOpen: false,
-        read: () => { this.#demand?.resolve(undefined); },
+      if (args.length !== 0 && args[0] !== SERVER_SIDE) throw new VMError("FEATURE_NOT_AVAILABLE", "tls.TLSSocket wrapping an existing socket is unavailable", { api: "tls.TLSSocket" });
+      super({ highWaterMark: ASSISTANCE_LIMITS.chunk, autoDestroy: true, allowHalfOpen: args[0] === SERVER_SIDE && args[1] === true,
+        read: () => { this.#demand?.resolve(undefined); this.#acknowledge(); },
         write: (bytes, _encoding, done) => { void this.#write(bytes, done); },
         final: done => { void this.#finish(done); },
         destroy: (error, done) => { void this.#destroy(error, done); },
@@ -78,12 +140,17 @@ export function createNodeTls(children: Pick<ReturnType<typeof createNativeChild
     get remoteFamily(): string | undefined { return this.#address?.remoteFamily; }
     getProtocol(): string | null { return this.#secure?.protocol ?? null; }
     getCipher(): TlsSecureInfo["cipher"] | undefined { return this.#secure === undefined ? undefined : { ...this.#secure.cipher }; }
+    /** The certificate the guest's Node saw. Only a server-side socket carries one; a client socket's stays in Linux. */
+    getPeerCertificate(): object {
+      if (this.#link === undefined) unavailableNodeApi("tls.TLSSocket.getPeerCertificate");
+      return this.#peer === null ? {} : { ...this.#peer };
+    }
     address(): object { return this.#address === undefined ? {} : { address: this.localAddress, port: this.localPort, family: this.localFamily }; }
-    ref(): this { this.#referenced = true; if (this.#child !== undefined && !this.destroyed) this.#release ??= retain(); return this; }
+    ref(): this { this.#referenced = true; if ((this.#child !== undefined || this.#link !== undefined) && !this.destroyed) this.#release ??= retain(); return this; }
     unref(): this { this.#referenced = false; this.#release?.(); this.#release = undefined; return this; }
     connect(...args: unknown[]): this {
-      if (this.#child !== undefined || this.destroyed) throw failure("ERR_SOCKET_CLOSED", "TLS socket is already connected or closed");
-      const { options, timeout, callback } = connectArguments(args);
+      if (this.#child !== undefined || this.#link !== undefined || this.destroyed) throw failure("ERR_SOCKET_CLOSED", "TLS socket is already connected or closed");
+      const { options, timeout, callback } = connectArguments(args, installed);
       if (callback !== undefined) this.once("secureConnect", callback);
       this.#verifyCertificate = options["rejectUnauthorized"] !== false;
       const child = children.spawnService("/usr/bin/node", tlsGuestArguments(options)); this.#child = child;
@@ -112,6 +179,7 @@ export function createNodeTls(children: Pick<ReturnType<typeof createNativeChild
     }
     #command(command: TlsControl): void {
       if (this.destroyed) return;
+      if (this.#link !== undefined) { if (command.kind === "no-delay" || command.kind === "keep-alive" || command.kind === "timeout") this.#link.command(command); return; }
       if (this.#child === undefined) throw failure("ERR_SOCKET_CLOSED", "TLS socket is not connected");
       this.#child.stdin.write(tlsControl(command), error => { if (error) this.destroy(error); });
     }
@@ -123,6 +191,7 @@ export function createNodeTls(children: Pick<ReturnType<typeof createNativeChild
     async #write(value: unknown, done: Completion): Promise<void> {
       try {
         if (!(value instanceof Uint8Array)) throw new TypeError("TLS requires binary or string writes");
+        if (this.#link !== undefined) { await this.#link.write(value); this.#writtenBytes += value.length; await this.#deliver(() => done()); return; }
         if (this.#child === undefined) throw failure("ERR_SOCKET_CLOSED", "TLS socket is not connected");
         await this.#ready.promise;
         for (let offset = 0; offset < value.length; offset += 65536) {
@@ -135,6 +204,7 @@ export function createNodeTls(children: Pick<ReturnType<typeof createNativeChild
     }
     async #finish(done: Completion): Promise<void> {
       try {
+        if (this.#link !== undefined) { await this.#link.finish(); this.#finished = true; await this.#deliver(() => done()); return; }
         if (this.#child === undefined) throw failure("ERR_SOCKET_CLOSED", "TLS socket is not connected");
         await this.#ready.promise;
         if (this.#finished) { await this.#deliver(() => done()); return; }
@@ -197,6 +267,19 @@ export function createNodeTls(children: Pick<ReturnType<typeof createNativeChild
         if (!this.destroyed) await this.#deliver(() => { this.push(null); });
       } catch (error) { if (this.#applicationFailed) throw error; if (!this.#closing) await this.#deliver(() => { this.destroy(streamError(error)); }); }
     }
+    /** Server side: plaintext of this connection, in the process's dispatch. Bytes the stream does not take are acknowledged when it asks for more. */
+    #incoming(bytes: Buffer | null): void {
+      if (this.destroyed || this.#end) return;
+      // As net.Socket does at EOF: an empty stream ends even when the program is not reading.
+      if (bytes === null) { this.#end = true; this.push(null); this.read(0); return; }
+      this.#readBytes += bytes.length;
+      if (this.push(bytes)) this.#link?.acknowledge(bytes.length); else this.#unacknowledged += bytes.length;
+    }
+    #acknowledge(): void {
+      const count = this.#unacknowledged;
+      if (count === 0 || this.destroyed) return;
+      this.#unacknowledged = 0; this.#link?.acknowledge(count);
+    }
     async #destroy(error: Error | null, done: Completion): Promise<void> {
       this.#closing = true;
       const reason = error ?? failure("ERR_SOCKET_CLOSED", "TLS socket closed");
@@ -205,18 +288,25 @@ export function createNodeTls(children: Pick<ReturnType<typeof createNativeChild
         if (error !== null || !this.#end || !this.#finished) this.#child.kill("SIGKILL");
         await this.#retired.promise;
       }
+      this.#link?.destroy();
       this.#release?.(); this.#release = undefined;
       await this.#deliver(() => done(error));
     }
   }
-  return { connect: (...args: unknown[]) => new TLSSocket().connect(...args), TLSSocket };
+  // Node's `exports.getCiphers` is an anonymous function that hands out a fresh list.
+  const [getCiphers] = [(): string[] => [...TLS_CIPHERS]];
+  const module = { ...TLS_DEFAULTS, getCiphers, get rootCertificates(): readonly string[] { return certificates.rootCertificates(); }, getCACertificates: certificates.getCACertificates, setDefaultCACertificates: certificates.setDefaultCACertificates,
+    convertALPNProtocols, checkServerIdentity, createSecureContext, SecureContext, TLSSocket, connect: (...args: unknown[]) => new TLSSocket().connect(...args) };
+  // The bundle is read from the image on first use, and the property has only a getter, as in Node.
+  Object.defineProperty(module, "rootCertificates", { configurable: false, enumerable: true, get: certificates.rootCertificates });
+  return module;
 }
 /**
  * The arguments as Node's tls.connect normalizes them: net's normalizeArgs takes an options object, a pipe path (a string
  * that is not a port number) or a port with an optional host; a second argument that is an object, else the third,
  * is then assigned over them, so its port and host win over positional ones.
  */
-function connectArguments(args: unknown[]): { options: Record<string, unknown>; timeout: number | undefined; callback?: (...args: unknown[]) => void } {
+function connectArguments(args: unknown[], installed: () => string | undefined): { options: Record<string, unknown>; timeout: number | undefined; callback?: (...args: unknown[]) => void } {
   const values = [...args]; const last = values.at(-1); const callback = isEventListener(last) ? last : undefined;
   if (callback !== undefined) values.pop();
   const [first, second, third] = values;
@@ -224,6 +314,8 @@ function connectArguments(args: unknown[]): { options: Record<string, unknown>; 
     : typeof first === "string" && !(Number(first) >= 0) ? copyOptions({ path: first })
       : copyOptions(typeof second === "string" ? { port: first, host: second } : { port: first });
   Object.assign(options, typeof second === "object" && second !== null ? second : third);
+  useSecureContext(options);
+  if (!truthy(options["ca"])) { const ca = installed(); if (ca !== undefined) options["ca"] = ca; }
   refuseSetOptions(options, UNSUPPORTED_TLS_CONNECT_OPTIONS, "tls.connect", "tls.connect");
   const host = truthy(options["host"]) ? options["host"] : "localhost";
   if (typeof host !== "string" || host.includes("\0") || Buffer.byteLength(host) > 4096) throw new TypeError("Invalid TLS host");
@@ -231,6 +323,21 @@ function connectArguments(args: unknown[]): { options: Record<string, unknown>; 
   if (typeof port !== "number" || !Number.isInteger(port) || port < 1 || port > 65535) throw failure("ERR_SOCKET_BAD_PORT", "Invalid TLS port");
   const timeout = truthy(options["timeout"]) ? timeoutDuration(options["timeout"]) : undefined;
   return { options: { host, port, ...tlsOptions(options) }, timeout, ...(callback === undefined ? {} : { callback }) };
+}
+/** The keys Node takes from a secure context and not from the connection's own options when one is given. */
+const CONTEXT_OPTION_NAMES = ["allowPartialTrustChain", "ca", "cert", "ciphers", "clientCertEngine", "crl", "dhparam", "ecdhCurve", "key", "passphrase", "pfx", "privateKeyIdentifier", "privateKeyEngine",
+  "sessionIdContext", "sessionTimeout", "sigalgs", "ticketKeys", "honorCipherOrder", "minVersion", "maxVersion", "secureProtocol", "secureOptions"] as const;
+/**
+ * A context from `tls.createSecureContext` whose options the guest's TLS takes (ca, minVersion, maxVersion) stands
+ * in for those options, as in Node, where the connection's own are then not read. A context holding anything else,
+ * or a foreign object, stays in `options` and is refused with the other unsupported keys.
+ */
+function useSecureContext(options: Record<string, unknown>): void {
+  const held = secureContextOptions(options["secureContext"]);
+  if (held === undefined || Object.keys(UNSUPPORTED_TLS_OPTIONS).some(name => UNSUPPORTED_TLS_OPTIONS[name]?.(held[name]) === true)) return;
+  for (const name of CONTEXT_OPTION_NAMES) Reflect.deleteProperty(options, name);
+  Reflect.deleteProperty(options, "secureContext");
+  for (const name of ["ca", "minVersion", "maxVersion"] as const) if (held[name] !== undefined) options[name] = held[name];
 }
 function timeoutDuration(value: unknown): number {
   if (typeof value !== "number" || !Number.isFinite(value) || value < 0) throw failure("ERR_OUT_OF_RANGE", "TLS timeout must be a nonnegative finite number");

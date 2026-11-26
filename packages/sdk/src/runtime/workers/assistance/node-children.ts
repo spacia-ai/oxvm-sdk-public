@@ -160,11 +160,24 @@ export function createNativeChildren(
       const errno: unknown = Reflect.get(failure, "errno");
       if (typeof errno === "number" && Number.isInteger(errno) && errno < 0 && errno >= -4095) {
         this.exitCode = errno;
+        const code: unknown = Reflect.get(failure, "code");
         Object.assign(failure, { syscall: `spawn ${command}`, path: command, spawnargs: [...args] });
+        // Node's errnoException wording: the system call, then the code.
+        if (typeof code === "string") failure.message = `spawn ${command} ${code}`;
       }
       this.ready.reject(failure);
-      this.stdin?.destroy(); this.stdout?.destroy(); this.stderr?.destroy();
+      this.stdin?.destroy();
       this.run(() => this.emit("error", failure));
+      // Node ends the outputs of a child that never started; it does not destroy them. A reader then sees an empty
+      // stream and the spawn error, where a destroyed stream would report a premature close of its own.
+      const ended: Promise<void>[] = [];
+      for (const stream of [this.stdout, this.stderr]) {
+        if (stream === null || stream === undefined || stream.destroyed) continue;
+        ended.push(new Promise<void>(resolve => { stream.once("close", () => { resolve(); }); }));
+        this.run(() => stream.push(null));
+        stream.resume();
+      }
+      await Promise.all(ended);
       await Promise.resolve();
       this.run(() => this.emit("close", this.exitCode, null));
     }

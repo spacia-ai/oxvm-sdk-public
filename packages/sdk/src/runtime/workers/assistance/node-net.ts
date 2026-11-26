@@ -8,7 +8,9 @@ import type { AsyncContext } from "./async-context.js";
 import { bindAsyncEvents, EventEmitter, streamError } from "./node-streams.js";
 import { nodeResult } from "./node-file-operations.js";
 import { createNodeSockets } from "./node-socket.js";
-import type { SocketNetworking } from "./node-socket-connect.js";
+import type { SocketLookup, SocketNetworking } from "./node-socket-connect.js";
+import { blockedAddress, BlockList, invalidBlockList, SocketAddress } from "./node-net-address.ts";
+import { createServerHandle, normalizeArgs } from "./node-net-extras.ts";
 
 type Listener = Extract<AssistanceResult, { kind: "socket" }>;
 
@@ -27,15 +29,53 @@ type NodeNet = ReturnType<typeof createNodeSockets> & {
   readonly isIP: (value: unknown) => number;
   readonly isIPv4: (value: unknown) => boolean;
   readonly isIPv6: (value: unknown) => boolean;
+  readonly BlockList: typeof BlockList;
+  readonly SocketAddress: typeof SocketAddress;
+  readonly Stream: ReturnType<typeof createNodeSockets>["Socket"];
+  readonly _normalizeArgs: typeof normalizeArgs;
+  readonly _createServerHandle: typeof createServerHandle;
 };
 
 export function createNodeNet(io: Pick<ProcessIO, "call" | "callSync" | "retain">, context: AsyncContext, scheduler?: ProcessScheduler, networking?: SocketNetworking): NodeNet {
-  const sockets = createNodeSockets(io, context, scheduler, networking);
+  const plain = createNodeSockets(io, context, scheduler, networking);
   const deliver = <Result>(callback: () => Result): Promise<Result> => scheduler === undefined
     ? Promise.resolve(callback()) : scheduler.execute(callback);
   const nextTick = (callback: () => void) => {
     if (scheduler === undefined) queueMicrotask(callback); else scheduler.nextTick(callback);
   };
+  /** The Linux-backed socket, with Node's `blockList` option: an address the list holds is never connected to. */
+  class Socket extends plain.Socket {
+    #blockList: BlockList | undefined;
+    constructor(value: unknown = {}) {
+      const { blockList, rest } = withoutBlockList(value);
+      super(rest);
+      this.#blockList = blockList;
+    }
+    override connect(...args: unknown[]): this {
+      const list = this.#blockList;
+      if (list === undefined) { super.connect(...args); return this; }
+      const last = args.at(-1), callback = typeof last === "function" ? last : undefined, values = callback === undefined ? args : args.slice(0, -1);
+      const options: Record<string, unknown> = typeof values[0] === "object" && values[0] !== null ? withoutBlockList(values[0]).rest : { port: values[0], ...(values[1] === undefined ? {} : { host: values[1] }) };
+      const host = options["host"] ?? "localhost", custom = options["lookup"], lookup = callLookup(custom) ?? networking?.lookup;
+      const literal = typeof host !== "string" ? undefined : isIP(host) !== 0 ? host : host === "localhost" && lookup === undefined ? "127.0.0.1" : undefined;
+      if (literal !== undefined && list.check(literal, `ipv${String(isIP(literal))}`)) {
+        // Node finds the block one tick into the connection; until then the socket is connecting.
+        Reflect.defineProperty(this, "connecting", { configurable: true, get: () => true });
+        const run = context.capture();
+        nextTick(() => { Reflect.deleteProperty(this, "connecting"); run(() => { this.destroy(blockedAddress(literal)); }); });
+        return this;
+      }
+      const guarded = literal !== undefined || lookup === undefined ? options : { ...options, lookup: allowedLookup(lookup, list) };
+      super.connect(...(callback === undefined ? [guarded] : [guarded, callback]));
+      return this;
+    }
+  }
+  Object.defineProperty(Socket, "name", { value: "Socket" });
+  const createConnection = (...args: unknown[]): InstanceType<typeof Socket> => {
+    const first = args[0], blockList: unknown = typeof first === "object" && first !== null ? Reflect.get(first, "blockList") : undefined;
+    return new Socket(blockList === undefined ? {} : { blockList }).connect(...args);
+  };
+  const sockets = { ...plain, Socket, createConnection, connect: createConnection };
   class Server extends EventEmitter {
     #state: "idle" | "opening" | "listening" | "closing" = "idle";
     #listener: Listener | undefined;
@@ -156,8 +196,35 @@ export function createNodeNet(io: Pick<ProcessIO, "call" | "callSync" | "retain"
       }
     }
   }
-  return { ...sockets, connect: sockets.createConnection, Server, createServer: (options?: unknown, listener?: unknown) => new Server(options, listener),
-    isIP, isIPv4: (value: unknown) => isIP(value) === 4, isIPv6: (value: unknown) => isIP(value) === 6 };
+  return { ...sockets, Server, createServer: (options?: unknown, listener?: unknown) => new Server(options, listener),
+    isIP, isIPv4: (value: unknown) => isIP(value) === 4, isIPv6: (value: unknown) => isIP(value) === 6,
+    BlockList, SocketAddress, Stream: Socket, _normalizeArgs: normalizeArgs, _createServerHandle: createServerHandle };
+}
+
+/** Node reads `blockList` when it is truthy and refuses anything but a BlockList. */
+function withoutBlockList(value: unknown): { blockList: BlockList | undefined; rest: Record<string, unknown> } {
+  const { blockList, ...rest } = record(value, "net.Socket options");
+  if (blockList === undefined || blockList === null || blockList === false || blockList === 0 || blockList === "") return { blockList: undefined, rest };
+  if (!(blockList instanceof BlockList)) throw invalidBlockList(blockList);
+  return { blockList, rest };
+}
+function callLookup(custom: unknown): SocketLookup | undefined {
+  if (typeof custom !== "function") return undefined;
+  return (host, options, callback) => { const value: unknown = Reflect.apply(custom, undefined, [host, options, callback]); return value; };
+}
+/** A lookup whose blocked answers are dropped, as Node skips them; when every answer is blocked the first is the error. */
+function allowedLookup(lookup: SocketLookup, list: BlockList): SocketLookup {
+  return (host, options, callback) => lookup(host, options, (error: unknown, value: unknown, family: unknown) => {
+    if (typeof callback !== "function") return;
+    const blocked = (address: unknown, kind: unknown): boolean => typeof address === "string" && list.check(address, kind === 6 ? "ipv6" : "ipv4");
+    let answer: unknown[] = [error, value, family];
+    if ((error === null || error === undefined) && Array.isArray(value)) {
+      const entries: unknown[] = value, open = entries.filter(entry => !(typeof entry === "object" && entry !== null && blocked(Reflect.get(entry, "address"), Reflect.get(entry, "family"))));
+      const first: unknown = entries[0];
+      answer = open.length === 0 && typeof first === "object" && first !== null ? [blockedAddress(String(Reflect.get(first, "address")))] : [error, open, family];
+    } else if ((error === null || error === undefined) && blocked(value, family)) answer = [blockedAddress(String(value))];
+    Reflect.apply(callback, undefined, answer);
+  });
 }
 
 function isIP(value: unknown): number {
@@ -166,9 +233,14 @@ function isIP(value: unknown): number {
   catch { return 0; }
 }
 
-function listenArguments(args: unknown[]) {
+export function listenArguments(input: readonly unknown[]) {
+  const args = [...input];
+  // Node reads the last function as the callback and takes a trailing undefined for "not given".
+  const absent = (value: unknown): boolean => value === undefined || value === null;
+  while (args.length > 0 && absent(args.at(-1))) args.pop();
   const last = args.at(-1); const callback = typeof last === "function" ? last : undefined;
   if (callback !== undefined) args.pop();
+  while (args.length > 1 && absent(args.at(-1))) args.pop();
   let port: unknown; let host: unknown; let backlog: unknown;
   if (typeof args[0] === "object" && args[0] !== null) {
     if (args.length !== 1) throw new TypeError("Unsupported net.Server.listen arguments");
@@ -178,6 +250,7 @@ function listenArguments(args: unknown[]) {
   } else {
     if (args.length < 1 || args.length > 3) throw new TypeError("Unsupported net.Server.listen arguments");
     [port, host, backlog] = args;
+    if (host === null) host = undefined;
     if (typeof host === "number" && backlog === undefined) { backlog = host; host = undefined; }
   }
   if (typeof port === "string" && /^[0-9]+$/u.test(port)) port = Number(port);

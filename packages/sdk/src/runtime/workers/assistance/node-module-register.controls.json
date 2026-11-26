@@ -1,0 +1,595 @@
+{
+ "//": "Node.js v24.18.1 (node:24.18.1-alpine): module.register() scenarios. The tree under /workspace/r is the fixture directory fx/ the recorder mounts; write it out from \"tree\" to record again.",
+ "recorder": "// docker run --rm -v \"$PWD/rec-register.js:/rec.js:ro\" -v \"$PWD/fx:/fx:ro\" node:24.18.1-alpine node /rec.js\n// Each scenario is one CommonJS program of the tree (basic.cjs, lifo.cjs, errors.cjs, registering.cjs, rejecting.cjs, requiring.cjs, ports.cjs), run\n// in a fresh Node process; the test runs the same text in a fresh fast-path loader.\nconst fs = require(\"fs\"), path = require(\"path\"), { spawnSync } = require(\"child_process\");\nconst ROOT = \"/workspace/r\", tree = { files: {} };\n(function walk(directory) {\n  for (const entry of fs.readdirSync(directory, { withFileTypes: true })) {\n    const file = path.join(directory, entry.name);\n    if (entry.isDirectory()) walk(file); else tree.files[ROOT + file.slice(\"/fx\".length)] = fs.readFileSync(file, \"utf8\");\n  }\n})(\"/fx\");\nfor (const [file, text] of Object.entries(tree.files)) { fs.mkdirSync(path.dirname(file), { recursive: true }); fs.writeFileSync(file, text); }\nconst results = {};\nfor (const scenario of [\"basic\", \"lifo\", \"errors\", \"registering\", \"rejecting\", \"requiring\", \"ports\"]) {\n  const run = spawnSync(process.execPath, [\"-e\", `require(${JSON.stringify(`${ROOT}/${scenario}.cjs`)}).then(out => process.stdout.write(JSON.stringify(out)))`], { cwd: ROOT, encoding: \"utf8\" });\n  if (run.status !== 0 || run.stdout === \"\") { process.stderr.write(`${scenario}: ${run.stderr}`); process.exit(1); }\n  results[scenario] = JSON.parse(run.stdout);\n}\nprocess.stdout.write(JSON.stringify({ tree, results }, null, 1));\n",
+ "tree": {
+  "files": {
+   "/workspace/r/app.ts": "interface Shape { side: number }\nconst square: Shape = { side: 3 };\nexport function area(shape: Shape): number { return shape.side ** 2; }\nexport default area(square) as number;\n",
+   "/workspace/r/basic.cjs": "const { register } = require('node:module');\nconst fs = require('node:fs');\nconst LOG = '/workspace/r/log.txt', here = 'file:///workspace/r/basic.cjs';\nconst log = () => { const text = fs.readFileSync(LOG, 'utf8'); fs.writeFileSync(LOG, ''); return text.split('\\n').filter(Boolean); };\nfs.writeFileSync(LOG, '');\nmodule.exports = (async () => {\n  const out = {};\n  const returned = register('./hooks/trace.mjs', here, { data: { n: 1 } });\n  out.register = { returned: String(returned), log: log() };\n  out.require = { value: require('./x.js'), log: log() };\n  out.graph = { value: (await import('./m.mjs')).default, log: log() };\n  out.again = { value: (await import('./m.mjs')).default, log: log() };\n  const ts = await import('./app.ts');\n  out.typescript = { value: ts.default, area: ts.area({ side: 2 }), log: log() };\n  out.shared = { value: (await import('./shared.mjs')).bump(), log: log().length };\n  return out;\n})();\n",
+   "/workspace/r/e.mjs": "import g from \"./g.mjs\"; export default \"e\" + g;\n",
+   "/workspace/r/errors.cjs": "const { register } = require('node:module');\nconst R = ['no-short', 'undefined', 'null', 'number', 'no-url', 'url-number', 'bad-url', 'format-number', 'attrs-string', 'throws', 'next-bad-spec', 'next-bad-context', 'next-no-context', 'next-partial-context', 'short', 'missing', 'next-twice', 'extra', 'query'];\nconst L = ['no-short', 'undefined', 'number', 'no-format', 'format-number', 'unknown-format', 'no-source', 'source-number', 'source-object', 'string', 'array-buffer', 'typed-array', 'commonjs', 'json', 'builtin', 'throws', 'next-bad-url', 'next-invalid-url', 'next-bad-context', 'next-no-context', 'next-other', 'bad-response-url', 'meta'];\nmodule.exports = (async () => {\n  register('./hooks/errors.mjs', 'file:///workspace/r/errors.cjs');\n  const out = {};\n  const attempt = async (name, options) => {\n    try { const value = (await import(name, options)).default; out[name] = { value: value === undefined ? '<undefined>' : value }; }\n    catch (error) { out[name] = { error: { name: error.constructor.name, code: error.code === undefined ? null : error.code, message: error.message } }; }\n  };\n  for (const name of R) await attempt('r:' + name);\n  for (const name of L) await attempt('l:' + name, name === 'json' ? { with: { type: 'json' } } : undefined);\n  await attempt('./t.weird');\n  return out;\n})();\n",
+   "/workspace/r/g.mjs": "export default \"g\";\n",
+   "/workspace/r/hooks/A.mjs": "import { appendFileSync } from 'node:fs';\nimport { bump } from '../shared.mjs';\nconst log = line => appendFileSync('/workspace/r/log.txt', line + '\\n');\nexport function initialize(data) { log('A.init ' + JSON.stringify(data) + ' shared=' + bump()); }\nexport async function resolve(specifier, context, nextResolve) {\n  log('A.resolve ' + specifier + ' parent=' + context.parentURL);\n  if (specifier === 'virtual:A') return { url: 'file:///workspace/r/x.js', shortCircuit: true, format: 'commonjs' };\n  return nextResolve(specifier, context);\n}\nexport async function load(url, context, nextLoad) {\n  log('A.load ' + url + ' ' + JSON.stringify(context));\n  return nextLoad(url, context);\n}\n",
+   "/workspace/r/hooks/B.mjs": "import { appendFileSync } from 'node:fs';\nimport { bump } from '../shared.mjs';\nconst log = line => appendFileSync('/workspace/r/log.txt', line + '\\n');\nexport function initialize(data) { log('B.init ' + JSON.stringify(data) + ' shared=' + bump()); }\nexport async function resolve(specifier, context, nextResolve) {\n  log('B.resolve ' + specifier + ' parent=' + context.parentURL);\n  if (specifier === 'virtual:B') return { url: 'file:///workspace/r/x.js', shortCircuit: true, format: 'commonjs' };\n  return nextResolve(specifier, context);\n}\nexport async function load(url, context, nextLoad) {\n  log('B.load ' + url + ' ' + JSON.stringify(context));\n  return nextLoad(url, context);\n}\n",
+   "/workspace/r/hooks/common.cjs": "exports.initialize = data => { require('node:fs').appendFileSync('/workspace/r/log.txt', 'C.init ' + JSON.stringify(data) + '\\n'); };\nexports.resolve = async (specifier, context, next) => specifier === 'virtual:C' ? { url: 'file:///workspace/r/x.js', shortCircuit: true } : next(specifier, context);\n",
+   "/workspace/r/hooks/errors.mjs": "const X = 'file:///workspace/r/x.mjs';\nexport async function resolve(specifier, context, nextResolve) {\n  const k = specifier.startsWith('r:') ? specifier.slice(2) : '';\n  switch (k) {\n    case 'no-short': return { url: X };\n    case 'undefined': return undefined;\n    case 'null': return null;\n    case 'number': return 5;\n    case 'no-url': return { shortCircuit: true };\n    case 'url-number': return { url: 5, shortCircuit: true };\n    case 'bad-url': return { url: 'not a url', shortCircuit: true };\n    case 'format-number': return { url: X, format: 5, shortCircuit: true };\n    case 'attrs-string': return { url: X, importAttributes: 'x', shortCircuit: true };\n    case 'throws': throw new RangeError('boom');\n    case 'next-bad-spec': return nextResolve(5, context);\n    case 'next-bad-context': return nextResolve('./x.mjs', 5);\n    case 'next-no-context': return nextResolve('./x.mjs');\n    case 'next-partial-context': return nextResolve('./x.mjs', { conditions: ['custom'] });\n    case 'short': return { url: X, shortCircuit: true };\n    case 'missing': return nextResolve('./missing.mjs', context);\n    case 'next-twice': { await nextResolve('./x.mjs', context); return nextResolve('./y.mjs', context); }\n    case 'extra': return { url: X, shortCircuit: true, extra: 1, format: 'module' };\n    case 'query': return { url: X + '?v=1#h', shortCircuit: true };\n    case 'not-async': return { url: X, shortCircuit: true };\n  }\n  if (specifier.startsWith('l:')) return { url: 'file:///workspace/r/l/' + specifier.slice(2) + '.mjs', shortCircuit: true };\n  return nextResolve(specifier, context);\n}\nexport async function load(url, context, nextLoad) {\n  const m = /\\/l\\/(.*)\\.mjs$/.exec(url); const k = m ? m[1] : '';\n  switch (k) {\n    case 'no-short': return { format: 'module', source: 'export default 1' };\n    case 'undefined': return undefined;\n    case 'number': return 5;\n    case 'no-format': return { source: 'export default 1', shortCircuit: true };\n    case 'format-number': return { format: 5, source: 'export default 1', shortCircuit: true };\n    case 'unknown-format': return { format: 'weird', source: 'export default 1', shortCircuit: true };\n    case 'no-source': return { format: 'module', shortCircuit: true };\n    case 'source-number': return { format: 'module', source: 5, shortCircuit: true };\n    case 'source-object': return { format: 'module', source: {}, shortCircuit: true };\n    case 'string': return { format: 'module', source: 'export default \"st\"', shortCircuit: true };\n    case 'array-buffer': return { format: 'module', source: new TextEncoder().encode('export default \"ab\"').buffer, shortCircuit: true };\n    case 'typed-array': return { format: 'module', source: new TextEncoder().encode('export default \"ta\"'), shortCircuit: true };\n    case 'commonjs': return { format: 'commonjs', source: 'module.exports = { c: 1 }', shortCircuit: true };\n    case 'json': return { format: 'json', source: '{\"j\":2}', shortCircuit: true };\n    case 'builtin': return { format: 'builtin', shortCircuit: true };\n    case 'throws': throw new RangeError('lboom');\n    case 'next-bad-url': return nextLoad(5, context);\n    case 'next-invalid-url': return nextLoad('not a url', context);\n    case 'next-bad-context': return nextLoad(X, 5);\n    case 'next-no-context': return nextLoad(X);\n    case 'next-other': return nextLoad(X, context);\n    case 'bad-response-url': return { format: 'module', source: 'export default 1', responseURL: 'nope', shortCircuit: true };\n    case 'meta': return { format: 'module', source: 'export default import.meta.url', shortCircuit: true };\n  }\n  return nextLoad(url, context);\n}\n",
+   "/workspace/r/hooks/init-rejects.mjs": "export async function initialize() { throw new RangeError('initialize rejected'); }\n",
+   "/workspace/r/hooks/init-throws.mjs": "export function initialize() { throw new RangeError('initialize threw'); }\n",
+   "/workspace/r/hooks/none.mjs": "export const unrelated = 1; export const resolve = 0; export const load = null;\n",
+   "/workspace/r/hooks/port.mjs": "let port;\nexport function initialize(data) { port = data.port; port.postMessage({ type: 'init', tag: data.tag, sameArray: Array.isArray(data.list), list: data.list }); }\nexport async function load(url, context, nextLoad) { port.postMessage({ type: 'load', url }); return nextLoad(url, context); }\n",
+   "/workspace/r/hooks/throws.mjs": "throw new RangeError('hooks module threw');\n",
+   "/workspace/r/hooks/tla.mjs": "import { appendFileSync } from 'node:fs';\nawait new Promise(done => setTimeout(done, 10));\nappendFileSync('/workspace/r/log.txt', 'TLA.evaluated\\n');\nexport function initialize(data) { appendFileSync('/workspace/r/log.txt', 'TLA.init ' + JSON.stringify(data) + '\\n'); }\nexport async function resolve(specifier, context, next) { return specifier === 'virtual:TLA' ? { url: 'file:///workspace/r/x.js', shortCircuit: true } : next(specifier, context); }\n",
+   "/workspace/r/hooks/trace.mjs": "import { appendFileSync } from 'node:fs';\nimport { stripTypeScriptTypes } from 'node:module';\nimport { bump } from '../shared.mjs';\nconst log = line => appendFileSync('/workspace/r/log.txt', line + '\\n');\nconst brief = r => JSON.stringify({ ...r, source: r.source == null ? String(r.source) : (ArrayBuffer.isView(r.source) ? 'bytes:' : 'text:') + String(r.source).slice(0, 24) });\nexport async function initialize(data) { log('T.init ' + JSON.stringify(data) + ' shared=' + bump()); await new Promise(done => setTimeout(done, 20)); log('T.init done'); }\nexport async function resolve(specifier, context, nextResolve) {\n  log('T.resolve ' + specifier + ' ' + JSON.stringify(context));\n  if (specifier === 'virtual-pkg') return { url: new URL('../lib/real.mjs', import.meta.url).href, shortCircuit: true };\n  const result = await nextResolve(specifier, context);\n  log('T.resolved ' + JSON.stringify(result));\n  return result;\n}\nexport async function load(url, context, nextLoad) {\n  log('T.load ' + url + ' ' + JSON.stringify(context));\n  if (url.endsWith('.ts')) {\n    const { source } = await nextLoad(url, { ...context, format: 'module' });\n    return { format: 'module', shortCircuit: true, source: stripTypeScriptTypes(String(source)) };\n  }\n  const result = await nextLoad(url, context);\n  log('T.loaded ' + brief(result));\n  return result;\n}\n",
+   "/workspace/r/hooks/upper.mjs": "export async function load(url, context, nextLoad) {\n  if (!url.endsWith('.txt')) return nextLoad(url, context);\n  const { source } = await nextLoad(url, { ...context, format: 'module' });\n  return { format: 'module', shortCircuit: true, source: 'export default ' + JSON.stringify(String(source).trim().toUpperCase()) };\n}\n",
+   "/workspace/r/j.json": "{\"j\":1}\n",
+   "/workspace/r/lib/real.mjs": "export default \"real\";\n",
+   "/workspace/r/lifo.cjs": "const { register, registerHooks } = require('node:module');\nconst fs = require('node:fs');\nconst LOG = '/workspace/r/log.txt', here = 'file:///workspace/r/lifo.cjs';\nconst log = () => { const text = fs.readFileSync(LOG, 'utf8'); fs.writeFileSync(LOG, ''); return text.split('\\n').filter(Boolean); };\nfs.writeFileSync(LOG, '');\nconst note = line => fs.appendFileSync(LOG, line + '\\n');\nmodule.exports = (async () => {\n  const out = {};\n  register('./hooks/A.mjs', here, { data: 'a' });\n  const sync = registerHooks({\n    resolve(specifier, context, next) {\n      note('S.resolve ' + specifier);\n      if (specifier === 'virtual:S') return { url: 'file:///workspace/r/x.js', shortCircuit: true, format: 'commonjs' };\n      const result = next(specifier === 'alias:g' ? './g.mjs' : specifier, context);\n      note('S.resolved ' + JSON.stringify(result));\n      return result;\n    },\n    load(url, context, next) { note('S.load ' + url + ' ' + JSON.stringify(context)); const result = next(url, context); note('S.loaded ' + result.format); return result; },\n  });\n  register('./hooks/B.mjs', here, { data: 'b' });\n  out.registered = log();\n  out.shared = { value: (await import('./shared.mjs')).bump(), log: log() };\n  out.virtualB = { value: (await import('virtual:B')).default, log: log() };\n  out.virtualA = { value: (await import('virtual:A')).default, log: log() };\n  out.virtualS = { value: (await import('virtual:S')).default, log: log() };\n  out.alias = { value: (await import('alias:g')).default, log: log() };\n  out.required = { value: require('./y.cjs'), log: log() };\n  sync.deregister();\n  out.afterDeregister = { value: (await import('./e.mjs')).default, log: log() };\n  return out;\n})();\n",
+   "/workspace/r/m.mjs": "import y from \"./y.cjs\"; import j from \"./j.json\" with { type: \"json\" }; import fs from \"node:fs\"; import real from \"virtual-pkg\"; export default \"m\" + y + j.j + real + typeof fs.appendFileSync;\n",
+   "/workspace/r/node_modules/hookpkg/index.mjs": "export async function resolve(specifier, context, next) { return specifier === 'virtual:P' ? { url: 'file:///workspace/r/x.js', shortCircuit: true } : next(specifier, context); }\n",
+   "/workspace/r/node_modules/hookpkg/package.json": "{\"name\":\"hookpkg\",\"exports\":{\".\":\"./index.mjs\"}}\n",
+   "/workspace/r/note.txt": "hello\n",
+   "/workspace/r/plain.js": "module.exports = \"plain\";\n",
+   "/workspace/r/ports.cjs": "const { register } = require('node:module');\nconst { MessageChannel } = require('node:worker_threads');\nmodule.exports = (async () => {\n  const { port1, port2 } = new MessageChannel(), messages = [], list = [1, 2];\n  port1.on('message', message => messages.push(message));\n  const data = { port: port2, tag: 'ports', list };\n  register('./hooks/port.mjs', 'file:///workspace/r/ports.cjs', { data, transferList: [port2] });\n  list.push(3);\n  const value = (await import('./g.mjs')).default;\n  await new Promise(done => setTimeout(done, 50));\n  port1.close();\n  let detached; try { port2.postMessage('after'); detached = 'no throw'; } catch (error) { detached = error.code || error.name; }\n  return { value, messages, detached };\n})();\n",
+   "/workspace/r/registering.cjs": "const { register } = require('node:module');\nconst fs = require('node:fs');\nconst LOG = '/workspace/r/log.txt', here = 'file:///workspace/r/registering.cjs';\nconst log = () => { const text = fs.readFileSync(LOG, 'utf8'); fs.writeFileSync(LOG, ''); return text.split('\\n').filter(Boolean); };\nfs.writeFileSync(LOG, '');\nconst run = call => { try { const value = call(); return { value: value === undefined ? '<undefined>' : value, log: log() }; } catch (error) { return { error: { name: error.constructor.name, code: error.code === undefined ? null : error.code, message: error.message }, log: log() }; } };\nmodule.exports = (async () => {\n  const out = {};\n  out.missing = run(() => register('./hooks/missing.mjs', here));\n  out.missingPackage = run(() => register('nopkg', here));\n  out.bareDefaultParent = run(() => register('hookpkg'));\n  out.relativeDefaultParent = run(() => register('./hooks/common.cjs'));\n  out.pathParent = run(() => register('./hooks/common.cjs', '/workspace/r/registering.cjs'));\n  out.throws = run(() => register('./hooks/throws.mjs', here));\n  out.initThrows = run(() => register('./hooks/init-throws.mjs', here));\n  out.uncloneable = run(() => register('./hooks/common.cjs', here, { data: { f() {} } }));\n  out.none = run(() => register('./hooks/none.mjs', here));\n  out.commonjs = run(() => register('./hooks/common.cjs', here, { data: { c: [1, new Date(5)] } }));\n  out.package = run(() => register('hookpkg', here));\n  out.optionsForm = run(() => register('./hooks/common.cjs?second', { parentURL: here, data: 'options' }));\n  out.urlObjects = run(() => register(new URL('./hooks/common.cjs?third', here), new URL(here), { data: 'urls' }));\n  out.directoryParent = run(() => register('./hooks/common.cjs?fourth', 'file:///workspace/r/', { data: 'dir' }));\n  out.absolute = run(() => register('file:///workspace/r/hooks/common.cjs?fifth', undefined, { data: 'absolute' }));\n  out.tla = run(() => register('./hooks/tla.mjs', here, { data: 'tla' }));\n  for (const name of ['virtual:C', 'virtual:P', 'virtual:TLA']) out[name] = await import(name).then(ns => ns.default, error => error.code);\n  out.finalLog = log();\n  return out;\n})();\n",
+   "/workspace/r/rejecting.cjs": "const { register } = require('node:module');\nconst outcome = promise => promise.then(ns => ({ value: ns.default }), error => ({ error: { name: error.constructor.name, message: error.message } }));\nmodule.exports = (async () => {\n  const out = {};\n  try { out.register = { value: String(register('./hooks/init-rejects.mjs', 'file:///workspace/r/rejecting.cjs')) }; }\n  catch (error) { out.register = { error: { name: error.constructor.name, message: error.message } }; }\n  out.first = await outcome(import('./g.mjs'));\n  out.second = await outcome(import('./g.mjs'));\n  return out;\n})();\n",
+   "/workspace/r/requiring.cjs": "const { register } = require('node:module');\nmodule.exports = (async () => {\n  register('./hooks/upper.mjs', 'file:///workspace/r/requiring.cjs');\n  const out = {};\n  out.imported = (await import('./note.txt')).default;\n  out.plain = require('./plain.js');\n  out.json = require('./j.json');\n  out.esm = require('./e.mjs').default;\n  return out;\n})();\n",
+   "/workspace/r/shared.mjs": "let n = 0; export function bump() { return ++n; }\n",
+   "/workspace/r/t.weird": "export default 1;\n",
+   "/workspace/r/uses-note.mjs": "import text from \"./note.txt\"; export default \"esm:\" + text;\n",
+   "/workspace/r/x.js": "module.exports = \"x\";\n",
+   "/workspace/r/x.mjs": "export default \"x\";\n",
+   "/workspace/r/y.cjs": "module.exports = \"y\" + require(\"./x.js\");\n",
+   "/workspace/r/y.mjs": "export default \"y\";\n"
+  }
+ },
+ "results": {
+  "basic": {
+   "register": {
+    "returned": "undefined",
+    "log": [
+     "T.init {\"n\":1} shared=1",
+     "T.init done"
+    ]
+   },
+   "require": {
+    "value": "x",
+    "log": []
+   },
+   "graph": {
+    "value": "myx1realfunction",
+    "log": [
+     "T.resolve ./m.mjs {\"conditions\":[\"node\",\"import\",\"module-sync\",\"node-addons\"],\"importAttributes\":{},\"parentURL\":\"file:///workspace/r/basic.cjs\"}",
+     "T.resolved {\"url\":\"file:///workspace/r/m.mjs\",\"format\":\"module\"}",
+     "T.load file:///workspace/r/m.mjs {\"format\":\"module\",\"importAttributes\":{}}",
+     "T.loaded {\"format\":\"module\",\"responseURL\":\"file:///workspace/r/m.mjs\",\"source\":\"bytes:import y from \\\"./y.cjs\\\";\"}",
+     "T.resolve ./y.cjs {\"conditions\":[\"node\",\"import\",\"module-sync\",\"node-addons\"],\"importAttributes\":{},\"parentURL\":\"file:///workspace/r/m.mjs\"}",
+     "T.resolved {\"url\":\"file:///workspace/r/y.cjs\",\"format\":\"commonjs\"}",
+     "T.load file:///workspace/r/y.cjs {\"format\":\"commonjs\",\"importAttributes\":{}}",
+     "T.loaded {\"format\":\"commonjs\",\"responseURL\":\"file:///workspace/r/y.cjs\",\"source\":\"undefined\"}",
+     "T.resolve ./j.json {\"conditions\":[\"node\",\"import\",\"module-sync\",\"node-addons\"],\"importAttributes\":{\"type\":\"json\"},\"parentURL\":\"file:///workspace/r/m.mjs\"}",
+     "T.resolved {\"url\":\"file:///workspace/r/j.json\",\"format\":\"json\"}",
+     "T.load file:///workspace/r/j.json {\"format\":\"json\",\"importAttributes\":{\"type\":\"json\"}}",
+     "T.loaded {\"format\":\"json\",\"responseURL\":\"file:///workspace/r/j.json\",\"source\":\"bytes:{\\\"j\\\":1}\\n\"}",
+     "T.resolve node:fs {\"conditions\":[\"node\",\"import\",\"module-sync\",\"node-addons\"],\"importAttributes\":{},\"parentURL\":\"file:///workspace/r/m.mjs\"}",
+     "T.resolved {\"url\":\"node:fs\"}",
+     "T.load node:fs {\"importAttributes\":{}}",
+     "T.loaded {\"format\":\"builtin\",\"responseURL\":\"node:fs\",\"source\":\"null\"}",
+     "T.resolve virtual-pkg {\"conditions\":[\"node\",\"import\",\"module-sync\",\"node-addons\"],\"importAttributes\":{},\"parentURL\":\"file:///workspace/r/m.mjs\"}",
+     "T.load file:///workspace/r/lib/real.mjs {\"importAttributes\":{}}",
+     "T.loaded {\"format\":\"module\",\"responseURL\":\"file:///workspace/r/lib/real.mjs\",\"source\":\"bytes:export default \\\"real\\\";\\n\"}"
+    ]
+   },
+   "again": {
+    "value": "myx1realfunction",
+    "log": [
+     "T.resolve ./m.mjs {\"conditions\":[\"node\",\"import\",\"module-sync\",\"node-addons\"],\"importAttributes\":{},\"parentURL\":\"file:///workspace/r/basic.cjs\"}",
+     "T.resolved {\"url\":\"file:///workspace/r/m.mjs\",\"format\":\"module\"}"
+    ]
+   },
+   "typescript": {
+    "value": 9,
+    "area": 4,
+    "log": [
+     "T.resolve ./app.ts {\"conditions\":[\"node\",\"import\",\"module-sync\",\"node-addons\"],\"importAttributes\":{},\"parentURL\":\"file:///workspace/r/basic.cjs\"}",
+     "T.resolved {\"url\":\"file:///workspace/r/app.ts\",\"format\":null}",
+     "T.load file:///workspace/r/app.ts {\"format\":null,\"importAttributes\":{}}"
+    ]
+   },
+   "shared": {
+    "value": 1,
+    "log": 4
+   }
+  },
+  "lifo": {
+   "registered": [
+    "A.init \"a\" shared=1",
+    "A.resolve ./hooks/B.mjs parent=file:///workspace/r/lifo.cjs",
+    "A.load file:///workspace/r/hooks/B.mjs {\"format\":\"module\",\"importAttributes\":{}}",
+    "A.resolve node:fs parent=file:///workspace/r/hooks/B.mjs",
+    "A.resolve ../shared.mjs parent=file:///workspace/r/hooks/B.mjs",
+    "B.init \"b\" shared=2"
+   ],
+   "shared": {
+    "value": 1,
+    "log": [
+     "S.resolve ./shared.mjs",
+     "B.resolve ./shared.mjs parent=file:///workspace/r/lifo.cjs",
+     "A.resolve ./shared.mjs parent=file:///workspace/r/lifo.cjs",
+     "S.resolved {\"url\":\"file:///workspace/r/shared.mjs\",\"format\":\"module\"}",
+     "S.load file:///workspace/r/shared.mjs {\"format\":\"module\",\"importAttributes\":{},\"conditions\":[\"node\",\"import\",\"module-sync\",\"node-addons\"]}",
+     "B.load file:///workspace/r/shared.mjs {\"format\":\"module\",\"importAttributes\":{},\"conditions\":[\"node\",\"import\",\"module-sync\",\"node-addons\"]}",
+     "A.load file:///workspace/r/shared.mjs {\"format\":\"module\",\"importAttributes\":{},\"conditions\":[\"node\",\"import\",\"module-sync\",\"node-addons\"]}",
+     "S.loaded module"
+    ]
+   },
+   "virtualB": {
+    "value": "x",
+    "log": [
+     "S.resolve virtual:B",
+     "B.resolve virtual:B parent=file:///workspace/r/lifo.cjs",
+     "S.resolved {\"url\":\"file:///workspace/r/x.js\",\"format\":\"commonjs\"}",
+     "S.load file:///workspace/r/x.js {\"format\":\"commonjs\",\"importAttributes\":{},\"conditions\":[\"node\",\"import\",\"module-sync\",\"node-addons\"]}",
+     "B.load file:///workspace/r/x.js {\"format\":\"commonjs\",\"importAttributes\":{},\"conditions\":[\"node\",\"import\",\"module-sync\",\"node-addons\"]}",
+     "A.load file:///workspace/r/x.js {\"format\":\"commonjs\",\"importAttributes\":{},\"conditions\":[\"node\",\"import\",\"module-sync\",\"node-addons\"]}",
+     "S.loaded commonjs"
+    ]
+   },
+   "virtualA": {
+    "value": "x",
+    "log": [
+     "S.resolve virtual:A",
+     "B.resolve virtual:A parent=file:///workspace/r/lifo.cjs",
+     "A.resolve virtual:A parent=file:///workspace/r/lifo.cjs",
+     "S.resolved {\"url\":\"file:///workspace/r/x.js\",\"format\":\"commonjs\"}"
+    ]
+   },
+   "virtualS": {
+    "value": "x",
+    "log": [
+     "S.resolve virtual:S"
+    ]
+   },
+   "alias": {
+    "value": "g",
+    "log": [
+     "S.resolve alias:g",
+     "B.resolve ./g.mjs parent=file:///workspace/r/lifo.cjs",
+     "A.resolve ./g.mjs parent=file:///workspace/r/lifo.cjs",
+     "S.resolved {\"url\":\"file:///workspace/r/g.mjs\",\"format\":\"module\"}",
+     "S.load file:///workspace/r/g.mjs {\"format\":\"module\",\"importAttributes\":{},\"conditions\":[\"node\",\"import\",\"module-sync\",\"node-addons\"]}",
+     "B.load file:///workspace/r/g.mjs {\"format\":\"module\",\"importAttributes\":{},\"conditions\":[\"node\",\"import\",\"module-sync\",\"node-addons\"]}",
+     "A.load file:///workspace/r/g.mjs {\"format\":\"module\",\"importAttributes\":{},\"conditions\":[\"node\",\"import\",\"module-sync\",\"node-addons\"]}",
+     "S.loaded module"
+    ]
+   },
+   "required": {
+    "value": "yx",
+    "log": [
+     "S.resolve ./y.cjs",
+     "S.resolved {\"url\":\"file:///workspace/r/y.cjs\"}",
+     "S.load file:///workspace/r/y.cjs {\"format\":\"commonjs\",\"conditions\":[\"require\",\"node\",\"node-addons\",\"module-sync\"]}",
+     "S.loaded commonjs",
+     "S.resolve ./x.js",
+     "S.resolved {\"url\":\"file:///workspace/r/x.js\"}"
+    ]
+   },
+   "afterDeregister": {
+    "value": "eg",
+    "log": [
+     "B.resolve ./e.mjs parent=file:///workspace/r/lifo.cjs",
+     "A.resolve ./e.mjs parent=file:///workspace/r/lifo.cjs",
+     "B.load file:///workspace/r/e.mjs {\"format\":\"module\",\"importAttributes\":{}}",
+     "A.load file:///workspace/r/e.mjs {\"format\":\"module\",\"importAttributes\":{}}",
+     "B.resolve ./g.mjs parent=file:///workspace/r/e.mjs",
+     "A.resolve ./g.mjs parent=file:///workspace/r/e.mjs"
+    ]
+   }
+  },
+  "errors": {
+   "r:no-short": {
+    "error": {
+     "name": "Error",
+     "code": "ERR_LOADER_CHAIN_INCOMPLETE",
+     "message": "\"./hooks/errors.mjs 'resolve'\" did not call the next hook in its chain and did not explicitly signal a short circuit. If this is intentional, include `shortCircuit: true` in the hook's return."
+    }
+   },
+   "r:undefined": {
+    "error": {
+     "name": "TypeError",
+     "code": "ERR_INVALID_RETURN_VALUE",
+     "message": "Expected an object to be returned from the \"./hooks/errors.mjs 'resolve' hook's nextResolve()\" function but got undefined."
+    }
+   },
+   "r:null": {
+    "error": {
+     "name": "TypeError",
+     "code": "ERR_INVALID_RETURN_VALUE",
+     "message": "Expected an object to be returned from the \"./hooks/errors.mjs 'resolve' hook's nextResolve()\" function but got null."
+    }
+   },
+   "r:number": {
+    "error": {
+     "name": "TypeError",
+     "code": "ERR_INVALID_RETURN_VALUE",
+     "message": "Expected an object to be returned from the \"./hooks/errors.mjs 'resolve' hook's nextResolve()\" function but got type number (5)."
+    }
+   },
+   "r:no-url": {
+    "error": {
+     "name": "TypeError",
+     "code": "ERR_INVALID_RETURN_PROPERTY_VALUE",
+     "message": "Expected a URL string to be returned for the \"url\" from the \"./hooks/errors.mjs 'resolve'\" hook but got undefined."
+    }
+   },
+   "r:url-number": {
+    "error": {
+     "name": "TypeError",
+     "code": "ERR_INVALID_RETURN_PROPERTY_VALUE",
+     "message": "Expected a URL string to be returned for the \"url\" from the \"./hooks/errors.mjs 'resolve'\" hook but got type number (5)."
+    }
+   },
+   "r:bad-url": {
+    "error": {
+     "name": "TypeError",
+     "code": "ERR_INVALID_RETURN_PROPERTY_VALUE",
+     "message": "Expected a URL string to be returned for the \"url\" from the \"./hooks/errors.mjs 'resolve'\" hook but got type string ('not a url')."
+    }
+   },
+   "r:format-number": {
+    "error": {
+     "name": "TypeError",
+     "code": "ERR_INVALID_RETURN_PROPERTY_VALUE",
+     "message": "Expected a string to be returned for the \"format\" from the \"./hooks/errors.mjs 'resolve'\" hook but got type number (5)."
+    }
+   },
+   "r:attrs-string": {
+    "error": {
+     "name": "TypeError",
+     "code": "ERR_INVALID_RETURN_PROPERTY_VALUE",
+     "message": "Expected an object to be returned for the \"importAttributes\" from the \"./hooks/errors.mjs 'resolve'\" hook but got type string ('x')."
+    }
+   },
+   "r:throws": {
+    "error": {
+     "name": "RangeError",
+     "code": null,
+     "message": "boom"
+    }
+   },
+   "r:next-bad-spec": {
+    "error": {
+     "name": "TypeError",
+     "code": "ERR_INVALID_ARG_TYPE",
+     "message": "The \"node:internal/modules/esm/resolve 'resolve' hook's nextResolve() specifier\" argument must be of type string. Received type number (5)"
+    }
+   },
+   "r:next-bad-context": {
+    "error": {
+     "name": "TypeError",
+     "code": "ERR_INVALID_ARG_TYPE",
+     "message": "The \"node:internal/modules/esm/resolve 'resolve' hook's nextResolve() context\" argument must be of type object. Received type number (5)"
+    }
+   },
+   "r:next-no-context": {
+    "value": "x"
+   },
+   "r:next-partial-context": {
+    "value": "x"
+   },
+   "r:short": {
+    "value": "x"
+   },
+   "r:missing": {
+    "error": {
+     "name": "Error",
+     "code": "ERR_MODULE_NOT_FOUND",
+     "message": "Cannot find module '/workspace/r/missing.mjs' imported from /workspace/r/errors.cjs"
+    }
+   },
+   "r:next-twice": {
+    "value": "y"
+   },
+   "r:extra": {
+    "value": "x"
+   },
+   "r:query": {
+    "value": "x"
+   },
+   "l:no-short": {
+    "error": {
+     "name": "Error",
+     "code": "ERR_LOADER_CHAIN_INCOMPLETE",
+     "message": "\"./hooks/errors.mjs 'load'\" did not call the next hook in its chain and did not explicitly signal a short circuit. If this is intentional, include `shortCircuit: true` in the hook's return."
+    }
+   },
+   "l:undefined": {
+    "error": {
+     "name": "TypeError",
+     "code": "ERR_INVALID_RETURN_VALUE",
+     "message": "Expected an object to be returned from the \"./hooks/errors.mjs 'load' hook's nextLoad()\" function but got undefined."
+    }
+   },
+   "l:number": {
+    "error": {
+     "name": "TypeError",
+     "code": "ERR_INVALID_RETURN_VALUE",
+     "message": "Expected an object to be returned from the \"./hooks/errors.mjs 'load' hook's nextLoad()\" function but got type number (5)."
+    }
+   },
+   "l:no-format": {
+    "error": {
+     "name": "RangeError",
+     "code": "ERR_UNKNOWN_MODULE_FORMAT",
+     "message": "Unknown module format: undefined for URL file:///workspace/r/l/no-format.mjs"
+    }
+   },
+   "l:format-number": {
+    "error": {
+     "name": "TypeError",
+     "code": "ERR_INVALID_RETURN_PROPERTY_VALUE",
+     "message": "Expected a string to be returned for the \"format\" from the \"./hooks/errors.mjs 'load'\" hook but got type number (5)."
+    }
+   },
+   "l:unknown-format": {
+    "error": {
+     "name": "RangeError",
+     "code": "ERR_UNKNOWN_MODULE_FORMAT",
+     "message": "Unknown module format: weird for URL file:///workspace/r/l/unknown-format.mjs"
+    }
+   },
+   "l:no-source": {
+    "error": {
+     "name": "TypeError",
+     "code": "ERR_INVALID_RETURN_PROPERTY_VALUE",
+     "message": "Expected string, array buffer, or typed array to be returned for the \"source\" from the \"load\" hook but got undefined."
+    }
+   },
+   "l:source-number": {
+    "error": {
+     "name": "TypeError",
+     "code": "ERR_INVALID_RETURN_PROPERTY_VALUE",
+     "message": "Expected a string, an ArrayBuffer, or a TypedArray to be returned for the \"source\" from the \"./hooks/errors.mjs 'load'\" hook but got type number (5)."
+    }
+   },
+   "l:source-object": {
+    "error": {
+     "name": "TypeError",
+     "code": "ERR_INVALID_RETURN_PROPERTY_VALUE",
+     "message": "Expected a string, an ArrayBuffer, or a TypedArray to be returned for the \"source\" from the \"./hooks/errors.mjs 'load'\" hook but got an instance of Object."
+    }
+   },
+   "l:string": {
+    "value": "st"
+   },
+   "l:array-buffer": {
+    "value": "ab"
+   },
+   "l:typed-array": {
+    "value": "ta"
+   },
+   "l:commonjs": {
+    "value": {
+     "c": 1
+    }
+   },
+   "l:json": {
+    "value": {
+     "j": 2
+    }
+   },
+   "l:builtin": {
+    "error": {
+     "name": "Error",
+     "code": "ERR_UNKNOWN_BUILTIN_MODULE",
+     "message": "No such built-in module: file:///workspace/r/l/builtin.mjs"
+    }
+   },
+   "l:throws": {
+    "error": {
+     "name": "RangeError",
+     "code": null,
+     "message": "lboom"
+    }
+   },
+   "l:next-bad-url": {
+    "error": {
+     "name": "TypeError",
+     "code": "ERR_INVALID_ARG_TYPE",
+     "message": "The \"node:internal/modules/esm/load 'load' hook's nextLoad() url\" argument must be an a URL string. Received type number (5)"
+    }
+   },
+   "l:next-invalid-url": {
+    "error": {
+     "name": "TypeError",
+     "code": "ERR_INVALID_ARG_VALUE",
+     "message": "The argument 'node:internal/modules/esm/load 'load' hook's nextLoad() url' should be a URL string. Received 'not a url'"
+    }
+   },
+   "l:next-bad-context": {
+    "error": {
+     "name": "TypeError",
+     "code": "ERR_INVALID_ARG_TYPE",
+     "message": "The \"node:internal/modules/esm/load 'load' hook's nextLoad() context\" argument must be of type object. Received type number (5)"
+    }
+   },
+   "l:next-no-context": {
+    "value": "x"
+   },
+   "l:next-other": {
+    "value": "x"
+   },
+   "l:bad-response-url": {
+    "error": {
+     "name": "TypeError",
+     "code": "ERR_INVALID_RETURN_PROPERTY_VALUE",
+     "message": "Expected undefined or a fully resolved URL string to be returned for the \"responseURL\" from the \"./hooks/errors.mjs 'load'\" hook but got type string ('nope')."
+    }
+   },
+   "l:meta": {
+    "value": "file:///workspace/r/l/meta.mjs"
+   },
+   "./t.weird": {
+    "error": {
+     "name": "TypeError",
+     "code": "ERR_UNKNOWN_FILE_EXTENSION",
+     "message": "Unknown file extension \".weird\" for /workspace/r/t.weird"
+    }
+   }
+  },
+  "registering": {
+   "missing": {
+    "error": {
+     "name": "Error",
+     "code": "ERR_MODULE_NOT_FOUND",
+     "message": "Cannot find module '/workspace/r/hooks/missing.mjs' imported from /workspace/r/registering.cjs"
+    },
+    "log": []
+   },
+   "missingPackage": {
+    "error": {
+     "name": "Error",
+     "code": "ERR_MODULE_NOT_FOUND",
+     "message": "Cannot find package 'nopkg' imported from /workspace/r/registering.cjs"
+    },
+    "log": []
+   },
+   "bareDefaultParent": {
+    "error": {
+     "name": "TypeError",
+     "code": "ERR_UNSUPPORTED_RESOLVE_REQUEST",
+     "message": "Failed to resolve module specifier \"hookpkg\" from \"data:\": Invalid relative URL or base scheme is not hierarchical."
+    },
+    "log": []
+   },
+   "relativeDefaultParent": {
+    "error": {
+     "name": "TypeError",
+     "code": "ERR_UNSUPPORTED_RESOLVE_REQUEST",
+     "message": "Failed to resolve module specifier \"./hooks/common.cjs\" from \"data:\": Invalid relative URL or base scheme is not hierarchical."
+    },
+    "log": []
+   },
+   "pathParent": {
+    "error": {
+     "name": "TypeError",
+     "code": "ERR_UNSUPPORTED_RESOLVE_REQUEST",
+     "message": "Failed to resolve module specifier \"./hooks/common.cjs\" from \"/workspace/r/registering.cjs\": Invalid relative URL or base scheme is not hierarchical."
+    },
+    "log": []
+   },
+   "throws": {
+    "error": {
+     "name": "RangeError",
+     "code": null,
+     "message": "hooks module threw"
+    },
+    "log": []
+   },
+   "initThrows": {
+    "error": {
+     "name": "RangeError",
+     "code": null,
+     "message": "initialize threw"
+    },
+    "log": []
+   },
+   "uncloneable": {
+    "error": {
+     "name": "DOMException",
+     "code": 25,
+     "message": "f() {} could not be cloned."
+    },
+    "log": []
+   },
+   "none": {
+    "value": "<undefined>",
+    "log": []
+   },
+   "commonjs": {
+    "value": "<undefined>",
+    "log": [
+     "C.init {\"c\":[1,\"1970-01-01T00:00:00.005Z\"]}"
+    ]
+   },
+   "package": {
+    "value": "<undefined>",
+    "log": []
+   },
+   "optionsForm": {
+    "value": "<undefined>",
+    "log": [
+     "C.init \"options\""
+    ]
+   },
+   "urlObjects": {
+    "value": "<undefined>",
+    "log": [
+     "C.init \"urls\""
+    ]
+   },
+   "directoryParent": {
+    "value": "<undefined>",
+    "log": [
+     "C.init \"dir\""
+    ]
+   },
+   "absolute": {
+    "value": "<undefined>",
+    "log": [
+     "C.init \"absolute\""
+    ]
+   },
+   "tla": {
+    "value": "<undefined>",
+    "log": [
+     "TLA.evaluated",
+     "TLA.init \"tla\""
+    ]
+   },
+   "virtual:C": "x",
+   "virtual:P": "x",
+   "virtual:TLA": "x",
+   "finalLog": []
+  },
+  "rejecting": {
+   "register": {
+    "error": {
+     "name": "RangeError",
+     "message": "initialize rejected"
+    }
+   },
+   "first": {
+    "value": "g"
+   },
+   "second": {
+    "value": "g"
+   }
+  },
+  "requiring": {
+   "imported": "HELLO",
+   "plain": "plain",
+   "json": {
+    "j": 1
+   },
+   "esm": "eg"
+  },
+  "ports": {
+   "value": "g",
+   "messages": [
+    {
+     "type": "init",
+     "tag": "ports",
+     "sameArray": true,
+     "list": [
+      1,
+      2
+     ]
+    },
+    {
+     "type": "load",
+     "url": "file:///workspace/r/g.mjs"
+    }
+   ],
+   "detached": "no throw"
+  }
+ }
+}

@@ -190,3 +190,16 @@ function thrown(run: () => unknown): unknown {
   try { run(); } catch (error: unknown) { return error; }
   throw new Error("expected a throw");
 }
+
+it("reports _exiting from the first exit on and lets a program assign it", () => {
+  const stopped = new Error("terminated");
+  const process = new NodeProcess(() => { throw stopped; }, "24.18.1");
+  const seen: unknown[] = [];
+  process.on("exit", () => { seen.push(Reflect.get(process, "_exiting")); });
+  expect(Reflect.get(process, "_exiting")).toBe(false);
+  Reflect.set(process, "_exiting", 5);
+  expect(Reflect.get(process, "_exiting")).toBe(true);
+  Reflect.set(process, "_exiting", 0);
+  expect(() => { process.exit(); }).toThrow(stopped);
+  expect([seen, Reflect.get(process, "_exiting")]).toEqual([[true], true]);
+});

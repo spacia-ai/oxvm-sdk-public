@@ -18,7 +18,8 @@ export { decodeUserspaceSpawnResult, type UserspaceSpawnResult } from "./userspa
 
 /** API 152 adds native utility run results, work counters and process-free root migration. */
 /** API 153 adds the OXJR statfs operation to the native utility engine. */
-export const USERSPACE_API_VERSION = 153;
+/** API 154 adds the OXJR ownership operations: fchownat 260 and fchown 93. */
+export const USERSPACE_API_VERSION = 154;
 /** Current encoder version; historical trace versions remain readable below. */
 export const USERSPACE_SYSCALL_TRACE_VERSION = 53;
 

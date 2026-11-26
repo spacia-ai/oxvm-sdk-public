@@ -1,0 +1,2250 @@
+{
+ "node": {
+  "version": "v24.18.1",
+  "image": "node:24.18.1-alpine"
+ },
+ "surface": {
+  "packed": [
+   "getPackedSettings",
+   1
+  ],
+  "unpacked": [
+   "getUnpackedSettings",
+   1
+  ],
+  "handshake": [
+   "performServerHandshake",
+   1
+  ],
+  "sensitive": [
+   "symbol",
+   "Symbol(sensitiveHeaders)",
+   true
+  ]
+ },
+ "pack": [
+  {
+   "args": [],
+   "value": {
+    "isBuffer": true,
+    "hex": ""
+   }
+  },
+  {
+   "args": [
+    {
+     "$": "undefined"
+    }
+   ],
+   "value": {
+    "isBuffer": true,
+    "hex": ""
+   }
+  },
+  {
+   "args": [
+    {}
+   ],
+   "value": {
+    "isBuffer": true,
+    "hex": ""
+   }
+  },
+  {
+   "args": [
+    {
+     "headerTableSize": 1
+    }
+   ],
+   "value": {
+    "isBuffer": true,
+    "hex": "000100000001"
+   }
+  },
+  {
+   "args": [
+    {
+     "enablePush": false
+    }
+   ],
+   "value": {
+    "isBuffer": true,
+    "hex": "000200000000"
+   }
+  },
+  {
+   "args": [
+    {
+     "enablePush": true
+    }
+   ],
+   "value": {
+    "isBuffer": true,
+    "hex": "000200000001"
+   }
+  },
+  {
+   "args": [
+    {
+     "initialWindowSize": 2147483647
+    }
+   ],
+   "value": {
+    "isBuffer": true,
+    "hex": "00047fffffff"
+   }
+  },
+  {
+   "args": [
+    {
+     "maxFrameSize": 16384
+    }
+   ],
+   "value": {
+    "isBuffer": true,
+    "hex": "000500004000"
+   }
+  },
+  {
+   "args": [
+    {
+     "maxFrameSize": 16777215
+    }
+   ],
+   "value": {
+    "isBuffer": true,
+    "hex": "000500ffffff"
+   }
+  },
+  {
+   "args": [
+    {
+     "maxConcurrentStreams": 4294967295
+    }
+   ],
+   "value": {
+    "isBuffer": true,
+    "hex": "0003ffffffff"
+   }
+  },
+  {
+   "args": [
+    {
+     "maxHeaderListSize": 100
+    }
+   ],
+   "value": {
+    "isBuffer": true,
+    "hex": "000600000064"
+   }
+  },
+  {
+   "args": [
+    {
+     "maxHeaderSize": 200
+    }
+   ],
+   "value": {
+    "isBuffer": true,
+    "hex": "0006000000c8"
+   }
+  },
+  {
+   "args": [
+    {
+     "maxHeaderListSize": 100,
+     "maxHeaderSize": 200
+    }
+   ],
+   "value": {
+    "isBuffer": true,
+    "hex": "0006000000c8"
+   }
+  },
+  {
+   "args": [
+    {
+     "maxHeaderListSize": 100,
+     "maxHeaderSize": 100
+    }
+   ],
+   "value": {
+    "isBuffer": true,
+    "hex": "000600000064"
+   }
+  },
+  {
+   "args": [
+    {
+     "enableConnectProtocol": true
+    }
+   ],
+   "value": {
+    "isBuffer": true,
+    "hex": "000800000001"
+   }
+  },
+  {
+   "args": [
+    {
+     "enableConnectProtocol": false
+    }
+   ],
+   "value": {
+    "isBuffer": true,
+    "hex": "000800000000"
+   }
+  },
+  {
+   "args": [
+    {
+     "headerTableSize": 4096,
+     "enablePush": true,
+     "initialWindowSize": 65535,
+     "maxFrameSize": 16384,
+     "maxConcurrentStreams": 100,
+     "maxHeaderListSize": 65535,
+     "enableConnectProtocol": false
+    }
+   ],
+   "value": {
+    "isBuffer": true,
+    "hex": "00010000100000020000000100030000006400040000ffff00050000400000060000ffff000800000000"
+   }
+  },
+  {
+   "args": [
+    {
+     "enableConnectProtocol": true,
+     "maxHeaderListSize": 9,
+     "maxConcurrentStreams": 8,
+     "maxFrameSize": 16385,
+     "initialWindowSize": 7,
+     "enablePush": false,
+     "headerTableSize": 6
+    }
+   ],
+   "value": {
+    "isBuffer": true,
+    "hex": "000100000006000200000000000300000008000400000007000500004001000600000009000800000001"
+   }
+  },
+  {
+   "args": [
+    {
+     "headerTableSize": 4096,
+     "enablePush": true,
+     "initialWindowSize": 65535,
+     "maxFrameSize": 16384,
+     "maxConcurrentStreams": 4294967295,
+     "maxHeaderSize": 65535,
+     "maxHeaderListSize": 65535,
+     "enableConnectProtocol": false
+    }
+   ],
+   "value": {
+    "isBuffer": true,
+    "hex": "0001000010000002000000010003ffffffff00040000ffff00050000400000060000ffff000800000000"
+   }
+  },
+  {
+   "args": [
+    {
+     "customSettings": {
+      "10": 5
+     }
+    }
+   ],
+   "value": {
+    "isBuffer": true,
+    "hex": "000a00000005"
+   }
+  },
+  {
+   "args": [
+    {
+     "customSettings": {
+      "16": 5,
+      "20": 1,
+      "65535": 4294967295
+     }
+    }
+   ],
+   "value": {
+    "isBuffer": true,
+    "hex": "001000000005001400000001ffffffffffff"
+   }
+  },
+  {
+   "args": [
+    {
+     "customSettings": {
+      "15": 2,
+      "20": 1
+     },
+     "headerTableSize": 3
+    }
+   ],
+   "value": {
+    "isBuffer": true,
+    "hex": "000100000003000f00000002001400000001"
+   }
+  },
+  {
+   "args": [
+    {
+     "customSettings": {
+      "1": 77
+     }
+    }
+   ],
+   "error": {
+    "name": "TypeError",
+    "code": null,
+    "message": "Cannot read properties of undefined (reading 'toString')",
+    "ctor": "TypeError"
+   }
+  },
+  {
+   "args": [
+    {
+     "customSettings": {
+      "2": 1
+     }
+    }
+   ],
+   "value": {
+    "isBuffer": true,
+    "hex": "000400000001"
+   }
+  },
+  {
+   "args": [
+    {
+     "customSettings": {
+      "3": 16384
+     }
+    }
+   ],
+   "value": {
+    "isBuffer": true,
+    "hex": "000500004000"
+   }
+  },
+  {
+   "args": [
+    {
+     "customSettings": {
+      "4": 9
+     }
+    }
+   ],
+   "value": {
+    "isBuffer": true,
+    "hex": "000300000009"
+   }
+  },
+  {
+   "args": [
+    {
+     "customSettings": {
+      "5": 9
+     }
+    }
+   ],
+   "value": {
+    "isBuffer": true,
+    "hex": "000600000009"
+   }
+  },
+  {
+   "args": [
+    {
+     "customSettings": {
+      "6": 1
+     }
+    }
+   ],
+   "value": {
+    "isBuffer": true,
+    "hex": "000800000001"
+   }
+  },
+  {
+   "args": [
+    {
+     "customSettings": {
+      "7": 3
+     }
+    }
+   ],
+   "value": {
+    "isBuffer": true,
+    "hex": "000700000003"
+   }
+  },
+  {
+   "args": [
+    {
+     "customSettings": {
+      "8": 3
+     }
+    }
+   ],
+   "error": {
+    "name": "TypeError",
+    "code": null,
+    "message": "Cannot read properties of undefined (reading 'toString')",
+    "ctor": "TypeError"
+   }
+  },
+  {
+   "args": [
+    {
+     "customSettings": {
+      "1": 77
+     },
+     "enablePush": false
+    }
+   ],
+   "value": {
+    "isBuffer": true,
+    "hex": "000200000000"
+   }
+  },
+  {
+   "args": [
+    {
+     "customSettings": {
+      "3": 20000
+     },
+     "maxFrameSize": 16384
+    }
+   ],
+   "value": {
+    "isBuffer": true,
+    "hex": "000500004000"
+   }
+  },
+  {
+   "args": [
+    {
+     "customSettings": {
+      "0": 1
+     }
+    }
+   ],
+   "error": {
+    "name": "RangeError",
+    "code": "ERR_HTTP2_INVALID_SETTING_VALUE",
+    "message": "Invalid value for setting \"Range Error\": 0",
+    "ctor": "RangeError",
+    "actual": 0,
+    "min": 0,
+    "max": 65535
+   }
+  },
+  {
+   "args": [
+    {
+     "customSettings": {
+      "10": 0
+     }
+    }
+   ],
+   "error": {
+    "name": "RangeError",
+    "code": "ERR_HTTP2_INVALID_SETTING_VALUE",
+    "message": "Invalid value for setting \"Range Error\": 0",
+    "ctor": "RangeError",
+    "actual": 0,
+    "min": 0,
+    "max": 4294967295
+   }
+  },
+  {
+   "args": [
+    {
+     "customSettings": {
+      "65536": 1
+     }
+    }
+   ],
+   "error": {
+    "name": "RangeError",
+    "code": "ERR_HTTP2_INVALID_SETTING_VALUE",
+    "message": "Invalid value for setting \"customSettings:id\": 65536",
+    "ctor": "RangeError",
+    "actual": 65536,
+    "min": 0,
+    "max": 65535
+   }
+  },
+  {
+   "args": [
+    {
+     "customSettings": {
+      "10": 4294967296
+     }
+    }
+   ],
+   "error": {
+    "name": "RangeError",
+    "code": "ERR_HTTP2_INVALID_SETTING_VALUE",
+    "message": "Invalid value for setting \"customSettings:value\": 4294967296",
+    "ctor": "RangeError",
+    "actual": 4294967296,
+    "min": 0,
+    "max": 4294967295
+   }
+  },
+  {
+   "args": [
+    {
+     "customSettings": {
+      "x": 1
+     }
+    }
+   ],
+   "error": {
+    "name": "RangeError",
+    "code": "ERR_HTTP2_INVALID_SETTING_VALUE",
+    "message": "Invalid value for setting \"Range Error\": NaN",
+    "ctor": "RangeError",
+    "actual": {
+     "$": "NaN"
+    },
+    "min": 0,
+    "max": 65535
+   }
+  },
+  {
+   "args": [
+    {
+     "customSettings": {
+      "10": "5"
+     }
+    }
+   ],
+   "value": {
+    "isBuffer": true,
+    "hex": ""
+   }
+  },
+  {
+   "args": [
+    {
+     "customSettings": {
+      "10": -1
+     }
+    }
+   ],
+   "error": {
+    "name": "RangeError",
+    "code": "ERR_HTTP2_INVALID_SETTING_VALUE",
+    "message": "Invalid value for setting \"customSettings:value\": -1",
+    "ctor": "RangeError",
+    "actual": -1,
+    "min": 0,
+    "max": 4294967295
+   }
+  },
+  {
+   "args": [
+    {
+     "customSettings": {
+      "10": 1.5
+     }
+    }
+   ],
+   "value": {
+    "isBuffer": true,
+    "hex": "000a00000001"
+   }
+  },
+  {
+   "args": [
+    {
+     "customSettings": {
+      "1.5": 3
+     }
+    }
+   ],
+   "value": {
+    "isBuffer": true,
+    "hex": "000100000003"
+   }
+  },
+  {
+   "args": [
+    {
+     "customSettings": {
+      "10": {
+       "$": "NaN"
+      }
+     }
+    }
+   ],
+   "error": {
+    "name": "RangeError",
+    "code": "ERR_HTTP2_INVALID_SETTING_VALUE",
+    "message": "Invalid value for setting \"Range Error\": NaN",
+    "ctor": "RangeError",
+    "actual": {
+     "$": "NaN"
+    },
+    "min": 0,
+    "max": 4294967295
+   }
+  },
+  {
+   "args": [
+    {
+     "customSettings": null
+    }
+   ],
+   "error": {
+    "name": "TypeError",
+    "code": "ERR_INVALID_ARG_TYPE",
+    "message": "The \"customSettings\" argument must be an instance of Number. Received null",
+    "ctor": "TypeError"
+   }
+  },
+  {
+   "args": [
+    {
+     "customSettings": []
+    }
+   ],
+   "error": {
+    "name": "TypeError",
+    "code": "ERR_INVALID_ARG_TYPE",
+    "message": "The \"customSettings\" argument must be an instance of Number. Received an instance of Array",
+    "ctor": "TypeError"
+   }
+  },
+  {
+   "args": [
+    {
+     "customSettings": 5
+    }
+   ],
+   "error": {
+    "name": "TypeError",
+    "code": "ERR_INVALID_ARG_TYPE",
+    "message": "The \"customSettings\" argument must be an instance of Number. Received type number (5)",
+    "ctor": "TypeError"
+   }
+  },
+  {
+   "args": [
+    {
+     "customSettings": "x"
+    }
+   ],
+   "error": {
+    "name": "TypeError",
+    "code": "ERR_INVALID_ARG_TYPE",
+    "message": "The \"customSettings\" argument must be an instance of Number. Received type string ('x')",
+    "ctor": "TypeError"
+   }
+  },
+  {
+   "args": [
+    {
+     "customSettings": {}
+    }
+   ],
+   "value": {
+    "isBuffer": true,
+    "hex": ""
+   }
+  },
+  {
+   "args": [
+    {
+     "customSettings": {
+      "100": 1,
+      "101": 2,
+      "102": 3,
+      "103": 4,
+      "104": 5,
+      "105": 6,
+      "106": 7,
+      "107": 8,
+      "108": 9,
+      "109": 10
+     }
+    }
+   ],
+   "value": {
+    "isBuffer": true,
+    "hex": "006400000001006500000002006600000003006700000004006800000005006900000006006a00000007006b00000008006c00000009006d0000000a"
+   }
+  },
+  {
+   "args": [
+    {
+     "customSettings": {
+      "100": 1,
+      "101": 2,
+      "102": 3,
+      "103": 4,
+      "104": 5,
+      "105": 6,
+      "106": 7,
+      "107": 8,
+      "108": 9,
+      "109": 10,
+      "110": 11
+     }
+    }
+   ],
+   "error": {
+    "name": "Error",
+    "code": "ERR_HTTP2_TOO_MANY_CUSTOM_SETTINGS",
+    "message": "Number of custom settings exceeds MAX_ADDITIONAL_SETTINGS",
+    "ctor": "Error"
+   }
+  },
+  {
+   "args": [
+    {
+     "headerTableSize": -1
+    }
+   ],
+   "error": {
+    "name": "RangeError",
+    "code": "ERR_HTTP2_INVALID_SETTING_VALUE",
+    "message": "Invalid value for setting \"headerTableSize\": -1",
+    "ctor": "RangeError",
+    "actual": -1,
+    "min": 0,
+    "max": 4294967295
+   }
+  },
+  {
+   "args": [
+    {
+     "headerTableSize": 4294967296
+    }
+   ],
+   "error": {
+    "name": "RangeError",
+    "code": "ERR_HTTP2_INVALID_SETTING_VALUE",
+    "message": "Invalid value for setting \"headerTableSize\": 4294967296",
+    "ctor": "RangeError",
+    "actual": 4294967296,
+    "min": 0,
+    "max": 4294967295
+   }
+  },
+  {
+   "args": [
+    {
+     "headerTableSize": "1"
+    }
+   ],
+   "error": {
+    "name": "RangeError",
+    "code": "ERR_HTTP2_INVALID_SETTING_VALUE",
+    "message": "Invalid value for setting \"headerTableSize\": 1",
+    "ctor": "RangeError",
+    "actual": "1",
+    "min": 0,
+    "max": 4294967295
+   }
+  },
+  {
+   "args": [
+    {
+     "headerTableSize": 1.5
+    }
+   ],
+   "value": {
+    "isBuffer": true,
+    "hex": "000100000001"
+   }
+  },
+  {
+   "args": [
+    {
+     "headerTableSize": {
+      "$": "NaN"
+     }
+    }
+   ],
+   "value": {
+    "isBuffer": true,
+    "hex": "000100000000"
+   }
+  },
+  {
+   "args": [
+    {
+     "headerTableSize": null
+    }
+   ],
+   "error": {
+    "name": "RangeError",
+    "code": "ERR_HTTP2_INVALID_SETTING_VALUE",
+    "message": "Invalid value for setting \"headerTableSize\": null",
+    "ctor": "RangeError",
+    "actual": null,
+    "min": 0,
+    "max": 4294967295
+   }
+  },
+  {
+   "args": [
+    {
+     "headerTableSize": {
+      "$": "undefined"
+     }
+    }
+   ],
+   "value": {
+    "isBuffer": true,
+    "hex": ""
+   }
+  },
+  {
+   "args": [
+    {
+     "initialWindowSize": 2147483648
+    }
+   ],
+   "error": {
+    "name": "RangeError",
+    "code": "ERR_HTTP2_INVALID_SETTING_VALUE",
+    "message": "Invalid value for setting \"initialWindowSize\": 2147483648",
+    "ctor": "RangeError",
+    "actual": 2147483648,
+    "min": 0,
+    "max": 2147483647
+   }
+  },
+  {
+   "args": [
+    {
+     "initialWindowSize": -1
+    }
+   ],
+   "error": {
+    "name": "RangeError",
+    "code": "ERR_HTTP2_INVALID_SETTING_VALUE",
+    "message": "Invalid value for setting \"initialWindowSize\": -1",
+    "ctor": "RangeError",
+    "actual": -1,
+    "min": 0,
+    "max": 2147483647
+   }
+  },
+  {
+   "args": [
+    {
+     "maxFrameSize": 16383
+    }
+   ],
+   "error": {
+    "name": "RangeError",
+    "code": "ERR_HTTP2_INVALID_SETTING_VALUE",
+    "message": "Invalid value for setting \"maxFrameSize\": 16383",
+    "ctor": "RangeError",
+    "actual": 16383,
+    "min": 16384,
+    "max": 16777215
+   }
+  },
+  {
+   "args": [
+    {
+     "maxFrameSize": 16777216
+    }
+   ],
+   "error": {
+    "name": "RangeError",
+    "code": "ERR_HTTP2_INVALID_SETTING_VALUE",
+    "message": "Invalid value for setting \"maxFrameSize\": 16777216",
+    "ctor": "RangeError",
+    "actual": 16777216,
+    "min": 16384,
+    "max": 16777215
+   }
+  },
+  {
+   "args": [
+    {
+     "maxFrameSize": 20000.5
+    }
+   ],
+   "value": {
+    "isBuffer": true,
+    "hex": "000500004e20"
+   }
+  },
+  {
+   "args": [
+    {
+     "maxConcurrentStreams": 4294967296
+    }
+   ],
+   "error": {
+    "name": "RangeError",
+    "code": "ERR_HTTP2_INVALID_SETTING_VALUE",
+    "message": "Invalid value for setting \"maxConcurrentStreams\": 4294967296",
+    "ctor": "RangeError",
+    "actual": 4294967296,
+    "min": 0,
+    "max": 4294967295
+   }
+  },
+  {
+   "args": [
+    {
+     "maxConcurrentStreams": -1
+    }
+   ],
+   "error": {
+    "name": "RangeError",
+    "code": "ERR_HTTP2_INVALID_SETTING_VALUE",
+    "message": "Invalid value for setting \"maxConcurrentStreams\": -1",
+    "ctor": "RangeError",
+    "actual": -1,
+    "min": 0,
+    "max": 4294967295
+   }
+  },
+  {
+   "args": [
+    {
+     "maxHeaderListSize": -1
+    }
+   ],
+   "error": {
+    "name": "RangeError",
+    "code": "ERR_HTTP2_INVALID_SETTING_VALUE",
+    "message": "Invalid value for setting \"maxHeaderListSize\": -1",
+    "ctor": "RangeError",
+    "actual": -1,
+    "min": 0,
+    "max": 4294967295
+   }
+  },
+  {
+   "args": [
+    {
+     "maxHeaderSize": 4294967296
+    }
+   ],
+   "error": {
+    "name": "RangeError",
+    "code": "ERR_HTTP2_INVALID_SETTING_VALUE",
+    "message": "Invalid value for setting \"maxHeaderSize\": 4294967296",
+    "ctor": "RangeError",
+    "actual": 4294967296,
+    "min": 0,
+    "max": 4294967295
+   }
+  },
+  {
+   "args": [
+    {
+     "maxHeaderSize": "9"
+    }
+   ],
+   "error": {
+    "name": "RangeError",
+    "code": "ERR_HTTP2_INVALID_SETTING_VALUE",
+    "message": "Invalid value for setting \"maxHeaderSize\": 9",
+    "ctor": "RangeError",
+    "actual": "9",
+    "min": 0,
+    "max": 4294967295
+   }
+  },
+  {
+   "args": [
+    {
+     "enablePush": 1
+    }
+   ],
+   "error": {
+    "name": "TypeError",
+    "code": "ERR_HTTP2_INVALID_SETTING_VALUE",
+    "message": "Invalid value for setting \"enablePush\": 1",
+    "ctor": "TypeError",
+    "actual": 1
+   }
+  },
+  {
+   "args": [
+    {
+     "enablePush": "true"
+    }
+   ],
+   "error": {
+    "name": "TypeError",
+    "code": "ERR_HTTP2_INVALID_SETTING_VALUE",
+    "message": "Invalid value for setting \"enablePush\": true",
+    "ctor": "TypeError",
+    "actual": "true"
+   }
+  },
+  {
+   "args": [
+    {
+     "enablePush": null
+    }
+   ],
+   "error": {
+    "name": "TypeError",
+    "code": "ERR_HTTP2_INVALID_SETTING_VALUE",
+    "message": "Invalid value for setting \"enablePush\": null",
+    "ctor": "TypeError",
+    "actual": null
+   }
+  },
+  {
+   "args": [
+    {
+     "enableConnectProtocol": 0
+    }
+   ],
+   "error": {
+    "name": "TypeError",
+    "code": "ERR_HTTP2_INVALID_SETTING_VALUE",
+    "message": "Invalid value for setting \"enableConnectProtocol\": 0",
+    "ctor": "TypeError",
+    "actual": 0
+   }
+  },
+  {
+   "args": [
+    {
+     "enableConnectProtocol": null
+    }
+   ],
+   "error": {
+    "name": "TypeError",
+    "code": "ERR_HTTP2_INVALID_SETTING_VALUE",
+    "message": "Invalid value for setting \"enableConnectProtocol\": null",
+    "ctor": "TypeError",
+    "actual": null
+   }
+  },
+  {
+   "args": [
+    {
+     "unknown": 5
+    }
+   ],
+   "value": {
+    "isBuffer": true,
+    "hex": ""
+   }
+  },
+  {
+   "args": [
+    {
+     "headerTableSize": -1,
+     "enablePush": 1
+    }
+   ],
+   "error": {
+    "name": "RangeError",
+    "code": "ERR_HTTP2_INVALID_SETTING_VALUE",
+    "message": "Invalid value for setting \"headerTableSize\": -1",
+    "ctor": "RangeError",
+    "actual": -1,
+    "min": 0,
+    "max": 4294967295
+   }
+  },
+  {
+   "args": [
+    {
+     "enablePush": 1,
+     "enableConnectProtocol": 1
+    }
+   ],
+   "error": {
+    "name": "TypeError",
+    "code": "ERR_HTTP2_INVALID_SETTING_VALUE",
+    "message": "Invalid value for setting \"enablePush\": 1",
+    "ctor": "TypeError",
+    "actual": 1
+   }
+  },
+  {
+   "args": [
+    {
+     "maxHeaderSize": -1,
+     "maxHeaderListSize": -2
+    }
+   ],
+   "error": {
+    "name": "RangeError",
+    "code": "ERR_HTTP2_INVALID_SETTING_VALUE",
+    "message": "Invalid value for setting \"maxHeaderListSize\": -2",
+    "ctor": "RangeError",
+    "actual": -2,
+    "min": 0,
+    "max": 4294967295
+   }
+  },
+  {
+   "args": [
+    null
+   ],
+   "error": {
+    "name": "TypeError",
+    "code": "ERR_INVALID_ARG_TYPE",
+    "message": "The \"settings\" argument must be of type object. Received null",
+    "ctor": "TypeError"
+   }
+  },
+  {
+   "args": [
+    1
+   ],
+   "error": {
+    "name": "TypeError",
+    "code": "ERR_INVALID_ARG_TYPE",
+    "message": "The \"settings\" argument must be of type object. Received type number (1)",
+    "ctor": "TypeError"
+   }
+  },
+  {
+   "args": [
+    "x"
+   ],
+   "error": {
+    "name": "TypeError",
+    "code": "ERR_INVALID_ARG_TYPE",
+    "message": "The \"settings\" argument must be of type object. Received type string ('x')",
+    "ctor": "TypeError"
+   }
+  },
+  {
+   "args": [
+    []
+   ],
+   "error": {
+    "name": "TypeError",
+    "code": "ERR_INVALID_ARG_TYPE",
+    "message": "The \"settings\" argument must be of type object. Received an instance of Array",
+    "ctor": "TypeError"
+   }
+  },
+  {
+   "args": [
+    true
+   ],
+   "error": {
+    "name": "TypeError",
+    "code": "ERR_INVALID_ARG_TYPE",
+    "message": "The \"settings\" argument must be of type object. Received type boolean (true)",
+    "ctor": "TypeError"
+   }
+  },
+  {
+   "args": [
+    {
+     "$": "fn"
+    }
+   ],
+   "error": {
+    "name": "TypeError",
+    "code": "ERR_INVALID_ARG_TYPE",
+    "message": "The \"settings\" argument must be of type object. Received function fn",
+    "ctor": "TypeError"
+   }
+  },
+  {
+   "args": [
+    {
+     "$": "symbol"
+    }
+   ],
+   "error": {
+    "name": "TypeError",
+    "code": "ERR_INVALID_ARG_TYPE",
+    "message": "The \"settings\" argument must be of type object. Received type symbol (Symbol(s))",
+    "ctor": "TypeError"
+   }
+  },
+  {
+   "args": [
+    {
+     "$": "Infinity"
+    }
+   ],
+   "error": {
+    "name": "TypeError",
+    "code": "ERR_INVALID_ARG_TYPE",
+    "message": "The \"settings\" argument must be of type object. Received type number (Infinity)",
+    "ctor": "TypeError"
+   }
+  }
+ ],
+ "unpack": [
+  {
+   "args": [
+    {
+     "$": "buffer",
+     "hex": ""
+    }
+   ],
+   "value": {
+    "keys": [],
+    "settings": {},
+    "proto": true,
+    "customProto": null
+   }
+  },
+  {
+   "args": [
+    {
+     "$": "buffer",
+     "hex": "000100001000"
+    }
+   ],
+   "value": {
+    "keys": [
+     "headerTableSize"
+    ],
+    "settings": {
+     "headerTableSize": 4096
+    },
+    "proto": true,
+    "customProto": null
+   }
+  },
+  {
+   "args": [
+    {
+     "$": "buffer",
+     "hex": "000200000000"
+    }
+   ],
+   "value": {
+    "keys": [
+     "enablePush"
+    ],
+    "settings": {
+     "enablePush": false
+    },
+    "proto": true,
+    "customProto": null
+   }
+  },
+  {
+   "args": [
+    {
+     "$": "buffer",
+     "hex": "000200000001"
+    }
+   ],
+   "value": {
+    "keys": [
+     "enablePush"
+    ],
+    "settings": {
+     "enablePush": true
+    },
+    "proto": true,
+    "customProto": null
+   }
+  },
+  {
+   "args": [
+    {
+     "$": "buffer",
+     "hex": "000200000007"
+    }
+   ],
+   "value": {
+    "keys": [
+     "enablePush"
+    ],
+    "settings": {
+     "enablePush": true
+    },
+    "proto": true,
+    "customProto": null
+   }
+  },
+  {
+   "args": [
+    {
+     "$": "buffer",
+     "hex": "0003ffffffff"
+    }
+   ],
+   "value": {
+    "keys": [
+     "maxConcurrentStreams"
+    ],
+    "settings": {
+     "maxConcurrentStreams": 4294967295
+    },
+    "proto": true,
+    "customProto": null
+   }
+  },
+  {
+   "args": [
+    {
+     "$": "buffer",
+     "hex": "000480000000"
+    }
+   ],
+   "value": {
+    "keys": [
+     "initialWindowSize"
+    ],
+    "settings": {
+     "initialWindowSize": 2147483648
+    },
+    "proto": true,
+    "customProto": null
+   }
+  },
+  {
+   "args": [
+    {
+     "$": "buffer",
+     "hex": "000500000001"
+    }
+   ],
+   "value": {
+    "keys": [
+     "maxFrameSize"
+    ],
+    "settings": {
+     "maxFrameSize": 1
+    },
+    "proto": true,
+    "customProto": null
+   }
+  },
+  {
+   "args": [
+    {
+     "$": "buffer",
+     "hex": "000600000064"
+    }
+   ],
+   "value": {
+    "keys": [
+     "maxHeaderSize",
+     "maxHeaderListSize"
+    ],
+    "settings": {
+     "maxHeaderSize": 100,
+     "maxHeaderListSize": 100
+    },
+    "proto": true,
+    "customProto": null
+   }
+  },
+  {
+   "args": [
+    {
+     "$": "buffer",
+     "hex": "000800000001"
+    }
+   ],
+   "value": {
+    "keys": [
+     "enableConnectProtocol"
+    ],
+    "settings": {
+     "enableConnectProtocol": true
+    },
+    "proto": true,
+    "customProto": null
+   }
+  },
+  {
+   "args": [
+    {
+     "$": "buffer",
+     "hex": "000800000000"
+    }
+   ],
+   "value": {
+    "keys": [
+     "enableConnectProtocol"
+    ],
+    "settings": {
+     "enableConnectProtocol": false
+    },
+    "proto": true,
+    "customProto": null
+   }
+  },
+  {
+   "args": [
+    {
+     "$": "buffer",
+     "hex": "000700000005"
+    }
+   ],
+   "value": {
+    "keys": [
+     "customSettings"
+    ],
+    "settings": {
+     "customSettings": {
+      "7": 5
+     }
+    },
+    "proto": true,
+    "customProto": true
+   }
+  },
+  {
+   "args": [
+    {
+     "$": "buffer",
+     "hex": "000000000005"
+    }
+   ],
+   "value": {
+    "keys": [
+     "customSettings"
+    ],
+    "settings": {
+     "customSettings": {
+      "0": 5
+     }
+    },
+    "proto": true,
+    "customProto": true
+   }
+  },
+  {
+   "args": [
+    {
+     "$": "buffer",
+     "hex": "ffff00000001fffe00000002"
+    }
+   ],
+   "value": {
+    "keys": [
+     "customSettings"
+    ],
+    "settings": {
+     "customSettings": {
+      "65534": 2,
+      "65535": 1
+     }
+    },
+    "proto": true,
+    "customProto": true
+   }
+  },
+  {
+   "args": [
+    {
+     "$": "buffer",
+     "hex": "000100000001000100000002"
+    }
+   ],
+   "value": {
+    "keys": [
+     "headerTableSize"
+    ],
+    "settings": {
+     "headerTableSize": 2
+    },
+    "proto": true,
+    "customProto": null
+   }
+  },
+  {
+   "args": [
+    {
+     "$": "buffer",
+     "hex": "0001000010000002000000010003ffffffff00040000ffff0005000040000006000100000008000000000010deadbeef"
+    }
+   ],
+   "value": {
+    "keys": [
+     "headerTableSize",
+     "enablePush",
+     "maxConcurrentStreams",
+     "initialWindowSize",
+     "maxFrameSize",
+     "maxHeaderSize",
+     "maxHeaderListSize",
+     "enableConnectProtocol",
+     "customSettings"
+    ],
+    "settings": {
+     "headerTableSize": 4096,
+     "enablePush": true,
+     "maxConcurrentStreams": 4294967295,
+     "initialWindowSize": 65535,
+     "maxFrameSize": 16384,
+     "maxHeaderSize": 65536,
+     "maxHeaderListSize": 65536,
+     "enableConnectProtocol": false,
+     "customSettings": {
+      "16": 3735928559
+     }
+    },
+    "proto": true,
+    "customProto": true
+   }
+  },
+  {
+   "args": [
+    {
+     "$": "buffer",
+     "hex": "0001"
+    }
+   ],
+   "error": {
+    "name": "RangeError",
+    "code": "ERR_HTTP2_INVALID_PACKED_SETTINGS_LENGTH",
+    "message": "Packed settings length must be a multiple of six",
+    "ctor": "RangeError"
+   }
+  },
+  {
+   "args": [
+    {
+     "$": "buffer",
+     "hex": "00010000100000"
+    }
+   ],
+   "error": {
+    "name": "RangeError",
+    "code": "ERR_HTTP2_INVALID_PACKED_SETTINGS_LENGTH",
+    "message": "Packed settings length must be a multiple of six",
+    "ctor": "RangeError"
+   }
+  },
+  {
+   "args": [
+    {
+     "$": "buffer",
+     "hex": "00"
+    },
+    {}
+   ],
+   "error": {
+    "name": "RangeError",
+    "code": "ERR_HTTP2_INVALID_PACKED_SETTINGS_LENGTH",
+    "message": "Packed settings length must be a multiple of six",
+    "ctor": "RangeError"
+   }
+  },
+  {
+   "args": [
+    {
+     "$": "buffer",
+     "hex": "000500000001"
+    },
+    {
+     "validate": true
+    }
+   ],
+   "error": {
+    "name": "RangeError",
+    "code": "ERR_HTTP2_INVALID_SETTING_VALUE",
+    "message": "Invalid value for setting \"maxFrameSize\": 1",
+    "ctor": "RangeError",
+    "actual": 1,
+    "min": 16384,
+    "max": 16777215
+   }
+  },
+  {
+   "args": [
+    {
+     "$": "buffer",
+     "hex": "000500004000"
+    },
+    {
+     "validate": true
+    }
+   ],
+   "value": {
+    "keys": [
+     "maxFrameSize"
+    ],
+    "settings": {
+     "maxFrameSize": 16384
+    },
+    "proto": true,
+    "customProto": null
+   }
+  },
+  {
+   "args": [
+    {
+     "$": "buffer",
+     "hex": "000480000000"
+    },
+    {
+     "validate": true
+    }
+   ],
+   "error": {
+    "name": "RangeError",
+    "code": "ERR_HTTP2_INVALID_SETTING_VALUE",
+    "message": "Invalid value for setting \"initialWindowSize\": 2147483648",
+    "ctor": "RangeError",
+    "actual": 2147483648,
+    "min": 0,
+    "max": 2147483647
+   }
+  },
+  {
+   "args": [
+    {
+     "$": "buffer",
+     "hex": "000480000000"
+    },
+    {
+     "validate": false
+    }
+   ],
+   "value": {
+    "keys": [
+     "initialWindowSize"
+    ],
+    "settings": {
+     "initialWindowSize": 2147483648
+    },
+    "proto": true,
+    "customProto": null
+   }
+  },
+  {
+   "args": [
+    {
+     "$": "buffer",
+     "hex": "000480000000"
+    },
+    {
+     "validate": 1
+    }
+   ],
+   "error": {
+    "name": "RangeError",
+    "code": "ERR_HTTP2_INVALID_SETTING_VALUE",
+    "message": "Invalid value for setting \"initialWindowSize\": 2147483648",
+    "ctor": "RangeError",
+    "actual": 2147483648,
+    "min": 0,
+    "max": 2147483647
+   }
+  },
+  {
+   "args": [
+    {
+     "$": "buffer",
+     "hex": "000480000000"
+    },
+    null
+   ],
+   "value": {
+    "keys": [
+     "initialWindowSize"
+    ],
+    "settings": {
+     "initialWindowSize": 2147483648
+    },
+    "proto": true,
+    "customProto": null
+   }
+  },
+  {
+   "args": [
+    {
+     "$": "buffer",
+     "hex": "000480000000"
+    },
+    {
+     "$": "undefined"
+    }
+   ],
+   "value": {
+    "keys": [
+     "initialWindowSize"
+    ],
+    "settings": {
+     "initialWindowSize": 2147483648
+    },
+    "proto": true,
+    "customProto": null
+   }
+  },
+  {
+   "args": [
+    {
+     "$": "buffer",
+     "hex": "000480000000"
+    },
+    5
+   ],
+   "value": {
+    "keys": [
+     "initialWindowSize"
+    ],
+    "settings": {
+     "initialWindowSize": 2147483648
+    },
+    "proto": true,
+    "customProto": null
+   }
+  },
+  {
+   "args": [
+    {
+     "$": "buffer",
+     "hex": "000480000000"
+    },
+    "x"
+   ],
+   "value": {
+    "keys": [
+     "initialWindowSize"
+    ],
+    "settings": {
+     "initialWindowSize": 2147483648
+    },
+    "proto": true,
+    "customProto": null
+   }
+  },
+  {
+   "args": [
+    {
+     "$": "buffer",
+     "hex": "001000000005"
+    },
+    {
+     "validate": true
+    }
+   ],
+   "value": {
+    "keys": [
+     "customSettings"
+    ],
+    "settings": {
+     "customSettings": {
+      "16": 5
+     }
+    },
+    "proto": true,
+    "customProto": true
+   }
+  },
+  {
+   "args": [
+    {
+     "$": "buffer",
+     "hex": "000000000005"
+    },
+    {
+     "validate": true
+    }
+   ],
+   "value": {
+    "keys": [
+     "customSettings"
+    ],
+    "settings": {
+     "customSettings": {
+      "0": 5
+     }
+    },
+    "proto": true,
+    "customProto": true
+   }
+  },
+  {
+   "args": [
+    {
+     "$": "buffer",
+     "hex": "0005000000010004ffffffff"
+    },
+    {
+     "validate": true
+    }
+   ],
+   "error": {
+    "name": "RangeError",
+    "code": "ERR_HTTP2_INVALID_SETTING_VALUE",
+    "message": "Invalid value for setting \"initialWindowSize\": 4294967295",
+    "ctor": "RangeError",
+    "actual": 4294967295,
+    "min": 0,
+    "max": 2147483647
+   }
+  },
+  {
+   "args": [
+    {
+     "$": "buffer",
+     "hex": "006400000001006500000001006600000001006700000001006800000001006900000001006a00000001006b00000001006c00000001006d00000001006e00000001"
+    },
+    {
+     "validate": true
+    }
+   ],
+   "error": {
+    "name": "Error",
+    "code": "ERR_HTTP2_TOO_MANY_CUSTOM_SETTINGS",
+    "message": "Number of custom settings exceeds MAX_ADDITIONAL_SETTINGS",
+    "ctor": "Error"
+   }
+  },
+  {
+   "args": [
+    {
+     "$": "buffer",
+     "hex": "006400000001006500000001006600000001006700000001006800000001006900000001006a00000001006b00000001006c00000001006d00000001006e00000001"
+    }
+   ],
+   "value": {
+    "keys": [
+     "customSettings"
+    ],
+    "settings": {
+     "customSettings": {
+      "100": 1,
+      "101": 1,
+      "102": 1,
+      "103": 1,
+      "104": 1,
+      "105": 1,
+      "106": 1,
+      "107": 1,
+      "108": 1,
+      "109": 1,
+      "110": 1
+     }
+    },
+    "proto": true,
+    "customProto": true
+   }
+  },
+  {
+   "args": [
+    {
+     "$": "u8",
+     "hex": "000100001000"
+    }
+   ],
+   "value": {
+    "keys": [
+     "headerTableSize"
+    ],
+    "settings": {
+     "headerTableSize": 4096
+    },
+    "proto": true,
+    "customProto": null
+   }
+  },
+  {
+   "args": [
+    {
+     "$": "u16",
+     "v": [
+      1,
+      2,
+      3,
+      4,
+      5,
+      6
+     ]
+    }
+   ],
+   "value": {
+    "keys": [
+     "customSettings"
+    ],
+    "settings": {
+     "customSettings": {
+      "258": 50595078
+     }
+    },
+    "proto": true,
+    "customProto": true
+   }
+  },
+  {
+   "args": [
+    {
+     "$": "u16",
+     "v": [
+      1,
+      2,
+      3
+     ]
+    }
+   ],
+   "error": {
+    "name": "RangeError",
+    "code": "ERR_HTTP2_INVALID_PACKED_SETTINGS_LENGTH",
+    "message": "Packed settings length must be a multiple of six",
+    "ctor": "RangeError"
+   }
+  },
+  {
+   "args": [
+    {
+     "$": "dataview"
+    }
+   ],
+   "error": {
+    "name": "TypeError",
+    "code": "ERR_INVALID_ARG_TYPE",
+    "message": "The \"buf\" argument must be an instance of Buffer or TypedArray. Received an instance of DataView",
+    "ctor": "TypeError"
+   }
+  },
+  {
+   "args": [
+    {
+     "$": "arraybuffer"
+    }
+   ],
+   "error": {
+    "name": "TypeError",
+    "code": "ERR_INVALID_ARG_TYPE",
+    "message": "The \"buf\" argument must be an instance of Buffer or TypedArray. Received an instance of ArrayBuffer",
+    "ctor": "TypeError"
+   }
+  },
+  {
+   "args": [
+    "000100001000"
+   ],
+   "error": {
+    "name": "TypeError",
+    "code": "ERR_INVALID_ARG_TYPE",
+    "message": "The \"buf\" argument must be an instance of Buffer or TypedArray. Received type string ('000100001000')",
+    "ctor": "TypeError"
+   }
+  },
+  {
+   "args": [
+    [
+     0,
+     1,
+     0,
+     0,
+     16,
+     0
+    ]
+   ],
+   "error": {
+    "name": "TypeError",
+    "code": "ERR_INVALID_ARG_TYPE",
+    "message": "The \"buf\" argument must be an instance of Buffer or TypedArray. Received an instance of Array",
+    "ctor": "TypeError"
+   }
+  },
+  {
+   "args": [
+    null
+   ],
+   "error": {
+    "name": "TypeError",
+    "code": "ERR_INVALID_ARG_TYPE",
+    "message": "The \"buf\" argument must be an instance of Buffer or TypedArray. Received null",
+    "ctor": "TypeError"
+   }
+  },
+  {
+   "args": [
+    {
+     "$": "undefined"
+    }
+   ],
+   "error": {
+    "name": "TypeError",
+    "code": "ERR_INVALID_ARG_TYPE",
+    "message": "The \"buf\" argument must be an instance of Buffer or TypedArray. Received undefined",
+    "ctor": "TypeError"
+   }
+  },
+  {
+   "args": [],
+   "error": {
+    "name": "TypeError",
+    "code": "ERR_INVALID_ARG_TYPE",
+    "message": "The \"buf\" argument must be an instance of Buffer or TypedArray. Received undefined",
+    "ctor": "TypeError"
+   }
+  },
+  {
+   "args": [
+    1
+   ],
+   "error": {
+    "name": "TypeError",
+    "code": "ERR_INVALID_ARG_TYPE",
+    "message": "The \"buf\" argument must be an instance of Buffer or TypedArray. Received type number (1)",
+    "ctor": "TypeError"
+   }
+  },
+  {
+   "args": [
+    {}
+   ],
+   "error": {
+    "name": "TypeError",
+    "code": "ERR_INVALID_ARG_TYPE",
+    "message": "The \"buf\" argument must be an instance of Buffer or TypedArray. Received an instance of Object",
+    "ctor": "TypeError"
+   }
+  },
+  {
+   "args": [
+    {
+     "length": 6
+    }
+   ],
+   "error": {
+    "name": "TypeError",
+    "code": "ERR_INVALID_ARG_TYPE",
+    "message": "The \"buf\" argument must be an instance of Buffer or TypedArray. Received an instance of Object",
+    "ctor": "TypeError"
+   }
+  }
+ ],
+ "roundTrip": [
+  {},
+  {
+   "headerTableSize": 1
+  },
+  {
+   "enablePush": false
+  },
+  {
+   "enablePush": true
+  },
+  {
+   "initialWindowSize": 2147483647
+  },
+  {
+   "maxFrameSize": 16384
+  },
+  {
+   "maxFrameSize": 16777215
+  },
+  {
+   "maxConcurrentStreams": 4294967295
+  },
+  {
+   "maxHeaderSize": 100,
+   "maxHeaderListSize": 100
+  },
+  {
+   "maxHeaderSize": 200,
+   "maxHeaderListSize": 200
+  },
+  {
+   "maxHeaderSize": 200,
+   "maxHeaderListSize": 200
+  },
+  {
+   "maxHeaderSize": 100,
+   "maxHeaderListSize": 100
+  },
+  {
+   "enableConnectProtocol": true
+  },
+  {
+   "enableConnectProtocol": false
+  },
+  {
+   "headerTableSize": 4096,
+   "enablePush": true,
+   "maxConcurrentStreams": 100,
+   "initialWindowSize": 65535,
+   "maxFrameSize": 16384,
+   "maxHeaderSize": 65535,
+   "maxHeaderListSize": 65535,
+   "enableConnectProtocol": false
+  },
+  {
+   "headerTableSize": 6,
+   "enablePush": false,
+   "maxConcurrentStreams": 8,
+   "initialWindowSize": 7,
+   "maxFrameSize": 16385,
+   "maxHeaderSize": 9,
+   "maxHeaderListSize": 9,
+   "enableConnectProtocol": true
+  },
+  {
+   "headerTableSize": 4096,
+   "enablePush": true,
+   "maxConcurrentStreams": 4294967295,
+   "initialWindowSize": 65535,
+   "maxFrameSize": 16384,
+   "maxHeaderSize": 65535,
+   "maxHeaderListSize": 65535,
+   "enableConnectProtocol": false
+  },
+  {
+   "customSettings": {
+    "10": 5
+   }
+  },
+  {
+   "customSettings": {
+    "16": 5,
+    "20": 1,
+    "65535": 4294967295
+   }
+  },
+  {
+   "headerTableSize": 3,
+   "customSettings": {
+    "15": 2,
+    "20": 1
+   }
+  },
+  null,
+  {
+   "initialWindowSize": 1
+  },
+  {
+   "maxFrameSize": 16384
+  },
+  {
+   "maxConcurrentStreams": 9
+  },
+  {
+   "maxHeaderSize": 9,
+   "maxHeaderListSize": 9
+  },
+  {
+   "enableConnectProtocol": true
+  },
+  {
+   "customSettings": {
+    "7": 3
+   }
+  },
+  null,
+  {
+   "enablePush": false
+  },
+  {
+   "maxFrameSize": 16384
+  },
+  null,
+  null,
+  null,
+  null,
+  null,
+  {},
+  null,
+  {
+   "customSettings": {
+    "10": 1
+   }
+  },
+  {
+   "headerTableSize": 3
+  },
+  null,
+  null,
+  null,
+  null,
+  null,
+  {},
+  {
+   "customSettings": {
+    "100": 1,
+    "101": 2,
+    "102": 3,
+    "103": 4,
+    "104": 5,
+    "105": 6,
+    "106": 7,
+    "107": 8,
+    "108": 9,
+    "109": 10
+   }
+  },
+  null,
+  null,
+  null,
+  null,
+  {
+   "headerTableSize": 1
+  },
+  {
+   "headerTableSize": 0
+  },
+  null,
+  {},
+  null,
+  null,
+  null,
+  null,
+  {
+   "maxFrameSize": 20000
+  },
+  null,
+  null,
+  null,
+  null,
+  null,
+  null,
+  null,
+  null,
+  null,
+  null,
+  {},
+  null,
+  null,
+  null,
+  null
+ ],
+ "warningCases": [
+  {
+   "maxHeaderListSize": 100,
+   "maxHeaderSize": 200
+  },
+  {
+   "maxHeaderSize": 200
+  },
+  {
+   "maxHeaderListSize": 100,
+   "maxHeaderSize": 100
+  },
+  {
+   "maxHeaderListSize": 5
+  }
+ ],
+ "recorder": "\"use strict\";\nconst http2 = require(\"http2\");\nconst U = { $: \"undefined\" };\nconst enc = v => v === undefined ? U : typeof v === \"number\" && Number.isNaN(v) ? { $: \"NaN\" } : v === Infinity ? { $: \"Infinity\" } : v === -Infinity ? { $: \"-Infinity\" } : typeof v === \"function\" ? { $: \"fn\" } : typeof v === \"symbol\" ? { $: \"symbol\" } : v;\nconst dec = v => Array.isArray(v) ? v.map(dec) : v && typeof v === \"object\" ? (\"$\" in v ? (v.$ === \"undefined\" ? undefined : v.$ === \"NaN\" ? NaN : v.$ === \"Infinity\" ? Infinity : v.$ === \"-Infinity\" ? -Infinity : v.$ === \"fn\" ? function fn() {} : v.$ === \"symbol\" ? Symbol(\"s\") : v.$ === \"buffer\" ? Buffer.from(v.hex, \"hex\") : v.$ === \"u8\" ? new Uint8Array(Buffer.from(v.hex, \"hex\")) : v.$ === \"u16\" ? new Uint16Array(v.v) : v.$ === \"dataview\" ? new DataView(new ArrayBuffer(6)) : v.$ === \"arraybuffer\" ? new ArrayBuffer(6) : v) : Object.fromEntries(Object.entries(v).map(([k, x]) => [k, dec(x)]))) : v;\nconst err = e => ({ name: e.name, code: e.code === undefined ? null : e.code, message: e.message, ctor: e.constructor.name, ...(Object.hasOwn(e, \"actual\") ? { actual: enc(e.actual) } : {}), ...(Object.hasOwn(e, \"min\") ? { min: e.min, max: enc(e.max) } : {}) });\nconst warnings = []; process.on(\"warning\", w => warnings.push(w.message));\nconst run = f => { try { return { value: f() }; } catch (e) { return { error: err(e) }; } };\nconst out = { node: { version: process.version, image: \"node:24.18.1-alpine\" } };\nout.surface = { packed: [http2.getPackedSettings.name, http2.getPackedSettings.length], unpacked: [http2.getUnpackedSettings.name, http2.getUnpackedSettings.length], handshake: [http2.performServerHandshake.name, http2.performServerHandshake.length], sensitive: [typeof http2.sensitiveHeaders, String(http2.sensitiveHeaders), Symbol.keyFor(http2.sensitiveHeaders) === undefined] };\nconst N = { $: \"NaN\" }, I = { $: \"Infinity\" };\nconst pack = [[], [U], [{}], [{ headerTableSize: 1 }], [{ enablePush: false }], [{ enablePush: true }], [{ initialWindowSize: 2 ** 31 - 1 }], [{ maxFrameSize: 16384 }], [{ maxFrameSize: 2 ** 24 - 1 }], [{ maxConcurrentStreams: 4294967295 }], [{ maxHeaderListSize: 100 }], [{ maxHeaderSize: 200 }], [{ maxHeaderListSize: 100, maxHeaderSize: 200 }], [{ maxHeaderListSize: 100, maxHeaderSize: 100 }], [{ enableConnectProtocol: true }], [{ enableConnectProtocol: false }],\n  [{ headerTableSize: 4096, enablePush: true, initialWindowSize: 65535, maxFrameSize: 16384, maxConcurrentStreams: 100, maxHeaderListSize: 65535, enableConnectProtocol: false }],\n  [{ enableConnectProtocol: true, maxHeaderListSize: 9, maxConcurrentStreams: 8, maxFrameSize: 16385, initialWindowSize: 7, enablePush: false, headerTableSize: 6 }],\n  [http2.getDefaultSettings()], [{ customSettings: { 10: 5 } }], [{ customSettings: { 0x10: 5, 0xffff: 4294967295, 20: 1 } }], [{ customSettings: { 20: 1, 15: 2 }, headerTableSize: 3 }], [{ customSettings: { 1: 77 } }], [{ customSettings: { 2: 1 } }], [{ customSettings: { 3: 16384 } }], [{ customSettings: { 4: 9 } }], [{ customSettings: { 5: 9 } }], [{ customSettings: { 6: 1 } }], [{ customSettings: { 7: 3 } }], [{ customSettings: { 8: 3 } }], [{ customSettings: { 1: 77 }, enablePush: false }], [{ customSettings: { 3: 20000 }, maxFrameSize: 16384 }],\n  [{ customSettings: { 0: 1 } }], [{ customSettings: { 10: 0 } }], [{ customSettings: { 65536: 1 } }], [{ customSettings: { 10: 4294967296 } }], [{ customSettings: { x: 1 } }], [{ customSettings: { 10: \"5\" } }], [{ customSettings: { 10: -1 } }], [{ customSettings: { 10: 1.5 } }], [{ customSettings: { \"1.5\": 3 } }], [{ customSettings: { 10: N } }], [{ customSettings: null }], [{ customSettings: [] }], [{ customSettings: 5 }], [{ customSettings: \"x\" }], [{ customSettings: {} }],\n  [{ customSettings: Object.fromEntries(Array.from({ length: 10 }, (_, i) => [100 + i, i + 1])) }], [{ customSettings: Object.fromEntries(Array.from({ length: 11 }, (_, i) => [100 + i, i + 1])) }],\n  [{ headerTableSize: -1 }], [{ headerTableSize: 4294967296 }], [{ headerTableSize: \"1\" }], [{ headerTableSize: 1.5 }], [{ headerTableSize: N }], [{ headerTableSize: null }], [{ headerTableSize: U }], [{ initialWindowSize: 2 ** 31 }], [{ initialWindowSize: -1 }], [{ maxFrameSize: 16383 }], [{ maxFrameSize: 2 ** 24 }], [{ maxFrameSize: 20000.5 }], [{ maxConcurrentStreams: 4294967296 }], [{ maxConcurrentStreams: -1 }], [{ maxHeaderListSize: -1 }], [{ maxHeaderSize: 4294967296 }], [{ maxHeaderSize: \"9\" }],\n  [{ enablePush: 1 }], [{ enablePush: \"true\" }], [{ enablePush: null }], [{ enableConnectProtocol: 0 }], [{ enableConnectProtocol: null }], [{ unknown: 5 }], [{ headerTableSize: -1, enablePush: 1 }], [{ enablePush: 1, enableConnectProtocol: 1 }], [{ maxHeaderSize: -1, maxHeaderListSize: -2 }],\n  [null], [1], [\"x\"], [[]], [true], [{ $: \"fn\" }], [{ $: \"symbol\" }], [I]];\nout.pack = pack.map(a => { warnings.length = 0; const r = run(() => { const b = http2.getPackedSettings(...a.map(dec)); return { isBuffer: Buffer.isBuffer(b), hex: b.toString(\"hex\") }; }); return { args: a, ...r }; });\nconst B = hex => ({ $: \"buffer\", hex });\nconst unpack = [[B(\"\")], [B(\"000100001000\")], [B(\"000200000000\")], [B(\"000200000001\")], [B(\"000200000007\")], [B(\"0003ffffffff\")], [B(\"000480000000\")], [B(\"000500000001\")], [B(\"000600000064\")], [B(\"000800000001\")], [B(\"000800000000\")], [B(\"000700000005\")], [B(\"000000000005\")], [B(\"ffff00000001fffe00000002\")], [B(\"000100000001000100000002\")], [B(\"0001000010000002000000010003ffffffff00040000ffff0005000040000006000100000008000000000010deadbeef\")],\n  [B(\"0001\")], [B(\"00010000100000\")], [B(\"00\"), {}], [B(\"000500000001\"), { validate: true }], [B(\"000500004000\"), { validate: true }], [B(\"000480000000\"), { validate: true }], [B(\"000480000000\"), { validate: false }], [B(\"000480000000\"), { validate: 1 }], [B(\"000480000000\"), null], [B(\"000480000000\"), U], [B(\"000480000000\"), 5], [B(\"000480000000\"), \"x\"],\n  [B(\"001000000005\"), { validate: true }], [B(\"000000000005\"), { validate: true }], [B(\"0005000000010004ffffffff\"), { validate: true }], [B(Array.from({ length: 11 }, (_, i) => (100 + i).toString(16).padStart(4, \"0\") + \"00000001\").join(\"\")), { validate: true }], [B(Array.from({ length: 11 }, (_, i) => (100 + i).toString(16).padStart(4, \"0\") + \"00000001\").join(\"\"))],\n  [{ $: \"u8\", hex: \"000100001000\" }], [{ $: \"u16\", v: [1, 2, 3, 4, 5, 6] }], [{ $: \"u16\", v: [1, 2, 3] }], [{ $: \"dataview\" }], [{ $: \"arraybuffer\" }], [\"000100001000\"], [[0, 1, 0, 0, 16, 0]], [null], [U], [], [1], [{}], [{ length: 6 }]];\nout.unpack = unpack.map(a => ({ args: a, ...run(() => { const s = http2.getUnpackedSettings(...a.map(dec)); return { keys: Object.keys(s), settings: s, proto: Object.getPrototypeOf(s) === Object.prototype, customProto: s.customSettings ? Object.getPrototypeOf(s.customSettings) === Object.prototype : null }; }) }));\nout.roundTrip = pack.filter(a => a.length === 1 && a[0] && typeof a[0] === \"object\" && !(\"$\" in a[0])).map(a => run(() => http2.getUnpackedSettings(http2.getPackedSettings(dec(a[0]))))).map((r, i) => r.error ? null : r.value);\nout.warningCases = [{ maxHeaderListSize: 100, maxHeaderSize: 200 }, { maxHeaderSize: 200 }, { maxHeaderListSize: 100, maxHeaderSize: 100 }, { maxHeaderListSize: 5 }];\nout.recorder = require(\"fs\").readFileSync(__filename, \"utf8\");\n(async () => {\n  out.warnings = [];\n  for (const s of out.warningCases) { warnings.length = 0; http2.getPackedSettings(s); await new Promise(r => setImmediate(r)); out.warnings.push([...warnings]); }\n  process.stdout.write(JSON.stringify(out, null, 1));\n})();\n",
+ "warnings": [
+  [
+   "settings.maxHeaderSize overwrite settings.maxHeaderListSize",
+   "settings.maxHeaderSize overwrite settings.maxHeaderListSize",
+   "settings.maxHeaderSize overwrite settings.maxHeaderListSize",
+   "settings.maxHeaderSize overwrite settings.maxHeaderListSize",
+   "settings.maxHeaderSize overwrite settings.maxHeaderListSize"
+  ],
+  [
+   "settings.maxHeaderSize overwrite settings.maxHeaderListSize"
+  ],
+  [],
+  []
+ ]
+}

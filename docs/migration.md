@@ -742,3 +742,66 @@ What changed for code:
   caller with `FEATURE_NOT_AVAILABLE` and `detail.reason: "js-process-active"`,
   or with the checkpoint's `PROTOCOL_ERROR`, and reports its own `save-failed`:
   a page's last event can be that failure while automatic saves stay paused.
+
+## Node.js built-ins on the fast path
+
+A fast-path process (`node` or `bun` JavaScript in a browser worker, see
+[JavaScript acceleration](acceleration.md)) provides most of what Node.js v24.18.1
+exports. Before this release about 400 exports and 22 built-in modules were missing;
+what is still missing is recorded in
+`packages/sdk/src/runtime/workers/assistance/builtin-gaps.controls.json`. No public
+SDK type, `VMError` code or `detail.reason` changed. `fs.chown`, `fchown` and `lchown`
+need the engine release this SDK pins (Userspace API 154).
+
+Programs that stay on the fast path now, and ran in full Linux after their first
+failure before:
+
+- **`node:crypto`** beyond hashes: key derivation, AES and ChaCha20 ciphers, key objects
+  (PEM, DER, JWK), RSA, ECDSA and EdDSA signatures, RSA encryption, key and prime
+  generation, Diffie-Hellman and ECDH. It is JavaScript and not constant-time: treat keys
+  used in a fast-path process as development keys. DSA, the post-quantum key types, DES,
+  Camellia, ARIA, AES-XTS, `X509Certificate`, `Certificate`, `encapsulate` and
+  `decapsulate` are still not available there.
+- **`node:fs`**: `opendir` and `Dir`, `cpSync`, `exists`, `readv` and `writev`,
+  `openAsBlob`, `glob`, `mkdtempDisposable`, `watchFile`, `promises.watch`, `Utf8Stream`,
+  the ownership calls and `fs.write(fd, text, encoding, callback)`.
+- **`node:module`**: every member, with `registerHooks`. `module.register` runs
+  asynchronous hooks for `import`; a synchronous load that a registered `load` hook would
+  have to transform is refused.
+- **`node:dns`**: `lookup`, `resolve*`, `reverse`, `Resolver` and `lookupService` are
+  answered in the process, from the hosts file and the VM's resolver over the VM's
+  sockets. `lookup` no longer starts the guest's Node for each name.
+- **Servers and sockets**: `tls.createServer` and `https.createServer` (one guest Node
+  process per listening server, 256 connections each; `SNICallback`, `ALPNCallback` and
+  PSK callbacks are refused), `node:dgram` between programs in the VM (datagrams that
+  would leave the VM are refused, except DNS to the VM's resolver; no multicast groups),
+  and the client-side members of `url`, `net`, `http`, `http2` and `tls` that were
+  missing.
+- **Whole modules**: `domain`, `repl` (one realm: `useGlobal: false` still evaluates in
+  the process's global, and there is no terminal mode), `trace_events` (categories only;
+  nothing is written), `punycode`, `readline/promises`, `stream/consumers`.
+- **`process.memoryUsage.rss()`** answers with the resident set of the process's Linux
+  task. `process.memoryUsage()` and the `v8` heap statistics calls still fail with
+  `FEATURE_NOT_AVAILABLE`.
+
+Behaviour that changed for a program already on the fast path:
+
+- **The global `WebSocket` connects through the VM.** It was the browser's class, which
+  connects from the page's network. It, and `http.WebSocket`, now use the process's own
+  Linux sockets: a connection reaches what the VM reaches, under the VM's network
+  policy, and nothing else. `permessage-deflate` is not offered.
+- **`error.stack` in Firefox reads as Node's does**, `Error: message` followed by
+  `    at …` lines, instead of Firefox's `function@file:line:column` lines. A function
+  the program installs as `Error.prepareStackTrace` receives call sites that name the
+  program's own files in Chromium and Firefox.
+- **`fs.cp` honours its options.** It read only `recursive` before. `filter`,
+  `dereference`, `errorOnExist`, `force`, `mode`, `preserveTimestamps` and
+  `verbatimSymlinks` now act as in Node, so a copy that used to overwrite or follow
+  links regardless of them can now fail or copy differently.
+- **`require("events")` returns a wrapper around the emitter class** that streams and
+  sockets share, so that the constructor reads its `captureRejections` option. It has the
+  same prototype and static members, and `instanceof` answers the same either way.
+
+Still placed in full Linux on the launch after their first use: `cluster`, `node:test`,
+`node:sea`, inspector sessions, `process.setuid` and the other identity setters,
+`process.dlopen`, `process.execve` and `process.abort`.

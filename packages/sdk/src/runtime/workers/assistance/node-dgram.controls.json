@@ -1,0 +1,1918 @@
+{
+ "node": "v24.18.1",
+ "recorder": "// Recorder for node-dgram.controls.json, two runs merged into one file:\n//   docker run --rm --network none -v \"$PWD\":/w node:24.18.1-alpine node /w/recorder.cjs > offline.json\n//   docker run --rm -e ROUTED=1 -v \"$PWD\":/w node:24.18.1-alpine node /w/recorder.cjs > routed.json\n// Without a network 10.255.255.1 is ENETUNREACH, as in a VM without a route; the routed run records only the\n// scenarios that need a default route (a broadcast is EACCES there until SO_BROADCAST is set).\nconst dgram = require(\"dgram\"), { BlockList } = require(\"net\");\nconst prelude = `\nconst shape = error => error instanceof Error ? Object.fromEntries([[\"name\", error.name], [\"message\", error.message], ...[\"code\", \"errno\", \"syscall\", \"address\", \"port\"].filter(key => key in error).map(key => [key, error[key]])]) : { thrown: String(error) };\nconst fail = run => { try { return { returned: run() === undefined ? \"undefined\" : \"value\" }; } catch (error) { return shape(error); } };\nconst once = (emitter, event) => new Promise(resolve => emitter.once(event, (...args) => resolve(args)));\nconst bound = async (type = \"udp4\", address = type === \"udp4\" ? \"127.0.0.1\" : \"::1\") => { const socket = dgram.createSocket(type); socket.bind(0, address); await once(socket, \"listening\"); return socket; };\nconst closed = async socket => { const done = once(socket, \"close\"); socket.close(); await done; };\nconst turn = () => new Promise(resolve => setImmediate(resolve));\n`;\nconst cases = {\n  \"createSocket()\": `return fail(() => dgram.createSocket());`,\n  \"createSocket('udp')\": `return fail(() => dgram.createSocket(\"udp\"));`,\n  \"createSocket({})\": `return fail(() => dgram.createSocket({}));`,\n  \"createSocket(null)\": `return fail(() => dgram.createSocket(null));`,\n  \"new Socket('udp5')\": `return fail(() => new dgram.Socket(\"udp5\"));`,\n  \"lookup not a function\": `return fail(() => dgram.createSocket({ type: \"udp4\", lookup: 1 }));`,\n  \"lookup checked before type\": `return fail(() => dgram.createSocket({ type: \"nope\", lookup: 1 }));`,\n  \"recvBufferSize -1\": `return fail(() => dgram.createSocket({ type: \"udp4\", recvBufferSize: -1 }));`,\n  \"recvBufferSize string\": `return fail(() => dgram.createSocket({ type: \"udp4\", recvBufferSize: \"x\" }));`,\n  \"sendBufferSize 1.5\": `return fail(() => dgram.createSocket({ type: \"udp4\", sendBufferSize: 1.5 }));`,\n  \"sendBufferSize 2**32\": `return fail(() => dgram.createSocket({ type: \"udp4\", sendBufferSize: 2 ** 32 }));`,\n  \"receiveBlockList object\": `return fail(() => dgram.createSocket({ type: \"udp4\", receiveBlockList: {} }));`,\n  \"sendBlockList number\": `return fail(() => dgram.createSocket({ type: \"udp4\", sendBlockList: 1 }));`,\n  \"signal object\": `return fail(() => dgram.createSocket({ type: \"udp4\", signal: {} }));`,\n  \"signal null\": `return fail(() => dgram.createSocket({ type: \"udp4\", signal: null }));`,\n  \"type property\": `const a = dgram.createSocket(\"udp4\"), b = dgram.createSocket({ type: \"udp6\" }); return [a.type, b.type, a instanceof dgram.Socket, typeof a.on, typeof a.emit];`,\n  \"surface\": `const p = dgram.Socket.prototype; return { keys: Object.keys(dgram), socket: [dgram.Socket.name, dgram.Socket.length], create: [dgram.createSocket.name, dgram.createSocket.length], methods: Object.getOwnPropertyNames(p).map(k => { const d = Object.getOwnPropertyDescriptor(p, k); return [k, d.enumerable, typeof d.value === \"function\" ? d.value.length : \"accessor\", typeof d.value === \"function\" ? d.value.name : \"\"]; }), dispose: typeof p[Symbol.asyncDispose] };`,\n  \"address before bind\": `const s = dgram.createSocket(\"udp4\"); return fail(() => s.address());`,\n  \"remoteAddress unconnected\": `const s = dgram.createSocket(\"udp4\"); return fail(() => s.remoteAddress());`,\n  \"disconnect unconnected\": `const s = dgram.createSocket(\"udp4\"); return fail(() => s.disconnect());`,\n  \"setBroadcast before bind\": `const s = dgram.createSocket(\"udp4\"); return fail(() => s.setBroadcast(true));`,\n  \"setTTL string\": `const s = dgram.createSocket(\"udp4\"); return fail(() => s.setTTL(\"64\"));`,\n  \"setTTL before bind\": `const s = dgram.createSocket(\"udp4\"); return fail(() => s.setTTL(64));`,\n  \"setTTL 0 before bind\": `const s = dgram.createSocket(\"udp4\"); return fail(() => s.setTTL(0));`,\n  \"setMulticastTTL string\": `const s = dgram.createSocket(\"udp4\"); return fail(() => s.setMulticastTTL(\"1\"));`,\n  \"setMulticastTTL before bind\": `const s = dgram.createSocket(\"udp4\"); return fail(() => s.setMulticastTTL(1));`,\n  \"setMulticastLoopback before bind\": `const s = dgram.createSocket(\"udp4\"); return fail(() => s.setMulticastLoopback(true));`,\n  \"setMulticastInterface number\": `const s = dgram.createSocket(\"udp4\"); return fail(() => s.setMulticastInterface(1));`,\n  \"setMulticastInterface before bind\": `const s = dgram.createSocket(\"udp4\"); return fail(() => s.setMulticastInterface(\"127.0.0.1\"));`,\n  \"setMulticastInterface not an address\": `const s = dgram.createSocket(\"udp4\"); return fail(() => s.setMulticastInterface(\"nope\"));`,\n  \"addMembership()\": `const s = dgram.createSocket(\"udp4\"); return fail(() => s.addMembership());`,\n  \"dropMembership('')\": `const s = dgram.createSocket(\"udp4\"); return fail(() => s.dropMembership(\"\"));`,\n  \"addMembership not an address\": `const s = dgram.createSocket(\"udp4\"); return fail(() => s.addMembership(\"nope\"));`,\n  \"dropMembership not an address\": `const s = dgram.createSocket(\"udp4\"); return fail(() => s.dropMembership(\"nope\", \"127.0.0.1\"));`,\n  \"addSourceSpecificMembership(1)\": `const s = dgram.createSocket(\"udp4\"); return fail(() => s.addSourceSpecificMembership(1, \"232.1.1.1\"));`,\n  \"addSourceSpecificMembership group\": `const s = dgram.createSocket(\"udp4\"); return fail(() => s.addSourceSpecificMembership(\"10.0.0.1\", 2));`,\n  \"dropSourceSpecificMembership()\": `const s = dgram.createSocket(\"udp4\"); return fail(() => s.dropSourceSpecificMembership());`,\n  \"addSourceSpecificMembership not an address\": `const s = dgram.createSocket(\"udp4\"); return fail(() => s.addSourceSpecificMembership(\"nope\", \"232.1.1.1\"));`,\n  \"setRecvBufferSize -1\": `const s = dgram.createSocket(\"udp4\"); return fail(() => s.setRecvBufferSize(-1));`,\n  \"setSendBufferSize string\": `const s = dgram.createSocket(\"udp4\"); return fail(() => s.setSendBufferSize(\"x\"));`,\n  \"setRecvBufferSize before bind\": `const s = dgram.createSocket(\"udp4\"); const e = fail(() => s.setRecvBufferSize(1024)); return e;`,\n  \"setSendBufferSize before bind\": `const s = dgram.createSocket(\"udp4\"); return fail(() => s.setSendBufferSize(1024));`,\n  \"getRecvBufferSize before bind\": `const s = dgram.createSocket(\"udp4\"); return fail(() => s.getRecvBufferSize());`,\n  \"getSendBufferSize before bind\": `const s = dgram.createSocket(\"udp4\"); return fail(() => s.getSendBufferSize());`,\n  \"send queue idle\": `const s = dgram.createSocket(\"udp4\"); return [s.getSendQueueSize(), s.getSendQueueCount()];`,\n  \"send()\": `const s = dgram.createSocket(\"udp4\"); return fail(() => s.send());`,\n  \"send(number)\": `const s = dgram.createSocket(\"udp4\"); return fail(() => s.send(1, 1234, \"localhost\"));`,\n  \"send without port\": `const s = dgram.createSocket(\"udp4\"); return fail(() => s.send(\"x\"));`,\n  \"send port 0\": `const s = dgram.createSocket(\"udp4\"); return fail(() => s.send(\"x\", 0));`,\n  \"send port 65536\": `const s = dgram.createSocket(\"udp4\"); return fail(() => s.send(\"x\", 65536));`,\n  \"send port text\": `const s = dgram.createSocket(\"udp4\"); return fail(() => s.send(\"x\", \"80a\"));`,\n  \"send port callback only\": `const s = dgram.createSocket(\"udp4\"); return fail(() => s.send(\"x\", () => {}));`,\n  \"send list with a number\": `const s = dgram.createSocket(\"udp4\"); return fail(() => s.send([1], 1234));`,\n  \"send offset beyond\": `const s = dgram.createSocket(\"udp4\"); return fail(() => s.send(Buffer.alloc(4), 5, 1, 1234, \"localhost\"));`,\n  \"send length beyond\": `const s = dgram.createSocket(\"udp4\"); return fail(() => s.send(Buffer.alloc(4), 2, 3, 1234, \"localhost\"));`,\n  \"send sliced non-buffer\": `const s = dgram.createSocket(\"udp4\"); return fail(() => s.send({}, 0, 1, 1234, \"localhost\"));`,\n  \"send address number\": `const s = dgram.createSocket(\"udp4\"); return fail(() => s.send(\"x\", 1234, 5));`,\n  \"sendto offset\": `const s = dgram.createSocket(\"udp4\"); return fail(() => s.sendto(\"x\", \"a\", 1, 1, \"h\"));`,\n  \"sendto length\": `const s = dgram.createSocket(\"udp4\"); return fail(() => s.sendto(\"x\", 0));`,\n  \"sendto port\": `const s = dgram.createSocket(\"udp4\"); return fail(() => s.sendto(\"x\", 0, 1, \"9\", \"h\"));`,\n  \"sendto address\": `const s = dgram.createSocket(\"udp4\"); return fail(() => s.sendto(\"x\", 0, 1, 9));`,\n  \"connect()\": `const s = dgram.createSocket(\"udp4\"); return fail(() => s.connect());`,\n  \"connect(0)\": `const s = dgram.createSocket(\"udp4\"); return fail(() => s.connect(0));`,\n  \"connect address number\": `const s = dgram.createSocket(\"udp4\"); return fail(() => s.connect(1234, 5));`,\n  \"connect twice\": `const s = dgram.createSocket(\"udp4\"); s.connect(1234, \"127.0.0.1\"); const e = fail(() => s.connect(1234, \"127.0.0.1\")); await closed(s); return e;`,\n  \"bind twice\": `const s = dgram.createSocket(\"udp4\"); s.bind(0, \"127.0.0.1\"); const e = fail(() => s.bind(0, \"127.0.0.1\")); await closed(s); return e;`,\n  \"bind after listening\": `const s = await bound(); const e = fail(() => s.bind(0)); await closed(s); return e;`,\n  \"bind returns this\": `const s = dgram.createSocket(\"udp4\"); const same = s.bind(0, \"127.0.0.1\") === s; const also = s.close() === s; await once(s, \"close\"); return [same, also];`,\n  \"closed: address\": `const s = await bound(); await closed(s); return fail(() => s.address());`,\n  \"closed: bind\": `const s = dgram.createSocket(\"udp4\"); s.close(); return fail(() => s.bind(0));`,\n  \"closed: send\": `const s = dgram.createSocket(\"udp4\"); s.close(); return fail(() => s.send(\"x\", 1234, \"127.0.0.1\"));`,\n  \"closed: send validates first\": `const s = dgram.createSocket(\"udp4\"); s.close(); return fail(() => s.send(\"x\", 0));`,\n  \"closed: close\": `const s = dgram.createSocket(\"udp4\"); s.close(); return fail(() => s.close());`,\n  \"closed: remoteAddress\": `const s = dgram.createSocket(\"udp4\"); s.close(); return fail(() => s.remoteAddress());`,\n  \"closed: setMulticastInterface\": `const s = dgram.createSocket(\"udp4\"); s.close(); return fail(() => s.setMulticastInterface(\"127.0.0.1\"));`,\n  \"closed: addMembership\": `const s = dgram.createSocket(\"udp4\"); s.close(); return fail(() => s.addMembership(\"224.0.0.114\"));`,\n  \"closed: addSourceSpecificMembership\": `const s = dgram.createSocket(\"udp4\"); s.close(); return fail(() => s.addSourceSpecificMembership(1, 2));`,\n  \"closed: setBroadcast\": `const s = dgram.createSocket(\"udp4\"); s.close(); return fail(() => s.setBroadcast(true));`,\n  \"closed: setTTL\": `const s = dgram.createSocket(\"udp4\"); s.close(); return fail(() => s.setTTL(1));`,\n  \"closed: setMulticastTTL\": `const s = dgram.createSocket(\"udp4\"); s.close(); return fail(() => s.setMulticastTTL(1));`,\n  \"closed: setMulticastLoopback\": `const s = dgram.createSocket(\"udp4\"); s.close(); return fail(() => s.setMulticastLoopback(1));`,\n  \"closed: setRecvBufferSize\": `const s = dgram.createSocket(\"udp4\"); s.close(); return fail(() => s.setRecvBufferSize(1024));`,\n  \"closed: getSendQueueSize\": `const s = dgram.createSocket(\"udp4\"); s.close(); return fail(() => s.getSendQueueSize());`,\n  \"closed: connect\": `const s = dgram.createSocket(\"udp4\"); s.close(); return fail(() => s.connect(1234));`,\n  \"closed: disconnect\": `const s = dgram.createSocket(\"udp4\"); s.close(); return fail(() => s.disconnect());`,\n  \"closed: ref and unref\": `const s = dgram.createSocket(\"udp4\"); s.close(); return [s.ref() === s, s.unref() === s];`,\n  \"ref and unref return this\": `const s = dgram.createSocket(\"udp4\"); return [s.ref() === s, s.unref() === s];`,\n  \"bound: address\": `const s = await bound(); const a = s.address(); await closed(s); return [Object.keys(a), a.address, a.family, typeof a.port, a.port > 0];`,\n  \"bound: default address\": `const s = dgram.createSocket(\"udp4\"); s.bind(); await once(s, \"listening\"); const a = s.address(); await closed(s); return [a.address, a.family, a.port > 0];`,\n  \"bound: options form\": `const s = dgram.createSocket(\"udp4\"); s.bind({ port: 0, address: \"127.0.0.1\", exclusive: true }); await once(s, \"listening\"); const a = s.address(); await closed(s); return [a.address, a.family];`,\n  \"bound: setters\": `const s = await bound(); const r = [fail(() => s.setBroadcast(true)), s.setTTL(64), s.setMulticastTTL(2), s.setMulticastLoopback(false), s.setMulticastLoopback(\"yes\"), fail(() => s.setRecvBufferSize(8192)), fail(() => s.setSendBufferSize(8192)), fail(() => s.setRecvBufferSize(0))]; await closed(s); return r;`,\n  \"bound: setTTL range\": `const s = await bound(); const r = [fail(() => s.setTTL(0)), fail(() => s.setTTL(256)), fail(() => s.setTTL(-1)), s.setTTL(1.9), s.setTTL(255)]; await closed(s); return r;`,\n  \"bound: setMulticastInterface\": `const s = await bound(); const r = [fail(() => s.setMulticastInterface(\"127.0.0.1\")), fail(() => s.setMulticastInterface(\"nope\")), fail(() => s.setMulticastInterface(\"::1\"))]; await closed(s); return r;`,\n  \"bound: membership not an address\": `const s = await bound(); const r = [fail(() => s.addMembership(\"nope\")), fail(() => s.dropMembership(\"nope\")), fail(() => s.addSourceSpecificMembership(\"nope\", \"232.1.1.1\")), fail(() => s.dropSourceSpecificMembership(\"10.0.0.1\", \"nope\"))]; await closed(s); return r;`,\n  \"bound: remoteAddress and disconnect\": `const s = await bound(); const r = [fail(() => s.remoteAddress()), fail(() => s.disconnect())]; await closed(s); return r;`,\n  \"bound: bad buffer size\": `const s = await bound(); const r = [fail(() => s.setRecvBufferSize(-1)), fail(() => s.setSendBufferSize(1.5)), fail(() => s.setSendBufferSize(2 ** 32))]; await closed(s); return r;`,\n  \"udp6: address\": `const s = dgram.createSocket(\"udp6\"); s.bind(0, \"::1\"); await once(s, \"listening\"); const a = s.address(); await closed(s); return [a.address, a.family, a.port > 0];`,\n  \"udp6: default address\": `const s = dgram.createSocket(\"udp6\"); s.bind(); await once(s, \"listening\"); const a = s.address(); await closed(s); return [a.address, a.family];`,\n  \"udp6: bind an IPv4 address\": `const s = dgram.createSocket(\"udp6\"); const failed = once(s, \"error\"); s.bind(0, \"127.0.0.1\"); const [e] = await failed; const again = fail(() => s.bind(0, \"::1\")); await once(s, \"listening\"); await closed(s); return [shape(e), again];`,\n  \"udp4: bind an IPv6 address\": `const s = dgram.createSocket(\"udp4\"); const failed = once(s, \"error\"); s.bind(0, \"::1\"); const [e] = await failed; await closed(s); return shape(e);`,\n};\nconst scenarios = {\n  \"echo\": `\n    const log = [], server = dgram.createSocket(\"udp4\"), client = dgram.createSocket(\"udp4\");\n    server.on(\"listening\", () => log.push(\"server listening\")); server.on(\"close\", () => log.push(\"server close\"));\n    client.on(\"listening\", () => { const a = client.address(); log.push(\"client listening \" + a.address + \" \" + a.family); }); client.on(\"close\", () => log.push(\"client close\"));\n    const done = new Promise(resolve => client.on(\"message\", (msg, rinfo) => { log.push([\"client message\", msg.toString(), Buffer.isBuffer(msg), Object.keys(rinfo), rinfo.address, rinfo.family, rinfo.port === server.address().port, rinfo.size]); resolve(); }));\n    server.on(\"message\", (msg, rinfo) => { log.push([\"server message\", msg.toString(), rinfo.address, rinfo.family, rinfo.port === client.address().port, rinfo.size]); server.send(\"pong:\" + msg, rinfo.port, rinfo.address, (error, bytes) => log.push([\"server sent\", error, bytes])); });\n    server.bind(0, \"127.0.0.1\", function () { log.push(\"server bind callback \" + (this === server)); });\n    await once(server, \"listening\");\n    log.push(\"sending\");\n    client.send(\"ping\", server.address().port, \"127.0.0.1\", function (error, bytes) { log.push([\"client sent\", error, bytes, this === client]); });\n    log.push(\"send returned\");\n    await done; await turn();\n    client.close(() => log.push(\"client close callback\")); log.push(\"client close returned\");\n    await once(client, \"close\");\n    server.close(); await once(server, \"close\");\n    return log;`,\n  \"ordering of three datagrams\": `\n    const log = [], server = await bound(), client = dgram.createSocket(\"udp4\");\n    const got = new Promise(resolve => server.on(\"message\", msg => { log.push(msg.toString()); if (log.length === 3) resolve(); }));\n    for (const text of [\"one\", \"two\", \"three\"]) client.send(text, server.address().port, \"127.0.0.1\");\n    await got; await closed(client); await closed(server); return log;`,\n  \"send overloads\": `\n    const log = [], server = await bound(), client = await bound(), port = server.address().port;\n    const next = () => new Promise(resolve => server.once(\"message\", (msg, rinfo) => resolve([msg.toString(\"latin1\"), rinfo.size])));\n    const sent = async run => { const arrived = next(); const callback = new Promise(resolve => run((error, bytes) => resolve([error, bytes]))); log.push([await arrived, await callback]); };\n    await sent(cb => client.send(\"string\", port, \"127.0.0.1\", cb));\n    await sent(cb => client.send(Buffer.from(\"buffer\"), port, \"127.0.0.1\", cb));\n    await sent(cb => client.send(Buffer.from(\"0123456789\"), 2, 5, port, \"127.0.0.1\", cb));\n    await sent(cb => client.send(\"0123456789\", 2, 5, port, \"127.0.0.1\", cb));\n    await sent(cb => client.send(new Uint8Array([104, 105]), port, \"127.0.0.1\", cb));\n    await sent(cb => client.send(new DataView(new Uint8Array([111, 107]).buffer), port, \"127.0.0.1\", cb));\n    await sent(cb => client.send(new Uint16Array([0x6261, 0x6463]), port, \"127.0.0.1\", cb));\n    await sent(cb => client.send([\"a\", Buffer.from(\"b\"), new Uint8Array([99])], port, \"127.0.0.1\", cb));\n    await sent(cb => client.send([], port, \"127.0.0.1\", cb));\n    await sent(cb => client.send(\"\", port, \"127.0.0.1\", cb));\n    await sent(cb => client.send(\"no address\", port, cb));\n    await sent(cb => client.send(\"null address\", port, null, cb));\n    await sent(cb => client.sendto(\"sendto\", 0, 4, port, \"127.0.0.1\", cb));\n    await closed(client); await closed(server); return log;`,\n  \"implicit bind on first send\": `\n    const log = [], server = await bound(), client = dgram.createSocket(\"udp4\");\n    client.on(\"listening\", () => { const a = client.address(); log.push([\"listening\", a.address, a.family, a.port > 0]); });\n    const arrived = once(server, \"message\");\n    client.send(\"first\", server.address().port, \"127.0.0.1\", error => log.push([\"first sent\", error]));\n    client.send(\"second\", server.address().port, \"127.0.0.1\", error => log.push([\"second sent\", error]));\n    log.push(\"queued\");\n    log.push(fail(() => client.bind(0)));\n    const [msg] = await arrived; log.push(msg.toString()); await turn();\n    await closed(client); await closed(server); return log;`,\n  \"connect, send, disconnect\": `\n    const log = [], server = await bound(), client = dgram.createSocket(\"udp4\"), port = server.address().port;\n    client.on(\"connect\", () => log.push(\"connect event\")); client.on(\"listening\", () => log.push(\"listening\"));\n    await new Promise(resolve => client.connect(port, \"127.0.0.1\", function (...args) { log.push([\"connect callback\", args, this === client]); resolve(); }));\n    const remote = client.remoteAddress(); log.push([Object.keys(remote), remote.address, remote.family, remote.port === port]);\n    log.push(fail(() => client.connect(port)));\n    log.push(fail(() => client.send(\"x\", port, \"127.0.0.1\")));\n    log.push(fail(() => client.send(\"x\", port)));\n    const next = () => new Promise(resolve => server.once(\"message\", (msg, rinfo) => resolve([msg.toString(), rinfo.port === client.address().port])));\n    let arrived = next(); await new Promise(resolve => client.send(\"connected\", (error, bytes) => { log.push([\"sent\", error, bytes]); resolve(); })); log.push(await arrived);\n    arrived = next(); await new Promise(resolve => client.send(\"0123456789\", 3, 4, (error, bytes) => { log.push([\"sent slice\", error, bytes]); resolve(); })); log.push(await arrived);\n    arrived = next(); client.send([\"a\", \"b\"]); log.push(await arrived);\n    log.push(fail(() => client.disconnect()));\n    log.push(fail(() => client.remoteAddress()));\n    log.push(fail(() => client.disconnect()));\n    log.push(fail(() => client.send(\"x\")));\n    arrived = next(); client.send(\"again\", port, \"127.0.0.1\"); log.push(await arrived);\n    await closed(client); await closed(server); return log;`,\n  \"connect without a callback, default address\": `\n    const log = [], server = await bound(), client = dgram.createSocket(\"udp4\");\n    client.connect(server.address().port); await once(client, \"connect\");\n    const remote = client.remoteAddress(); log.push([remote.address, remote.family]);\n    const arrived = once(server, \"message\"); client.send(\"hi\"); log.push((await arrived)[0].toString());\n    await closed(client); await closed(server); return log;`,\n  \"bind address in use\": `\n    const log = [], first = await bound(), second = dgram.createSocket(\"udp4\"), port = first.address().port;\n    const failed = once(second, \"error\");\n    second.bind(port, \"127.0.0.1\", () => log.push(\"bind callback\"));\n    const [error] = await failed; const e = shape(error); log.push([e.name, e.message === \"bind EADDRINUSE 127.0.0.1:\" + port, e.code, e.errno, e.syscall, e.address, e.port === port]);\n    log.push(second.listenerCount(\"listening\"), second.listenerCount(\"error\"));\n    second.bind(0, \"127.0.0.1\"); await once(second, \"listening\"); log.push(\"rebound\");\n    await closed(second); await closed(first); return log;`,\n  \"reuseAddr shares a port\": `\n    const log = [], first = dgram.createSocket({ type: \"udp4\", reuseAddr: true }); first.bind(0, \"127.0.0.1\"); await once(first, \"listening\");\n    const second = dgram.createSocket({ type: \"udp4\", reuseAddr: true }); second.bind(first.address().port, \"127.0.0.1\"); await once(second, \"listening\");\n    log.push(second.address().port === first.address().port);\n    await closed(second); await closed(first); return log;`,\n  \"close\": `\n    const log = [], socket = await bound();\n    socket.on(\"close\", () => log.push(\"close event\"));\n    socket.close(() => log.push(\"close callback\")); log.push(\"close returned\");\n    log.push(fail(() => socket.close()));\n    log.push(fail(() => socket.send(\"x\", 9, \"127.0.0.1\")));\n    await new Promise(resolve => process.nextTick(resolve)); log.push(\"after tick\");\n    await turn(); return log;`,\n  \"close before the bind completes\": `\n    const log = [], socket = dgram.createSocket(\"udp4\");\n    socket.on(\"listening\", () => log.push(\"listening\")); socket.on(\"error\", error => log.push(shape(error)));\n    socket.bind(0, \"127.0.0.1\", () => log.push(\"bind callback\")); socket.close(() => log.push(\"close callback\"));\n    await turn(); await turn(); return log;`,\n  \"close with a queued send\": `\n    const log = [], server = await bound(), socket = dgram.createSocket(\"udp4\");\n    server.on(\"message\", msg => log.push(\"arrived \" + msg));\n    socket.on(\"close\", () => log.push(\"close event\"));\n    socket.send(\"queued\", server.address().port, \"127.0.0.1\", error => log.push([\"sent\", error]));\n    socket.close(() => log.push(\"close callback\")); log.push(\"close returned\");\n    await once(socket, \"close\"); await turn(); await turn(); await closed(server); return log;`,\n  \"custom lookup\": `\n    const log = [], server = await bound();\n    const client = dgram.createSocket({ type: \"udp4\", lookup: (host, family, callback) => { log.push([\"lookup\", host, family]); process.nextTick(callback, null, \"127.0.0.1\", 4); } });\n    const arrived = once(server, \"message\");\n    client.send(\"hello\", server.address().port, \"example.test\", error => log.push([\"sent\", error]));\n    await arrived; await turn();\n    const again = once(server, \"message\"); client.send(\"default\", server.address().port); await again;\n    client.connect(server.address().port); await once(client, \"connect\");\n    await closed(client);\n    const six = dgram.createSocket({ type: \"udp6\", lookup: (host, family, callback) => { log.push([\"lookup\", host, family]); process.nextTick(callback, null, \"::1\", 6); } });\n    six.bind(); await once(six, \"listening\"); six.connect(9); await once(six, \"connect\"); await closed(six);\n    await closed(server); return log;`,\n  \"lookup failure\": `\n    const log = [], failure = Object.assign(new Error(\"getaddrinfo ENOTFOUND nowhere.test\"), { code: \"ENOTFOUND\" });\n    const make = () => dgram.createSocket({ type: \"udp4\", lookup: (host, family, callback) => { process.nextTick(callback, host === \"nowhere.test\" ? failure : null, host === \"nowhere.test\" ? undefined : \"127.0.0.1\", 4); } });\n    const a = make(); await new Promise(resolve => a.send(\"x\", 9, \"nowhere.test\", error => { log.push([\"callback\", error === failure]); resolve(); })); await closed(a);\n    const b = make(); const failed = once(b, \"error\"); b.send(\"x\", 9, \"nowhere.test\"); log.push([\"error event\", (await failed)[0] === failure]); await closed(b);\n    const c = make(); const refused = once(c, \"error\"); c.bind(0, \"nowhere.test\", () => log.push(\"bind callback\")); log.push([\"bind error\", (await refused)[0] === failure]); c.bind(0, \"127.0.0.1\"); await once(c, \"listening\"); log.push(\"bound after failure\"); await closed(c);\n    const d = make(); await new Promise(resolve => d.connect(9, \"nowhere.test\", error => { log.push([\"connect callback\", error === failure, d.listenerCount(\"connect\")]); resolve(); })); log.push(fail(() => d.remoteAddress())); await closed(d);\n    const e = make(); const lost = once(e, \"error\"); e.connect(9, \"nowhere.test\"); log.push([\"connect error event\", (await lost)[0] === failure]); await closed(e);\n    return log;`,\n  \"bind failure drops the queue\": `\n    const log = [], failure = new Error(\"no such host\");\n    const socket = dgram.createSocket({ type: \"udp4\", lookup: (host, family, callback) => { process.nextTick(callback, host === \"bad.test\" ? failure : null, \"127.0.0.1\", 4); } });\n    socket.on(\"error\", error => log.push([\"error\", error === failure]));\n    socket.bind(0, \"bad.test\");\n    socket.send(\"lost\", 9, \"127.0.0.1\", error => log.push([\"sent\", error]));\n    await turn(); await turn();\n    socket.bind(0, \"127.0.0.1\"); await once(socket, \"listening\"); log.push(\"listening\"); await turn();\n    await closed(socket); return log;`,\n  \"refused sends\": `\n    const log = [], socket = await bound(\"udp4\", \"0.0.0.0\");\n    const send = (address, port = 9) => new Promise(resolve => socket.send(\"x\", port, address, (error, bytes) => resolve([error === null ? null : shape(error), bytes])));\n    log.push(await send(\"255.255.255.255\"));\n    log.push(await send(\"10.255.255.1\"));\n    log.push(await send(\"127.0.0.1\", 1));\n    socket.on(\"error\", error => log.push([\"error event\", shape(error)]));\n    socket.send(\"x\", 9, \"255.255.255.255\"); await turn(); await turn();\n    await closed(socket); return log;`,\n  \"send to another family\": `\n    const log = [], four = await bound(\"udp4\"), six = await bound(\"udp6\");\n    const send = (socket, address) => new Promise(resolve => socket.send(\"x\", 9, address, (error, bytes) => resolve([error === null ? null : shape(error), bytes])));\n    log.push(await send(four, \"::1\")); log.push(await send(six, \"127.0.0.1\"));\n    await closed(four); await closed(six); return log;`,\n  \"udp6 echo\": `\n    const log = [], server = await bound(\"udp6\"), client = dgram.createSocket(\"udp6\");\n    server.on(\"message\", (msg, rinfo) => { log.push([\"server message\", msg.toString(), rinfo.address, rinfo.family, rinfo.size]); server.send(msg, rinfo.port, rinfo.address); });\n    const reply = once(client, \"message\");\n    client.send(\"six\", server.address().port, \"::1\");\n    const [msg, rinfo] = await reply; log.push([\"client message\", msg.toString(), rinfo.address, rinfo.family, client.address().address]);\n    await closed(client); await closed(server); return log;`,\n  \"abort signal\": `\n    const log = [], controller = new AbortController(), socket = dgram.createSocket({ type: \"udp4\", signal: controller.signal });\n    socket.on(\"close\", () => log.push(\"close\")); socket.bind(0, \"127.0.0.1\"); await once(socket, \"listening\");\n    controller.abort(); log.push(\"aborted\"); log.push(fail(() => socket.address())); await turn(); \n    const already = dgram.createSocket({ type: \"udp4\", signal: AbortSignal.abort() }); already.on(\"close\", () => log.push(\"second close\")); log.push(fail(() => already.bind(0))); await turn();\n    return log;`,\n  \"async dispose\": `\n    const log = [], socket = await bound(); socket.on(\"close\", () => log.push(\"close\"));\n    const result = socket[Symbol.asyncDispose](); log.push(result instanceof Promise); log.push(await result === undefined); log.push(await socket[Symbol.asyncDispose]() === undefined);\n    return log;`,\n  \"block lists\": `\n    const log = [], blocked = new BlockList(); blocked.addAddress(\"127.0.0.1\");\n    const server = dgram.createSocket({ type: \"udp4\", receiveBlockList: blocked }); server.bind(0, \"127.0.0.1\"); await once(server, \"listening\");\n    server.on(\"message\", msg => log.push(\"server got \" + msg));\n    const open = await bound(); open.send(\"dropped\", server.address().port, \"127.0.0.1\"); await turn(); await turn(); await turn();\n    const client = dgram.createSocket({ type: \"udp4\", sendBlockList: blocked });\n    await new Promise(resolve => client.send(\"x\", open.address().port, \"127.0.0.1\", error => { log.push(shape(error)); resolve(); }));\n    client.on(\"error\", error => log.push([\"error event\", shape(error)])); client.send(\"x\", open.address().port, \"127.0.0.1\"); await turn(); await turn();\n    await closed(client);\n    const connecting = dgram.createSocket({ type: \"udp4\", sendBlockList: blocked });\n    await new Promise(resolve => connecting.connect(open.address().port, \"127.0.0.1\", error => { log.push([\"connect\", shape(error)]); resolve(); }));\n    await closed(connecting); await closed(open); await closed(server); return log;`,\n  \"send callback timing\": `\n    const log = [], server = await bound(), client = await bound();\n    setImmediate(() => log.push(\"immediate\"));\n    Promise.resolve().then(() => log.push(\"microtask\"));\n    process.nextTick(() => log.push(\"tick before\"));\n    client.send(\"x\", server.address().port, \"127.0.0.1\", () => log.push(\"send callback\"));\n    process.nextTick(() => log.push(\"tick after\"));\n    log.push(\"sync\");\n    await once(server, \"message\"); log.push(\"message\"); await turn();\n    await closed(client); await closed(server); return log;`,\n  \"listening is emitted inside the lookup callback\": `\n    const log = []; let answer;\n    const socket = dgram.createSocket({ type: \"udp4\", lookup: (host, family, callback) => { answer = callback; } });\n    socket.on(\"listening\", () => log.push(\"listening\")); socket.bind(0, \"127.0.0.1\", () => log.push(\"bind callback\"));\n    log.push(\"before answer\"); answer(null, \"127.0.0.1\", 4); log.push(\"after answer\"); log.push(socket.address().address);\n    await closed(socket); return log;`,\n  \"message listener from createSocket\": `\n    const log = [], server = dgram.createSocket(\"udp4\", (msg, rinfo) => log.push([\"listener\", msg.toString(), rinfo.size])); server.bind(0, \"127.0.0.1\"); await once(server, \"listening\");\n    const client = await bound(); const arrived = once(server, \"message\"); client.send(\"hi\", server.address().port, \"127.0.0.1\"); await arrived;\n    log.push(server.listenerCount(\"message\")); await closed(client); await closed(server); return log;`,\n};\nconst routed = {\n  \"broadcast needs SO_BROADCAST\": `\n    const log = [], socket = await bound(\"udp4\", \"0.0.0.0\");\n    const send = () => new Promise(resolve => socket.send(\"x\", 9, \"255.255.255.255\", (error, bytes) => resolve([error === null ? null : shape(error), bytes])));\n    log.push(await send()); socket.setBroadcast(true); log.push(await send()); socket.setBroadcast(false); log.push((await send())[1]);\n    await closed(socket); return log;`,\n};\nconst AsyncFunction = (async () => {}).constructor;\n(async () => {\n  const run = async code => { try { return JSON.parse(JSON.stringify(await new AsyncFunction(\"dgram\", \"Buffer\", \"BlockList\", prelude + code)(dgram, Buffer, BlockList))); } catch (error) { return { escaped: String(error && error.stack || error) }; } };\n  const out = { prelude, cases: [], scenarios: [] };\n  if (process.env.ROUTED === \"1\") { for (const [name, code] of Object.entries(routed)) out.scenarios.push({ name, code, result: await run(code) }); console.log(JSON.stringify(out, null, 1)); return; }\n  for (const [name, code] of Object.entries(cases)) out.cases.push({ name, code, result: await run(code) });\n  for (const [name, code] of Object.entries(scenarios)) out.scenarios.push({ name, code, result: await run(code) });\n  console.log(JSON.stringify(out, null, 1));\n})();\n",
+ "prelude": "\nconst shape = error => error instanceof Error ? Object.fromEntries([[\"name\", error.name], [\"message\", error.message], ...[\"code\", \"errno\", \"syscall\", \"address\", \"port\"].filter(key => key in error).map(key => [key, error[key]])]) : { thrown: String(error) };\nconst fail = run => { try { return { returned: run() === undefined ? \"undefined\" : \"value\" }; } catch (error) { return shape(error); } };\nconst once = (emitter, event) => new Promise(resolve => emitter.once(event, (...args) => resolve(args)));\nconst bound = async (type = \"udp4\", address = type === \"udp4\" ? \"127.0.0.1\" : \"::1\") => { const socket = dgram.createSocket(type); socket.bind(0, address); await once(socket, \"listening\"); return socket; };\nconst closed = async socket => { const done = once(socket, \"close\"); socket.close(); await done; };\nconst turn = () => new Promise(resolve => setImmediate(resolve));\n",
+ "cases": [
+  {
+   "name": "createSocket()",
+   "code": "return fail(() => dgram.createSocket());",
+   "result": {
+    "name": "TypeError",
+    "message": "Bad socket type specified. Valid types are: udp4, udp6",
+    "code": "ERR_SOCKET_BAD_TYPE"
+   }
+  },
+  {
+   "name": "createSocket('udp')",
+   "code": "return fail(() => dgram.createSocket(\"udp\"));",
+   "result": {
+    "name": "TypeError",
+    "message": "Bad socket type specified. Valid types are: udp4, udp6",
+    "code": "ERR_SOCKET_BAD_TYPE"
+   }
+  },
+  {
+   "name": "createSocket({})",
+   "code": "return fail(() => dgram.createSocket({}));",
+   "result": {
+    "name": "TypeError",
+    "message": "Bad socket type specified. Valid types are: udp4, udp6",
+    "code": "ERR_SOCKET_BAD_TYPE"
+   }
+  },
+  {
+   "name": "createSocket(null)",
+   "code": "return fail(() => dgram.createSocket(null));",
+   "result": {
+    "name": "TypeError",
+    "message": "Bad socket type specified. Valid types are: udp4, udp6",
+    "code": "ERR_SOCKET_BAD_TYPE"
+   }
+  },
+  {
+   "name": "new Socket('udp5')",
+   "code": "return fail(() => new dgram.Socket(\"udp5\"));",
+   "result": {
+    "name": "TypeError",
+    "message": "Bad socket type specified. Valid types are: udp4, udp6",
+    "code": "ERR_SOCKET_BAD_TYPE"
+   }
+  },
+  {
+   "name": "lookup not a function",
+   "code": "return fail(() => dgram.createSocket({ type: \"udp4\", lookup: 1 }));",
+   "result": {
+    "name": "TypeError",
+    "message": "The \"lookup\" argument must be of type function. Received type number (1)",
+    "code": "ERR_INVALID_ARG_TYPE"
+   }
+  },
+  {
+   "name": "lookup checked before type",
+   "code": "return fail(() => dgram.createSocket({ type: \"nope\", lookup: 1 }));",
+   "result": {
+    "name": "TypeError",
+    "message": "The \"lookup\" argument must be of type function. Received type number (1)",
+    "code": "ERR_INVALID_ARG_TYPE"
+   }
+  },
+  {
+   "name": "recvBufferSize -1",
+   "code": "return fail(() => dgram.createSocket({ type: \"udp4\", recvBufferSize: -1 }));",
+   "result": {
+    "name": "RangeError",
+    "message": "The value of \"options.recvBufferSize\" is out of range. It must be >= 0 && <= 4294967295. Received -1",
+    "code": "ERR_OUT_OF_RANGE"
+   }
+  },
+  {
+   "name": "recvBufferSize string",
+   "code": "return fail(() => dgram.createSocket({ type: \"udp4\", recvBufferSize: \"x\" }));",
+   "result": {
+    "name": "TypeError",
+    "message": "The \"options.recvBufferSize\" property must be of type number. Received type string ('x')",
+    "code": "ERR_INVALID_ARG_TYPE"
+   }
+  },
+  {
+   "name": "sendBufferSize 1.5",
+   "code": "return fail(() => dgram.createSocket({ type: \"udp4\", sendBufferSize: 1.5 }));",
+   "result": {
+    "name": "RangeError",
+    "message": "The value of \"options.sendBufferSize\" is out of range. It must be an integer. Received 1.5",
+    "code": "ERR_OUT_OF_RANGE"
+   }
+  },
+  {
+   "name": "sendBufferSize 2**32",
+   "code": "return fail(() => dgram.createSocket({ type: \"udp4\", sendBufferSize: 2 ** 32 }));",
+   "result": {
+    "name": "RangeError",
+    "message": "The value of \"options.sendBufferSize\" is out of range. It must be >= 0 && <= 4294967295. Received 4294967296",
+    "code": "ERR_OUT_OF_RANGE"
+   }
+  },
+  {
+   "name": "receiveBlockList object",
+   "code": "return fail(() => dgram.createSocket({ type: \"udp4\", receiveBlockList: {} }));",
+   "result": {
+    "name": "TypeError",
+    "message": "The \"options.receiveBlockList\" property must be an net.BlockList. Received an instance of Object",
+    "code": "ERR_INVALID_ARG_TYPE"
+   }
+  },
+  {
+   "name": "sendBlockList number",
+   "code": "return fail(() => dgram.createSocket({ type: \"udp4\", sendBlockList: 1 }));",
+   "result": {
+    "name": "TypeError",
+    "message": "The \"options.sendBlockList\" property must be an net.BlockList. Received type number (1)",
+    "code": "ERR_INVALID_ARG_TYPE"
+   }
+  },
+  {
+   "name": "signal object",
+   "code": "return fail(() => dgram.createSocket({ type: \"udp4\", signal: {} }));",
+   "result": {
+    "name": "TypeError",
+    "message": "The \"options.signal\" property must be an instance of AbortSignal. Received an instance of Object",
+    "code": "ERR_INVALID_ARG_TYPE"
+   }
+  },
+  {
+   "name": "signal null",
+   "code": "return fail(() => dgram.createSocket({ type: \"udp4\", signal: null }));",
+   "result": {
+    "name": "TypeError",
+    "message": "The \"options.signal\" property must be an instance of AbortSignal. Received null",
+    "code": "ERR_INVALID_ARG_TYPE"
+   }
+  },
+  {
+   "name": "type property",
+   "code": "const a = dgram.createSocket(\"udp4\"), b = dgram.createSocket({ type: \"udp6\" }); return [a.type, b.type, a instanceof dgram.Socket, typeof a.on, typeof a.emit];",
+   "result": [
+    "udp4",
+    "udp6",
+    true,
+    "function",
+    "function"
+   ]
+  },
+  {
+   "name": "surface",
+   "code": "const p = dgram.Socket.prototype; return { keys: Object.keys(dgram), socket: [dgram.Socket.name, dgram.Socket.length], create: [dgram.createSocket.name, dgram.createSocket.length], methods: Object.getOwnPropertyNames(p).map(k => { const d = Object.getOwnPropertyDescriptor(p, k); return [k, d.enumerable, typeof d.value === \"function\" ? d.value.length : \"accessor\", typeof d.value === \"function\" ? d.value.name : \"\"]; }), dispose: typeof p[Symbol.asyncDispose] };",
+   "result": {
+    "keys": [
+     "_createSocketHandle",
+     "createSocket",
+     "Socket"
+    ],
+    "socket": [
+     "Socket",
+     2
+    ],
+    "create": [
+     "createSocket",
+     2
+    ],
+    "methods": [
+     [
+      "constructor",
+      false,
+      2,
+      "Socket"
+     ],
+     [
+      "bind",
+      true,
+      2,
+      ""
+     ],
+     [
+      "connect",
+      true,
+      3,
+      ""
+     ],
+     [
+      "disconnect",
+      true,
+      0,
+      ""
+     ],
+     [
+      "sendto",
+      true,
+      6,
+      ""
+     ],
+     [
+      "send",
+      true,
+      6,
+      ""
+     ],
+     [
+      "close",
+      true,
+      1,
+      ""
+     ],
+     [
+      "address",
+      true,
+      0,
+      ""
+     ],
+     [
+      "remoteAddress",
+      true,
+      0,
+      ""
+     ],
+     [
+      "setBroadcast",
+      true,
+      1,
+      ""
+     ],
+     [
+      "setTTL",
+      true,
+      1,
+      ""
+     ],
+     [
+      "setMulticastTTL",
+      true,
+      1,
+      ""
+     ],
+     [
+      "setMulticastLoopback",
+      true,
+      1,
+      ""
+     ],
+     [
+      "setMulticastInterface",
+      true,
+      1,
+      ""
+     ],
+     [
+      "addMembership",
+      true,
+      2,
+      ""
+     ],
+     [
+      "dropMembership",
+      true,
+      2,
+      ""
+     ],
+     [
+      "addSourceSpecificMembership",
+      true,
+      3,
+      ""
+     ],
+     [
+      "dropSourceSpecificMembership",
+      true,
+      3,
+      ""
+     ],
+     [
+      "ref",
+      true,
+      0,
+      ""
+     ],
+     [
+      "unref",
+      true,
+      0,
+      ""
+     ],
+     [
+      "setRecvBufferSize",
+      true,
+      1,
+      ""
+     ],
+     [
+      "setSendBufferSize",
+      true,
+      1,
+      ""
+     ],
+     [
+      "getRecvBufferSize",
+      true,
+      0,
+      ""
+     ],
+     [
+      "getSendBufferSize",
+      true,
+      0,
+      ""
+     ],
+     [
+      "getSendQueueSize",
+      true,
+      0,
+      ""
+     ],
+     [
+      "getSendQueueCount",
+      true,
+      0,
+      ""
+     ],
+     [
+      "_handle",
+      false,
+      "accessor",
+      ""
+     ],
+     [
+      "_receiving",
+      false,
+      "accessor",
+      ""
+     ],
+     [
+      "_bindState",
+      false,
+      "accessor",
+      ""
+     ],
+     [
+      "_queue",
+      false,
+      "accessor",
+      ""
+     ],
+     [
+      "_reuseAddr",
+      false,
+      "accessor",
+      ""
+     ],
+     [
+      "_healthCheck",
+      true,
+      0,
+      "deprecated"
+     ],
+     [
+      "_stopReceiving",
+      true,
+      0,
+      "deprecated"
+     ]
+    ],
+    "dispose": "function"
+   }
+  },
+  {
+   "name": "address before bind",
+   "code": "const s = dgram.createSocket(\"udp4\"); return fail(() => s.address());",
+   "result": {
+    "name": "Error",
+    "message": "getsockname EBADF",
+    "code": "EBADF",
+    "errno": -9,
+    "syscall": "getsockname"
+   }
+  },
+  {
+   "name": "remoteAddress unconnected",
+   "code": "const s = dgram.createSocket(\"udp4\"); return fail(() => s.remoteAddress());",
+   "result": {
+    "name": "Error",
+    "message": "Not connected",
+    "code": "ERR_SOCKET_DGRAM_NOT_CONNECTED"
+   }
+  },
+  {
+   "name": "disconnect unconnected",
+   "code": "const s = dgram.createSocket(\"udp4\"); return fail(() => s.disconnect());",
+   "result": {
+    "name": "Error",
+    "message": "Not connected",
+    "code": "ERR_SOCKET_DGRAM_NOT_CONNECTED"
+   }
+  },
+  {
+   "name": "setBroadcast before bind",
+   "code": "const s = dgram.createSocket(\"udp4\"); return fail(() => s.setBroadcast(true));",
+   "result": {
+    "name": "Error",
+    "message": "setBroadcast EBADF",
+    "code": "EBADF",
+    "errno": -9,
+    "syscall": "setBroadcast"
+   }
+  },
+  {
+   "name": "setTTL string",
+   "code": "const s = dgram.createSocket(\"udp4\"); return fail(() => s.setTTL(\"64\"));",
+   "result": {
+    "name": "TypeError",
+    "message": "The \"ttl\" argument must be of type number. Received type string ('64')",
+    "code": "ERR_INVALID_ARG_TYPE"
+   }
+  },
+  {
+   "name": "setTTL before bind",
+   "code": "const s = dgram.createSocket(\"udp4\"); return fail(() => s.setTTL(64));",
+   "result": {
+    "name": "Error",
+    "message": "setTTL EBADF",
+    "code": "EBADF",
+    "errno": -9,
+    "syscall": "setTTL"
+   }
+  },
+  {
+   "name": "setTTL 0 before bind",
+   "code": "const s = dgram.createSocket(\"udp4\"); return fail(() => s.setTTL(0));",
+   "result": {
+    "name": "Error",
+    "message": "setTTL EINVAL",
+    "code": "EINVAL",
+    "errno": -22,
+    "syscall": "setTTL"
+   }
+  },
+  {
+   "name": "setMulticastTTL string",
+   "code": "const s = dgram.createSocket(\"udp4\"); return fail(() => s.setMulticastTTL(\"1\"));",
+   "result": {
+    "name": "TypeError",
+    "message": "The \"ttl\" argument must be of type number. Received type string ('1')",
+    "code": "ERR_INVALID_ARG_TYPE"
+   }
+  },
+  {
+   "name": "setMulticastTTL before bind",
+   "code": "const s = dgram.createSocket(\"udp4\"); return fail(() => s.setMulticastTTL(1));",
+   "result": {
+    "name": "Error",
+    "message": "setMulticastTTL EBADF",
+    "code": "EBADF",
+    "errno": -9,
+    "syscall": "setMulticastTTL"
+   }
+  },
+  {
+   "name": "setMulticastLoopback before bind",
+   "code": "const s = dgram.createSocket(\"udp4\"); return fail(() => s.setMulticastLoopback(true));",
+   "result": {
+    "name": "Error",
+    "message": "setMulticastLoopback EBADF",
+    "code": "EBADF",
+    "errno": -9,
+    "syscall": "setMulticastLoopback"
+   }
+  },
+  {
+   "name": "setMulticastInterface number",
+   "code": "const s = dgram.createSocket(\"udp4\"); return fail(() => s.setMulticastInterface(1));",
+   "result": {
+    "name": "TypeError",
+    "message": "The \"interfaceAddress\" argument must be of type string. Received type number (1)",
+    "code": "ERR_INVALID_ARG_TYPE"
+   }
+  },
+  {
+   "name": "setMulticastInterface before bind",
+   "code": "const s = dgram.createSocket(\"udp4\"); return fail(() => s.setMulticastInterface(\"127.0.0.1\"));",
+   "result": {
+    "name": "Error",
+    "message": "setMulticastInterface EBADF",
+    "code": "EBADF",
+    "errno": -9,
+    "syscall": "setMulticastInterface"
+   }
+  },
+  {
+   "name": "setMulticastInterface not an address",
+   "code": "const s = dgram.createSocket(\"udp4\"); return fail(() => s.setMulticastInterface(\"nope\"));",
+   "result": {
+    "name": "Error",
+    "message": "setMulticastInterface EINVAL",
+    "code": "EINVAL",
+    "errno": -22,
+    "syscall": "setMulticastInterface"
+   }
+  },
+  {
+   "name": "addMembership()",
+   "code": "const s = dgram.createSocket(\"udp4\"); return fail(() => s.addMembership());",
+   "result": {
+    "name": "TypeError",
+    "message": "The \"multicastAddress\" argument must be specified",
+    "code": "ERR_MISSING_ARGS"
+   }
+  },
+  {
+   "name": "dropMembership('')",
+   "code": "const s = dgram.createSocket(\"udp4\"); return fail(() => s.dropMembership(\"\"));",
+   "result": {
+    "name": "TypeError",
+    "message": "The \"multicastAddress\" argument must be specified",
+    "code": "ERR_MISSING_ARGS"
+   }
+  },
+  {
+   "name": "addMembership not an address",
+   "code": "const s = dgram.createSocket(\"udp4\"); return fail(() => s.addMembership(\"nope\"));",
+   "result": {
+    "name": "Error",
+    "message": "addMembership EINVAL",
+    "code": "EINVAL",
+    "errno": -22,
+    "syscall": "addMembership"
+   }
+  },
+  {
+   "name": "dropMembership not an address",
+   "code": "const s = dgram.createSocket(\"udp4\"); return fail(() => s.dropMembership(\"nope\", \"127.0.0.1\"));",
+   "result": {
+    "name": "Error",
+    "message": "dropMembership EINVAL",
+    "code": "EINVAL",
+    "errno": -22,
+    "syscall": "dropMembership"
+   }
+  },
+  {
+   "name": "addSourceSpecificMembership(1)",
+   "code": "const s = dgram.createSocket(\"udp4\"); return fail(() => s.addSourceSpecificMembership(1, \"232.1.1.1\"));",
+   "result": {
+    "name": "TypeError",
+    "message": "The \"sourceAddress\" argument must be of type string. Received type number (1)",
+    "code": "ERR_INVALID_ARG_TYPE"
+   }
+  },
+  {
+   "name": "addSourceSpecificMembership group",
+   "code": "const s = dgram.createSocket(\"udp4\"); return fail(() => s.addSourceSpecificMembership(\"10.0.0.1\", 2));",
+   "result": {
+    "name": "TypeError",
+    "message": "The \"groupAddress\" argument must be of type string. Received type number (2)",
+    "code": "ERR_INVALID_ARG_TYPE"
+   }
+  },
+  {
+   "name": "dropSourceSpecificMembership()",
+   "code": "const s = dgram.createSocket(\"udp4\"); return fail(() => s.dropSourceSpecificMembership());",
+   "result": {
+    "name": "TypeError",
+    "message": "The \"sourceAddress\" argument must be of type string. Received undefined",
+    "code": "ERR_INVALID_ARG_TYPE"
+   }
+  },
+  {
+   "name": "addSourceSpecificMembership not an address",
+   "code": "const s = dgram.createSocket(\"udp4\"); return fail(() => s.addSourceSpecificMembership(\"nope\", \"232.1.1.1\"));",
+   "result": {
+    "name": "Error",
+    "message": "addSourceSpecificMembership EINVAL",
+    "code": "EINVAL",
+    "errno": -22,
+    "syscall": "addSourceSpecificMembership"
+   }
+  },
+  {
+   "name": "setRecvBufferSize -1",
+   "code": "const s = dgram.createSocket(\"udp4\"); return fail(() => s.setRecvBufferSize(-1));",
+   "result": {
+    "name": "TypeError",
+    "message": "Buffer size must be a positive integer",
+    "code": "ERR_SOCKET_BAD_BUFFER_SIZE"
+   }
+  },
+  {
+   "name": "setSendBufferSize string",
+   "code": "const s = dgram.createSocket(\"udp4\"); return fail(() => s.setSendBufferSize(\"x\"));",
+   "result": {
+    "name": "TypeError",
+    "message": "Buffer size must be a positive integer",
+    "code": "ERR_SOCKET_BAD_BUFFER_SIZE"
+   }
+  },
+  {
+   "name": "setRecvBufferSize before bind",
+   "code": "const s = dgram.createSocket(\"udp4\"); const e = fail(() => s.setRecvBufferSize(1024)); return e;",
+   "result": {
+    "name": "SystemError",
+    "message": "Could not get or set buffer size: uv_recv_buffer_size returned EBADF (bad file descriptor)",
+    "code": "ERR_SOCKET_BUFFER_SIZE",
+    "errno": -9,
+    "syscall": "uv_recv_buffer_size"
+   }
+  },
+  {
+   "name": "setSendBufferSize before bind",
+   "code": "const s = dgram.createSocket(\"udp4\"); return fail(() => s.setSendBufferSize(1024));",
+   "result": {
+    "name": "SystemError",
+    "message": "Could not get or set buffer size: uv_send_buffer_size returned EBADF (bad file descriptor)",
+    "code": "ERR_SOCKET_BUFFER_SIZE",
+    "errno": -9,
+    "syscall": "uv_send_buffer_size"
+   }
+  },
+  {
+   "name": "getRecvBufferSize before bind",
+   "code": "const s = dgram.createSocket(\"udp4\"); return fail(() => s.getRecvBufferSize());",
+   "result": {
+    "name": "SystemError",
+    "message": "Could not get or set buffer size: uv_recv_buffer_size returned EBADF (bad file descriptor)",
+    "code": "ERR_SOCKET_BUFFER_SIZE",
+    "errno": -9,
+    "syscall": "uv_recv_buffer_size"
+   }
+  },
+  {
+   "name": "getSendBufferSize before bind",
+   "code": "const s = dgram.createSocket(\"udp4\"); return fail(() => s.getSendBufferSize());",
+   "result": {
+    "name": "SystemError",
+    "message": "Could not get or set buffer size: uv_send_buffer_size returned EBADF (bad file descriptor)",
+    "code": "ERR_SOCKET_BUFFER_SIZE",
+    "errno": -9,
+    "syscall": "uv_send_buffer_size"
+   }
+  },
+  {
+   "name": "send queue idle",
+   "code": "const s = dgram.createSocket(\"udp4\"); return [s.getSendQueueSize(), s.getSendQueueCount()];",
+   "result": [
+    0,
+    0
+   ]
+  },
+  {
+   "name": "send()",
+   "code": "const s = dgram.createSocket(\"udp4\"); return fail(() => s.send());",
+   "result": {
+    "name": "TypeError",
+    "message": "The \"buffer\" argument must be of type string or an instance of Buffer, TypedArray, or DataView. Received undefined",
+    "code": "ERR_INVALID_ARG_TYPE"
+   }
+  },
+  {
+   "name": "send(number)",
+   "code": "const s = dgram.createSocket(\"udp4\"); return fail(() => s.send(1, 1234, \"localhost\"));",
+   "result": {
+    "name": "TypeError",
+    "message": "The \"buffer\" argument must be of type string or an instance of Buffer, TypedArray, or DataView. Received type number (1)",
+    "code": "ERR_INVALID_ARG_TYPE"
+   }
+  },
+  {
+   "name": "send without port",
+   "code": "const s = dgram.createSocket(\"udp4\"); return fail(() => s.send(\"x\"));",
+   "result": {
+    "name": "RangeError",
+    "message": "Port should be > 0 and < 65536. Received undefined.",
+    "code": "ERR_SOCKET_BAD_PORT"
+   }
+  },
+  {
+   "name": "send port 0",
+   "code": "const s = dgram.createSocket(\"udp4\"); return fail(() => s.send(\"x\", 0));",
+   "result": {
+    "name": "RangeError",
+    "message": "Port should be > 0 and < 65536. Received type number (0).",
+    "code": "ERR_SOCKET_BAD_PORT"
+   }
+  },
+  {
+   "name": "send port 65536",
+   "code": "const s = dgram.createSocket(\"udp4\"); return fail(() => s.send(\"x\", 65536));",
+   "result": {
+    "name": "RangeError",
+    "message": "Port should be > 0 and < 65536. Received type number (65536).",
+    "code": "ERR_SOCKET_BAD_PORT"
+   }
+  },
+  {
+   "name": "send port text",
+   "code": "const s = dgram.createSocket(\"udp4\"); return fail(() => s.send(\"x\", \"80a\"));",
+   "result": {
+    "name": "RangeError",
+    "message": "Port should be > 0 and < 65536. Received type string ('80a').",
+    "code": "ERR_SOCKET_BAD_PORT"
+   }
+  },
+  {
+   "name": "send port callback only",
+   "code": "const s = dgram.createSocket(\"udp4\"); return fail(() => s.send(\"x\", () => {}));",
+   "result": {
+    "name": "RangeError",
+    "message": "Port should be > 0 and < 65536. Received function .",
+    "code": "ERR_SOCKET_BAD_PORT"
+   }
+  },
+  {
+   "name": "send list with a number",
+   "code": "const s = dgram.createSocket(\"udp4\"); return fail(() => s.send([1], 1234));",
+   "result": {
+    "name": "TypeError",
+    "message": "The \"buffer list arguments\" argument must be of type string or an instance of Buffer, TypedArray, or DataView. Received an instance of Array",
+    "code": "ERR_INVALID_ARG_TYPE"
+   }
+  },
+  {
+   "name": "send offset beyond",
+   "code": "const s = dgram.createSocket(\"udp4\"); return fail(() => s.send(Buffer.alloc(4), 5, 1, 1234, \"localhost\"));",
+   "result": {
+    "name": "RangeError",
+    "message": "\"offset\" is outside of buffer bounds",
+    "code": "ERR_BUFFER_OUT_OF_BOUNDS"
+   }
+  },
+  {
+   "name": "send length beyond",
+   "code": "const s = dgram.createSocket(\"udp4\"); return fail(() => s.send(Buffer.alloc(4), 2, 3, 1234, \"localhost\"));",
+   "result": {
+    "name": "RangeError",
+    "message": "\"length\" is outside of buffer bounds",
+    "code": "ERR_BUFFER_OUT_OF_BOUNDS"
+   }
+  },
+  {
+   "name": "send sliced non-buffer",
+   "code": "const s = dgram.createSocket(\"udp4\"); return fail(() => s.send({}, 0, 1, 1234, \"localhost\"));",
+   "result": {
+    "name": "TypeError",
+    "message": "The \"buffer\" argument must be of type string or an instance of Buffer, TypedArray, or DataView. Received an instance of Object",
+    "code": "ERR_INVALID_ARG_TYPE"
+   }
+  },
+  {
+   "name": "send address number",
+   "code": "const s = dgram.createSocket(\"udp4\"); return fail(() => s.send(\"x\", 1234, 5));",
+   "result": {
+    "name": "TypeError",
+    "message": "The \"address\" argument must be of type string. Received type number (5)",
+    "code": "ERR_INVALID_ARG_TYPE"
+   }
+  },
+  {
+   "name": "sendto offset",
+   "code": "const s = dgram.createSocket(\"udp4\"); return fail(() => s.sendto(\"x\", \"a\", 1, 1, \"h\"));",
+   "result": {
+    "name": "TypeError",
+    "message": "The \"offset\" argument must be of type number. Received type string ('a')",
+    "code": "ERR_INVALID_ARG_TYPE"
+   }
+  },
+  {
+   "name": "sendto length",
+   "code": "const s = dgram.createSocket(\"udp4\"); return fail(() => s.sendto(\"x\", 0));",
+   "result": {
+    "name": "TypeError",
+    "message": "The \"length\" argument must be of type number. Received undefined",
+    "code": "ERR_INVALID_ARG_TYPE"
+   }
+  },
+  {
+   "name": "sendto port",
+   "code": "const s = dgram.createSocket(\"udp4\"); return fail(() => s.sendto(\"x\", 0, 1, \"9\", \"h\"));",
+   "result": {
+    "name": "TypeError",
+    "message": "The \"port\" argument must be of type number. Received type string ('9')",
+    "code": "ERR_INVALID_ARG_TYPE"
+   }
+  },
+  {
+   "name": "sendto address",
+   "code": "const s = dgram.createSocket(\"udp4\"); return fail(() => s.sendto(\"x\", 0, 1, 9));",
+   "result": {
+    "name": "TypeError",
+    "message": "The \"address\" argument must be of type string. Received undefined",
+    "code": "ERR_INVALID_ARG_TYPE"
+   }
+  },
+  {
+   "name": "connect()",
+   "code": "const s = dgram.createSocket(\"udp4\"); return fail(() => s.connect());",
+   "result": {
+    "name": "RangeError",
+    "message": "Port should be > 0 and < 65536. Received undefined.",
+    "code": "ERR_SOCKET_BAD_PORT"
+   }
+  },
+  {
+   "name": "connect(0)",
+   "code": "const s = dgram.createSocket(\"udp4\"); return fail(() => s.connect(0));",
+   "result": {
+    "name": "RangeError",
+    "message": "Port should be > 0 and < 65536. Received type number (0).",
+    "code": "ERR_SOCKET_BAD_PORT"
+   }
+  },
+  {
+   "name": "connect address number",
+   "code": "const s = dgram.createSocket(\"udp4\"); return fail(() => s.connect(1234, 5));",
+   "result": {
+    "name": "TypeError",
+    "message": "The \"address\" argument must be of type string. Received type number (5)",
+    "code": "ERR_INVALID_ARG_TYPE"
+   }
+  },
+  {
+   "name": "connect twice",
+   "code": "const s = dgram.createSocket(\"udp4\"); s.connect(1234, \"127.0.0.1\"); const e = fail(() => s.connect(1234, \"127.0.0.1\")); await closed(s); return e;",
+   "result": {
+    "name": "Error",
+    "message": "Already connected",
+    "code": "ERR_SOCKET_DGRAM_IS_CONNECTED"
+   }
+  },
+  {
+   "name": "bind twice",
+   "code": "const s = dgram.createSocket(\"udp4\"); s.bind(0, \"127.0.0.1\"); const e = fail(() => s.bind(0, \"127.0.0.1\")); await closed(s); return e;",
+   "result": {
+    "name": "Error",
+    "message": "Socket is already bound",
+    "code": "ERR_SOCKET_ALREADY_BOUND"
+   }
+  },
+  {
+   "name": "bind after listening",
+   "code": "const s = await bound(); const e = fail(() => s.bind(0)); await closed(s); return e;",
+   "result": {
+    "name": "Error",
+    "message": "Socket is already bound",
+    "code": "ERR_SOCKET_ALREADY_BOUND"
+   }
+  },
+  {
+   "name": "bind returns this",
+   "code": "const s = dgram.createSocket(\"udp4\"); const same = s.bind(0, \"127.0.0.1\") === s; const also = s.close() === s; await once(s, \"close\"); return [same, also];",
+   "result": [
+    true,
+    true
+   ]
+  },
+  {
+   "name": "closed: address",
+   "code": "const s = await bound(); await closed(s); return fail(() => s.address());",
+   "result": {
+    "name": "Error",
+    "message": "Not running",
+    "code": "ERR_SOCKET_DGRAM_NOT_RUNNING"
+   }
+  },
+  {
+   "name": "closed: bind",
+   "code": "const s = dgram.createSocket(\"udp4\"); s.close(); return fail(() => s.bind(0));",
+   "result": {
+    "name": "Error",
+    "message": "Not running",
+    "code": "ERR_SOCKET_DGRAM_NOT_RUNNING"
+   }
+  },
+  {
+   "name": "closed: send",
+   "code": "const s = dgram.createSocket(\"udp4\"); s.close(); return fail(() => s.send(\"x\", 1234, \"127.0.0.1\"));",
+   "result": {
+    "name": "Error",
+    "message": "Not running",
+    "code": "ERR_SOCKET_DGRAM_NOT_RUNNING"
+   }
+  },
+  {
+   "name": "closed: send validates first",
+   "code": "const s = dgram.createSocket(\"udp4\"); s.close(); return fail(() => s.send(\"x\", 0));",
+   "result": {
+    "name": "RangeError",
+    "message": "Port should be > 0 and < 65536. Received type number (0).",
+    "code": "ERR_SOCKET_BAD_PORT"
+   }
+  },
+  {
+   "name": "closed: close",
+   "code": "const s = dgram.createSocket(\"udp4\"); s.close(); return fail(() => s.close());",
+   "result": {
+    "name": "Error",
+    "message": "Not running",
+    "code": "ERR_SOCKET_DGRAM_NOT_RUNNING"
+   }
+  },
+  {
+   "name": "closed: remoteAddress",
+   "code": "const s = dgram.createSocket(\"udp4\"); s.close(); return fail(() => s.remoteAddress());",
+   "result": {
+    "name": "Error",
+    "message": "Not running",
+    "code": "ERR_SOCKET_DGRAM_NOT_RUNNING"
+   }
+  },
+  {
+   "name": "closed: setMulticastInterface",
+   "code": "const s = dgram.createSocket(\"udp4\"); s.close(); return fail(() => s.setMulticastInterface(\"127.0.0.1\"));",
+   "result": {
+    "name": "Error",
+    "message": "Not running",
+    "code": "ERR_SOCKET_DGRAM_NOT_RUNNING"
+   }
+  },
+  {
+   "name": "closed: addMembership",
+   "code": "const s = dgram.createSocket(\"udp4\"); s.close(); return fail(() => s.addMembership(\"224.0.0.114\"));",
+   "result": {
+    "name": "Error",
+    "message": "Not running",
+    "code": "ERR_SOCKET_DGRAM_NOT_RUNNING"
+   }
+  },
+  {
+   "name": "closed: addSourceSpecificMembership",
+   "code": "const s = dgram.createSocket(\"udp4\"); s.close(); return fail(() => s.addSourceSpecificMembership(1, 2));",
+   "result": {
+    "name": "Error",
+    "message": "Not running",
+    "code": "ERR_SOCKET_DGRAM_NOT_RUNNING"
+   }
+  },
+  {
+   "name": "closed: setBroadcast",
+   "code": "const s = dgram.createSocket(\"udp4\"); s.close(); return fail(() => s.setBroadcast(true));",
+   "result": {
+    "name": "TypeError",
+    "message": "Cannot read properties of null (reading 'setBroadcast')"
+   }
+  },
+  {
+   "name": "closed: setTTL",
+   "code": "const s = dgram.createSocket(\"udp4\"); s.close(); return fail(() => s.setTTL(1));",
+   "result": {
+    "name": "TypeError",
+    "message": "Cannot read properties of null (reading 'setTTL')"
+   }
+  },
+  {
+   "name": "closed: setMulticastTTL",
+   "code": "const s = dgram.createSocket(\"udp4\"); s.close(); return fail(() => s.setMulticastTTL(1));",
+   "result": {
+    "name": "TypeError",
+    "message": "Cannot read properties of null (reading 'setMulticastTTL')"
+   }
+  },
+  {
+   "name": "closed: setMulticastLoopback",
+   "code": "const s = dgram.createSocket(\"udp4\"); s.close(); return fail(() => s.setMulticastLoopback(1));",
+   "result": {
+    "name": "TypeError",
+    "message": "Cannot read properties of null (reading 'setMulticastLoopback')"
+   }
+  },
+  {
+   "name": "closed: setRecvBufferSize",
+   "code": "const s = dgram.createSocket(\"udp4\"); s.close(); return fail(() => s.setRecvBufferSize(1024));",
+   "result": {
+    "name": "TypeError",
+    "message": "Cannot read properties of null (reading 'bufferSize')"
+   }
+  },
+  {
+   "name": "closed: getSendQueueSize",
+   "code": "const s = dgram.createSocket(\"udp4\"); s.close(); return fail(() => s.getSendQueueSize());",
+   "result": {
+    "name": "TypeError",
+    "message": "Cannot read properties of null (reading 'getSendQueueSize')"
+   }
+  },
+  {
+   "name": "closed: connect",
+   "code": "const s = dgram.createSocket(\"udp4\"); s.close(); return fail(() => s.connect(1234));",
+   "result": {
+    "name": "Error",
+    "message": "Not running",
+    "code": "ERR_SOCKET_DGRAM_NOT_RUNNING"
+   }
+  },
+  {
+   "name": "closed: disconnect",
+   "code": "const s = dgram.createSocket(\"udp4\"); s.close(); return fail(() => s.disconnect());",
+   "result": {
+    "name": "Error",
+    "message": "Not connected",
+    "code": "ERR_SOCKET_DGRAM_NOT_CONNECTED"
+   }
+  },
+  {
+   "name": "closed: ref and unref",
+   "code": "const s = dgram.createSocket(\"udp4\"); s.close(); return [s.ref() === s, s.unref() === s];",
+   "result": [
+    true,
+    true
+   ]
+  },
+  {
+   "name": "ref and unref return this",
+   "code": "const s = dgram.createSocket(\"udp4\"); return [s.ref() === s, s.unref() === s];",
+   "result": [
+    true,
+    true
+   ]
+  },
+  {
+   "name": "bound: address",
+   "code": "const s = await bound(); const a = s.address(); await closed(s); return [Object.keys(a), a.address, a.family, typeof a.port, a.port > 0];",
+   "result": [
+    [
+     "address",
+     "family",
+     "port"
+    ],
+    "127.0.0.1",
+    "IPv4",
+    "number",
+    true
+   ]
+  },
+  {
+   "name": "bound: default address",
+   "code": "const s = dgram.createSocket(\"udp4\"); s.bind(); await once(s, \"listening\"); const a = s.address(); await closed(s); return [a.address, a.family, a.port > 0];",
+   "result": [
+    "0.0.0.0",
+    "IPv4",
+    true
+   ]
+  },
+  {
+   "name": "bound: options form",
+   "code": "const s = dgram.createSocket(\"udp4\"); s.bind({ port: 0, address: \"127.0.0.1\", exclusive: true }); await once(s, \"listening\"); const a = s.address(); await closed(s); return [a.address, a.family];",
+   "result": [
+    "127.0.0.1",
+    "IPv4"
+   ]
+  },
+  {
+   "name": "bound: setters",
+   "code": "const s = await bound(); const r = [fail(() => s.setBroadcast(true)), s.setTTL(64), s.setMulticastTTL(2), s.setMulticastLoopback(false), s.setMulticastLoopback(\"yes\"), fail(() => s.setRecvBufferSize(8192)), fail(() => s.setSendBufferSize(8192)), fail(() => s.setRecvBufferSize(0))]; await closed(s); return r;",
+   "result": [
+    {
+     "returned": "undefined"
+    },
+    64,
+    2,
+    false,
+    "yes",
+    {
+     "returned": "undefined"
+    },
+    {
+     "returned": "undefined"
+    },
+    {
+     "returned": "undefined"
+    }
+   ]
+  },
+  {
+   "name": "bound: setTTL range",
+   "code": "const s = await bound(); const r = [fail(() => s.setTTL(0)), fail(() => s.setTTL(256)), fail(() => s.setTTL(-1)), s.setTTL(1.9), s.setTTL(255)]; await closed(s); return r;",
+   "result": [
+    {
+     "name": "Error",
+     "message": "setTTL EINVAL",
+     "code": "EINVAL",
+     "errno": -22,
+     "syscall": "setTTL"
+    },
+    {
+     "name": "Error",
+     "message": "setTTL EINVAL",
+     "code": "EINVAL",
+     "errno": -22,
+     "syscall": "setTTL"
+    },
+    {
+     "name": "Error",
+     "message": "setTTL EINVAL",
+     "code": "EINVAL",
+     "errno": -22,
+     "syscall": "setTTL"
+    },
+    1.9,
+    255
+   ]
+  },
+  {
+   "name": "bound: setMulticastInterface",
+   "code": "const s = await bound(); const r = [fail(() => s.setMulticastInterface(\"127.0.0.1\")), fail(() => s.setMulticastInterface(\"nope\")), fail(() => s.setMulticastInterface(\"::1\"))]; await closed(s); return r;",
+   "result": [
+    {
+     "returned": "undefined"
+    },
+    {
+     "name": "Error",
+     "message": "setMulticastInterface EINVAL",
+     "code": "EINVAL",
+     "errno": -22,
+     "syscall": "setMulticastInterface"
+    },
+    {
+     "name": "Error",
+     "message": "setMulticastInterface ENOPROTOOPT",
+     "code": "ENOPROTOOPT",
+     "errno": -92,
+     "syscall": "setMulticastInterface"
+    }
+   ]
+  },
+  {
+   "name": "bound: membership not an address",
+   "code": "const s = await bound(); const r = [fail(() => s.addMembership(\"nope\")), fail(() => s.dropMembership(\"nope\")), fail(() => s.addSourceSpecificMembership(\"nope\", \"232.1.1.1\")), fail(() => s.dropSourceSpecificMembership(\"10.0.0.1\", \"nope\"))]; await closed(s); return r;",
+   "result": [
+    {
+     "name": "Error",
+     "message": "addMembership EINVAL",
+     "code": "EINVAL",
+     "errno": -22,
+     "syscall": "addMembership"
+    },
+    {
+     "name": "Error",
+     "message": "dropMembership EINVAL",
+     "code": "EINVAL",
+     "errno": -22,
+     "syscall": "dropMembership"
+    },
+    {
+     "name": "Error",
+     "message": "addSourceSpecificMembership EINVAL",
+     "code": "EINVAL",
+     "errno": -22,
+     "syscall": "addSourceSpecificMembership"
+    },
+    {
+     "name": "Error",
+     "message": "dropSourceSpecificMembership EINVAL",
+     "code": "EINVAL",
+     "errno": -22,
+     "syscall": "dropSourceSpecificMembership"
+    }
+   ]
+  },
+  {
+   "name": "bound: remoteAddress and disconnect",
+   "code": "const s = await bound(); const r = [fail(() => s.remoteAddress()), fail(() => s.disconnect())]; await closed(s); return r;",
+   "result": [
+    {
+     "name": "Error",
+     "message": "Not connected",
+     "code": "ERR_SOCKET_DGRAM_NOT_CONNECTED"
+    },
+    {
+     "name": "Error",
+     "message": "Not connected",
+     "code": "ERR_SOCKET_DGRAM_NOT_CONNECTED"
+    }
+   ]
+  },
+  {
+   "name": "bound: bad buffer size",
+   "code": "const s = await bound(); const r = [fail(() => s.setRecvBufferSize(-1)), fail(() => s.setSendBufferSize(1.5)), fail(() => s.setSendBufferSize(2 ** 32))]; await closed(s); return r;",
+   "result": [
+    {
+     "name": "TypeError",
+     "message": "Buffer size must be a positive integer",
+     "code": "ERR_SOCKET_BAD_BUFFER_SIZE"
+    },
+    {
+     "name": "TypeError",
+     "message": "Buffer size must be a positive integer",
+     "code": "ERR_SOCKET_BAD_BUFFER_SIZE"
+    },
+    {
+     "name": "TypeError",
+     "message": "Buffer size must be a positive integer",
+     "code": "ERR_SOCKET_BAD_BUFFER_SIZE"
+    }
+   ]
+  },
+  {
+   "name": "udp6: address",
+   "code": "const s = dgram.createSocket(\"udp6\"); s.bind(0, \"::1\"); await once(s, \"listening\"); const a = s.address(); await closed(s); return [a.address, a.family, a.port > 0];",
+   "result": [
+    "::1",
+    "IPv6",
+    true
+   ]
+  },
+  {
+   "name": "udp6: default address",
+   "code": "const s = dgram.createSocket(\"udp6\"); s.bind(); await once(s, \"listening\"); const a = s.address(); await closed(s); return [a.address, a.family];",
+   "result": [
+    "::",
+    "IPv6"
+   ]
+  },
+  {
+   "name": "udp6: bind an IPv4 address",
+   "code": "const s = dgram.createSocket(\"udp6\"); const failed = once(s, \"error\"); s.bind(0, \"127.0.0.1\"); const [e] = await failed; const again = fail(() => s.bind(0, \"::1\")); await once(s, \"listening\"); await closed(s); return [shape(e), again];",
+   "result": [
+    {
+     "name": "Error",
+     "message": "bind EINVAL 127.0.0.1",
+     "code": "EINVAL",
+     "errno": -22,
+     "syscall": "bind",
+     "address": "127.0.0.1"
+    },
+    {
+     "returned": "value"
+    }
+   ]
+  },
+  {
+   "name": "udp4: bind an IPv6 address",
+   "code": "const s = dgram.createSocket(\"udp4\"); const failed = once(s, \"error\"); s.bind(0, \"::1\"); const [e] = await failed; await closed(s); return shape(e);",
+   "result": {
+    "name": "Error",
+    "message": "bind EINVAL ::1",
+    "code": "EINVAL",
+    "errno": -22,
+    "syscall": "bind",
+    "address": "::1"
+   }
+  }
+ ],
+ "scenarios": [
+  {
+   "name": "echo",
+   "code": "\n    const log = [], server = dgram.createSocket(\"udp4\"), client = dgram.createSocket(\"udp4\");\n    server.on(\"listening\", () => log.push(\"server listening\")); server.on(\"close\", () => log.push(\"server close\"));\n    client.on(\"listening\", () => { const a = client.address(); log.push(\"client listening \" + a.address + \" \" + a.family); }); client.on(\"close\", () => log.push(\"client close\"));\n    const done = new Promise(resolve => client.on(\"message\", (msg, rinfo) => { log.push([\"client message\", msg.toString(), Buffer.isBuffer(msg), Object.keys(rinfo), rinfo.address, rinfo.family, rinfo.port === server.address().port, rinfo.size]); resolve(); }));\n    server.on(\"message\", (msg, rinfo) => { log.push([\"server message\", msg.toString(), rinfo.address, rinfo.family, rinfo.port === client.address().port, rinfo.size]); server.send(\"pong:\" + msg, rinfo.port, rinfo.address, (error, bytes) => log.push([\"server sent\", error, bytes])); });\n    server.bind(0, \"127.0.0.1\", function () { log.push(\"server bind callback \" + (this === server)); });\n    await once(server, \"listening\");\n    log.push(\"sending\");\n    client.send(\"ping\", server.address().port, \"127.0.0.1\", function (error, bytes) { log.push([\"client sent\", error, bytes, this === client]); });\n    log.push(\"send returned\");\n    await done; await turn();\n    client.close(() => log.push(\"client close callback\")); log.push(\"client close returned\");\n    await once(client, \"close\");\n    server.close(); await once(server, \"close\");\n    return log;",
+   "result": [
+    "server listening",
+    "server bind callback true",
+    "sending",
+    "send returned",
+    "client listening 0.0.0.0 IPv4",
+    [
+     "client sent",
+     null,
+     4,
+     false
+    ],
+    [
+     "server message",
+     "ping",
+     "127.0.0.1",
+     "IPv4",
+     true,
+     4
+    ],
+    [
+     "server sent",
+     null,
+     9
+    ],
+    [
+     "client message",
+     "pong:ping",
+     true,
+     [
+      "address",
+      "family",
+      "port",
+      "size"
+     ],
+     "127.0.0.1",
+     "IPv4",
+     true,
+     9
+    ],
+    "client close returned",
+    "client close",
+    "client close callback",
+    "server close"
+   ],
+   "routed": false
+  },
+  {
+   "name": "ordering of three datagrams",
+   "code": "\n    const log = [], server = await bound(), client = dgram.createSocket(\"udp4\");\n    const got = new Promise(resolve => server.on(\"message\", msg => { log.push(msg.toString()); if (log.length === 3) resolve(); }));\n    for (const text of [\"one\", \"two\", \"three\"]) client.send(text, server.address().port, \"127.0.0.1\");\n    await got; await closed(client); await closed(server); return log;",
+   "result": [
+    "one",
+    "two",
+    "three"
+   ],
+   "routed": false
+  },
+  {
+   "name": "send overloads",
+   "code": "\n    const log = [], server = await bound(), client = await bound(), port = server.address().port;\n    const next = () => new Promise(resolve => server.once(\"message\", (msg, rinfo) => resolve([msg.toString(\"latin1\"), rinfo.size])));\n    const sent = async run => { const arrived = next(); const callback = new Promise(resolve => run((error, bytes) => resolve([error, bytes]))); log.push([await arrived, await callback]); };\n    await sent(cb => client.send(\"string\", port, \"127.0.0.1\", cb));\n    await sent(cb => client.send(Buffer.from(\"buffer\"), port, \"127.0.0.1\", cb));\n    await sent(cb => client.send(Buffer.from(\"0123456789\"), 2, 5, port, \"127.0.0.1\", cb));\n    await sent(cb => client.send(\"0123456789\", 2, 5, port, \"127.0.0.1\", cb));\n    await sent(cb => client.send(new Uint8Array([104, 105]), port, \"127.0.0.1\", cb));\n    await sent(cb => client.send(new DataView(new Uint8Array([111, 107]).buffer), port, \"127.0.0.1\", cb));\n    await sent(cb => client.send(new Uint16Array([0x6261, 0x6463]), port, \"127.0.0.1\", cb));\n    await sent(cb => client.send([\"a\", Buffer.from(\"b\"), new Uint8Array([99])], port, \"127.0.0.1\", cb));\n    await sent(cb => client.send([], port, \"127.0.0.1\", cb));\n    await sent(cb => client.send(\"\", port, \"127.0.0.1\", cb));\n    await sent(cb => client.send(\"no address\", port, cb));\n    await sent(cb => client.send(\"null address\", port, null, cb));\n    await sent(cb => client.sendto(\"sendto\", 0, 4, port, \"127.0.0.1\", cb));\n    await closed(client); await closed(server); return log;",
+   "result": [
+    [
+     [
+      "string",
+      6
+     ],
+     [
+      null,
+      6
+     ]
+    ],
+    [
+     [
+      "buffer",
+      6
+     ],
+     [
+      null,
+      6
+     ]
+    ],
+    [
+     [
+      "23456",
+      5
+     ],
+     [
+      null,
+      5
+     ]
+    ],
+    [
+     [
+      "23456",
+      5
+     ],
+     [
+      null,
+      5
+     ]
+    ],
+    [
+     [
+      "hi",
+      2
+     ],
+     [
+      null,
+      2
+     ]
+    ],
+    [
+     [
+      "ok",
+      2
+     ],
+     [
+      null,
+      2
+     ]
+    ],
+    [
+     [
+      "abcd",
+      4
+     ],
+     [
+      null,
+      4
+     ]
+    ],
+    [
+     [
+      "abc",
+      3
+     ],
+     [
+      null,
+      3
+     ]
+    ],
+    [
+     [
+      "",
+      0
+     ],
+     [
+      null,
+      0
+     ]
+    ],
+    [
+     [
+      "",
+      0
+     ],
+     [
+      null,
+      0
+     ]
+    ],
+    [
+     [
+      "no address",
+      10
+     ],
+     [
+      null,
+      10
+     ]
+    ],
+    [
+     [
+      "null address",
+      12
+     ],
+     [
+      null,
+      12
+     ]
+    ],
+    [
+     [
+      "send",
+      4
+     ],
+     [
+      null,
+      4
+     ]
+    ]
+   ],
+   "routed": false
+  },
+  {
+   "name": "implicit bind on first send",
+   "code": "\n    const log = [], server = await bound(), client = dgram.createSocket(\"udp4\");\n    client.on(\"listening\", () => { const a = client.address(); log.push([\"listening\", a.address, a.family, a.port > 0]); });\n    const arrived = once(server, \"message\");\n    client.send(\"first\", server.address().port, \"127.0.0.1\", error => log.push([\"first sent\", error]));\n    client.send(\"second\", server.address().port, \"127.0.0.1\", error => log.push([\"second sent\", error]));\n    log.push(\"queued\");\n    log.push(fail(() => client.bind(0)));\n    const [msg] = await arrived; log.push(msg.toString()); await turn();\n    await closed(client); await closed(server); return log;",
+   "result": [
+    "queued",
+    {
+     "name": "Error",
+     "message": "Socket is already bound",
+     "code": "ERR_SOCKET_ALREADY_BOUND"
+    },
+    [
+     "listening",
+     "0.0.0.0",
+     "IPv4",
+     true
+    ],
+    [
+     "first sent",
+     null
+    ],
+    [
+     "second sent",
+     null
+    ],
+    "first"
+   ],
+   "routed": false
+  },
+  {
+   "name": "connect, send, disconnect",
+   "code": "\n    const log = [], server = await bound(), client = dgram.createSocket(\"udp4\"), port = server.address().port;\n    client.on(\"connect\", () => log.push(\"connect event\")); client.on(\"listening\", () => log.push(\"listening\"));\n    await new Promise(resolve => client.connect(port, \"127.0.0.1\", function (...args) { log.push([\"connect callback\", args, this === client]); resolve(); }));\n    const remote = client.remoteAddress(); log.push([Object.keys(remote), remote.address, remote.family, remote.port === port]);\n    log.push(fail(() => client.connect(port)));\n    log.push(fail(() => client.send(\"x\", port, \"127.0.0.1\")));\n    log.push(fail(() => client.send(\"x\", port)));\n    const next = () => new Promise(resolve => server.once(\"message\", (msg, rinfo) => resolve([msg.toString(), rinfo.port === client.address().port])));\n    let arrived = next(); await new Promise(resolve => client.send(\"connected\", (error, bytes) => { log.push([\"sent\", error, bytes]); resolve(); })); log.push(await arrived);\n    arrived = next(); await new Promise(resolve => client.send(\"0123456789\", 3, 4, (error, bytes) => { log.push([\"sent slice\", error, bytes]); resolve(); })); log.push(await arrived);\n    arrived = next(); client.send([\"a\", \"b\"]); log.push(await arrived);\n    log.push(fail(() => client.disconnect()));\n    log.push(fail(() => client.remoteAddress()));\n    log.push(fail(() => client.disconnect()));\n    log.push(fail(() => client.send(\"x\")));\n    arrived = next(); client.send(\"again\", port, \"127.0.0.1\"); log.push(await arrived);\n    await closed(client); await closed(server); return log;",
+   "result": [
+    "listening",
+    "connect event",
+    [
+     "connect callback",
+     [],
+     true
+    ],
+    [
+     [
+      "address",
+      "family",
+      "port"
+     ],
+     "127.0.0.1",
+     "IPv4",
+     true
+    ],
+    {
+     "name": "Error",
+     "message": "Already connected",
+     "code": "ERR_SOCKET_DGRAM_IS_CONNECTED"
+    },
+    {
+     "returned": "undefined"
+    },
+    {
+     "returned": "undefined"
+    },
+    [
+     "sent",
+     null,
+     9
+    ],
+    [
+     "x",
+     true
+    ],
+    [
+     "sent slice",
+     null,
+     4
+    ],
+    [
+     "x",
+     true
+    ],
+    [
+     "connected",
+     true
+    ],
+    {
+     "returned": "undefined"
+    },
+    {
+     "name": "Error",
+     "message": "Not connected",
+     "code": "ERR_SOCKET_DGRAM_NOT_CONNECTED"
+    },
+    {
+     "name": "Error",
+     "message": "Not connected",
+     "code": "ERR_SOCKET_DGRAM_NOT_CONNECTED"
+    },
+    {
+     "name": "RangeError",
+     "message": "Port should be > 0 and < 65536. Received undefined.",
+     "code": "ERR_SOCKET_BAD_PORT"
+    },
+    [
+     "3456",
+     false
+    ]
+   ],
+   "routed": false
+  },
+  {
+   "name": "connect without a callback, default address",
+   "code": "\n    const log = [], server = await bound(), client = dgram.createSocket(\"udp4\");\n    client.connect(server.address().port); await once(client, \"connect\");\n    const remote = client.remoteAddress(); log.push([remote.address, remote.family]);\n    const arrived = once(server, \"message\"); client.send(\"hi\"); log.push((await arrived)[0].toString());\n    await closed(client); await closed(server); return log;",
+   "result": [
+    [
+     "127.0.0.1",
+     "IPv4"
+    ],
+    "hi"
+   ],
+   "routed": false
+  },
+  {
+   "name": "bind address in use",
+   "code": "\n    const log = [], first = await bound(), second = dgram.createSocket(\"udp4\"), port = first.address().port;\n    const failed = once(second, \"error\");\n    second.bind(port, \"127.0.0.1\", () => log.push(\"bind callback\"));\n    const [error] = await failed; const e = shape(error); log.push([e.name, e.message === \"bind EADDRINUSE 127.0.0.1:\" + port, e.code, e.errno, e.syscall, e.address, e.port === port]);\n    log.push(second.listenerCount(\"listening\"), second.listenerCount(\"error\"));\n    second.bind(0, \"127.0.0.1\"); await once(second, \"listening\"); log.push(\"rebound\");\n    await closed(second); await closed(first); return log;",
+   "result": [
+    [
+     "Error",
+     true,
+     "EADDRINUSE",
+     -98,
+     "bind",
+     "127.0.0.1",
+     true
+    ],
+    0,
+    0,
+    "rebound"
+   ],
+   "routed": false
+  },
+  {
+   "name": "reuseAddr shares a port",
+   "code": "\n    const log = [], first = dgram.createSocket({ type: \"udp4\", reuseAddr: true }); first.bind(0, \"127.0.0.1\"); await once(first, \"listening\");\n    const second = dgram.createSocket({ type: \"udp4\", reuseAddr: true }); second.bind(first.address().port, \"127.0.0.1\"); await once(second, \"listening\");\n    log.push(second.address().port === first.address().port);\n    await closed(second); await closed(first); return log;",
+   "result": [
+    true
+   ],
+   "routed": false
+  },
+  {
+   "name": "close",
+   "code": "\n    const log = [], socket = await bound();\n    socket.on(\"close\", () => log.push(\"close event\"));\n    socket.close(() => log.push(\"close callback\")); log.push(\"close returned\");\n    log.push(fail(() => socket.close()));\n    log.push(fail(() => socket.send(\"x\", 9, \"127.0.0.1\")));\n    await new Promise(resolve => process.nextTick(resolve)); log.push(\"after tick\");\n    await turn(); return log;",
+   "result": [
+    "close returned",
+    {
+     "name": "Error",
+     "message": "Not running",
+     "code": "ERR_SOCKET_DGRAM_NOT_RUNNING"
+    },
+    {
+     "name": "Error",
+     "message": "Not running",
+     "code": "ERR_SOCKET_DGRAM_NOT_RUNNING"
+    },
+    "close event",
+    "close callback",
+    "after tick"
+   ],
+   "routed": false
+  },
+  {
+   "name": "close before the bind completes",
+   "code": "\n    const log = [], socket = dgram.createSocket(\"udp4\");\n    socket.on(\"listening\", () => log.push(\"listening\")); socket.on(\"error\", error => log.push(shape(error)));\n    socket.bind(0, \"127.0.0.1\", () => log.push(\"bind callback\")); socket.close(() => log.push(\"close callback\"));\n    await turn(); await turn(); return log;",
+   "result": [
+    "close callback"
+   ],
+   "routed": false
+  },
+  {
+   "name": "close with a queued send",
+   "code": "\n    const log = [], server = await bound(), socket = dgram.createSocket(\"udp4\");\n    server.on(\"message\", msg => log.push(\"arrived \" + msg));\n    socket.on(\"close\", () => log.push(\"close event\"));\n    socket.send(\"queued\", server.address().port, \"127.0.0.1\", error => log.push([\"sent\", error]));\n    socket.close(() => log.push(\"close callback\")); log.push(\"close returned\");\n    await once(socket, \"close\"); await turn(); await turn(); await closed(server); return log;",
+   "result": [
+    "close returned",
+    "close event",
+    "close callback"
+   ],
+   "routed": false
+  },
+  {
+   "name": "custom lookup",
+   "code": "\n    const log = [], server = await bound();\n    const client = dgram.createSocket({ type: \"udp4\", lookup: (host, family, callback) => { log.push([\"lookup\", host, family]); process.nextTick(callback, null, \"127.0.0.1\", 4); } });\n    const arrived = once(server, \"message\");\n    client.send(\"hello\", server.address().port, \"example.test\", error => log.push([\"sent\", error]));\n    await arrived; await turn();\n    const again = once(server, \"message\"); client.send(\"default\", server.address().port); await again;\n    client.connect(server.address().port); await once(client, \"connect\");\n    await closed(client);\n    const six = dgram.createSocket({ type: \"udp6\", lookup: (host, family, callback) => { log.push([\"lookup\", host, family]); process.nextTick(callback, null, \"::1\", 6); } });\n    six.bind(); await once(six, \"listening\"); six.connect(9); await once(six, \"connect\"); await closed(six);\n    await closed(server); return log;",
+   "result": [
+    [
+     "lookup",
+     "0.0.0.0",
+     4
+    ],
+    [
+     "lookup",
+     "example.test",
+     4
+    ],
+    [
+     "sent",
+     null
+    ],
+    [
+     "lookup",
+     "127.0.0.1",
+     4
+    ],
+    [
+     "lookup",
+     "127.0.0.1",
+     4
+    ],
+    [
+     "lookup",
+     "::",
+     6
+    ],
+    [
+     "lookup",
+     "::1",
+     6
+    ]
+   ],
+   "routed": false
+  },
+  {
+   "name": "lookup failure",
+   "code": "\n    const log = [], failure = Object.assign(new Error(\"getaddrinfo ENOTFOUND nowhere.test\"), { code: \"ENOTFOUND\" });\n    const make = () => dgram.createSocket({ type: \"udp4\", lookup: (host, family, callback) => { process.nextTick(callback, host === \"nowhere.test\" ? failure : null, host === \"nowhere.test\" ? undefined : \"127.0.0.1\", 4); } });\n    const a = make(); await new Promise(resolve => a.send(\"x\", 9, \"nowhere.test\", error => { log.push([\"callback\", error === failure]); resolve(); })); await closed(a);\n    const b = make(); const failed = once(b, \"error\"); b.send(\"x\", 9, \"nowhere.test\"); log.push([\"error event\", (await failed)[0] === failure]); await closed(b);\n    const c = make(); const refused = once(c, \"error\"); c.bind(0, \"nowhere.test\", () => log.push(\"bind callback\")); log.push([\"bind error\", (await refused)[0] === failure]); c.bind(0, \"127.0.0.1\"); await once(c, \"listening\"); log.push(\"bound after failure\"); await closed(c);\n    const d = make(); await new Promise(resolve => d.connect(9, \"nowhere.test\", error => { log.push([\"connect callback\", error === failure, d.listenerCount(\"connect\")]); resolve(); })); log.push(fail(() => d.remoteAddress())); await closed(d);\n    const e = make(); const lost = once(e, \"error\"); e.connect(9, \"nowhere.test\"); log.push([\"connect error event\", (await lost)[0] === failure]); await closed(e);\n    return log;",
+   "result": [
+    [
+     "callback",
+     true
+    ],
+    [
+     "error event",
+     true
+    ],
+    [
+     "bind error",
+     true
+    ],
+    "bound after failure",
+    [
+     "connect callback",
+     true,
+     0
+    ],
+    {
+     "name": "Error",
+     "message": "Not connected",
+     "code": "ERR_SOCKET_DGRAM_NOT_CONNECTED"
+    },
+    [
+     "connect error event",
+     true
+    ]
+   ],
+   "routed": false
+  },
+  {
+   "name": "bind failure drops the queue",
+   "code": "\n    const log = [], failure = new Error(\"no such host\");\n    const socket = dgram.createSocket({ type: \"udp4\", lookup: (host, family, callback) => { process.nextTick(callback, host === \"bad.test\" ? failure : null, \"127.0.0.1\", 4); } });\n    socket.on(\"error\", error => log.push([\"error\", error === failure]));\n    socket.bind(0, \"bad.test\");\n    socket.send(\"lost\", 9, \"127.0.0.1\", error => log.push([\"sent\", error]));\n    await turn(); await turn();\n    socket.bind(0, \"127.0.0.1\"); await once(socket, \"listening\"); log.push(\"listening\"); await turn();\n    await closed(socket); return log;",
+   "result": [
+    [
+     "error",
+     true
+    ],
+    "listening"
+   ],
+   "routed": false
+  },
+  {
+   "name": "refused sends",
+   "code": "\n    const log = [], socket = await bound(\"udp4\", \"0.0.0.0\");\n    const send = (address, port = 9) => new Promise(resolve => socket.send(\"x\", port, address, (error, bytes) => resolve([error === null ? null : shape(error), bytes])));\n    log.push(await send(\"255.255.255.255\"));\n    log.push(await send(\"10.255.255.1\"));\n    log.push(await send(\"127.0.0.1\", 1));\n    socket.on(\"error\", error => log.push([\"error event\", shape(error)]));\n    socket.send(\"x\", 9, \"255.255.255.255\"); await turn(); await turn();\n    await closed(socket); return log;",
+   "result": [
+    [
+     {
+      "name": "Error",
+      "message": "send ENETUNREACH 255.255.255.255:9",
+      "code": "ENETUNREACH",
+      "errno": -101,
+      "syscall": "send",
+      "address": "255.255.255.255",
+      "port": 9
+     },
+     null
+    ],
+    [
+     {
+      "name": "Error",
+      "message": "send ENETUNREACH 10.255.255.1:9",
+      "code": "ENETUNREACH",
+      "errno": -101,
+      "syscall": "send",
+      "address": "10.255.255.1",
+      "port": 9
+     },
+     null
+    ],
+    [
+     null,
+     1
+    ]
+   ],
+   "routed": false
+  },
+  {
+   "name": "send to another family",
+   "code": "\n    const log = [], four = await bound(\"udp4\"), six = await bound(\"udp6\");\n    const send = (socket, address) => new Promise(resolve => socket.send(\"x\", 9, address, (error, bytes) => resolve([error === null ? null : shape(error), bytes])));\n    log.push(await send(four, \"::1\")); log.push(await send(six, \"127.0.0.1\"));\n    await closed(four); await closed(six); return log;",
+   "result": [
+    [
+     {
+      "name": "Error",
+      "message": "send EINVAL ::1:9",
+      "code": "EINVAL",
+      "errno": -22,
+      "syscall": "send",
+      "address": "::1",
+      "port": 9
+     },
+     null
+    ],
+    [
+     {
+      "name": "Error",
+      "message": "send EINVAL 127.0.0.1:9",
+      "code": "EINVAL",
+      "errno": -22,
+      "syscall": "send",
+      "address": "127.0.0.1",
+      "port": 9
+     },
+     null
+    ]
+   ],
+   "routed": false
+  },
+  {
+   "name": "udp6 echo",
+   "code": "\n    const log = [], server = await bound(\"udp6\"), client = dgram.createSocket(\"udp6\");\n    server.on(\"message\", (msg, rinfo) => { log.push([\"server message\", msg.toString(), rinfo.address, rinfo.family, rinfo.size]); server.send(msg, rinfo.port, rinfo.address); });\n    const reply = once(client, \"message\");\n    client.send(\"six\", server.address().port, \"::1\");\n    const [msg, rinfo] = await reply; log.push([\"client message\", msg.toString(), rinfo.address, rinfo.family, client.address().address]);\n    await closed(client); await closed(server); return log;",
+   "result": [
+    [
+     "server message",
+     "six",
+     "::1",
+     "IPv6",
+     3
+    ],
+    [
+     "client message",
+     "six",
+     "::1",
+     "IPv6",
+     "::"
+    ]
+   ],
+   "routed": false
+  },
+  {
+   "name": "abort signal",
+   "code": "\n    const log = [], controller = new AbortController(), socket = dgram.createSocket({ type: \"udp4\", signal: controller.signal });\n    socket.on(\"close\", () => log.push(\"close\")); socket.bind(0, \"127.0.0.1\"); await once(socket, \"listening\");\n    controller.abort(); log.push(\"aborted\"); log.push(fail(() => socket.address())); await turn(); \n    const already = dgram.createSocket({ type: \"udp4\", signal: AbortSignal.abort() }); already.on(\"close\", () => log.push(\"second close\")); log.push(fail(() => already.bind(0))); await turn();\n    return log;",
+   "result": [
+    "aborted",
+    {
+     "name": "Error",
+     "message": "Not running",
+     "code": "ERR_SOCKET_DGRAM_NOT_RUNNING"
+    },
+    "close",
+    {
+     "name": "Error",
+     "message": "Not running",
+     "code": "ERR_SOCKET_DGRAM_NOT_RUNNING"
+    },
+    "second close"
+   ],
+   "routed": false
+  },
+  {
+   "name": "async dispose",
+   "code": "\n    const log = [], socket = await bound(); socket.on(\"close\", () => log.push(\"close\"));\n    const result = socket[Symbol.asyncDispose](); log.push(result instanceof Promise); log.push(await result === undefined); log.push(await socket[Symbol.asyncDispose]() === undefined);\n    return log;",
+   "result": [
+    true,
+    "close",
+    true,
+    true
+   ],
+   "routed": false
+  },
+  {
+   "name": "block lists",
+   "code": "\n    const log = [], blocked = new BlockList(); blocked.addAddress(\"127.0.0.1\");\n    const server = dgram.createSocket({ type: \"udp4\", receiveBlockList: blocked }); server.bind(0, \"127.0.0.1\"); await once(server, \"listening\");\n    server.on(\"message\", msg => log.push(\"server got \" + msg));\n    const open = await bound(); open.send(\"dropped\", server.address().port, \"127.0.0.1\"); await turn(); await turn(); await turn();\n    const client = dgram.createSocket({ type: \"udp4\", sendBlockList: blocked });\n    await new Promise(resolve => client.send(\"x\", open.address().port, \"127.0.0.1\", error => { log.push(shape(error)); resolve(); }));\n    client.on(\"error\", error => log.push([\"error event\", shape(error)])); client.send(\"x\", open.address().port, \"127.0.0.1\"); await turn(); await turn();\n    await closed(client);\n    const connecting = dgram.createSocket({ type: \"udp4\", sendBlockList: blocked });\n    await new Promise(resolve => connecting.connect(open.address().port, \"127.0.0.1\", error => { log.push([\"connect\", shape(error)]); resolve(); }));\n    await closed(connecting); await closed(open); await closed(server); return log;",
+   "result": [
+    {
+     "name": "Error",
+     "message": "IP(127.0.0.1) is blocked by net.BlockList",
+     "code": "ERR_IP_BLOCKED"
+    },
+    [
+     "connect",
+     {
+      "name": "Error",
+      "message": "IP(127.0.0.1) is blocked by net.BlockList",
+      "code": "ERR_IP_BLOCKED"
+     }
+    ]
+   ],
+   "routed": false
+  },
+  {
+   "name": "send callback timing",
+   "code": "\n    const log = [], server = await bound(), client = await bound();\n    setImmediate(() => log.push(\"immediate\"));\n    Promise.resolve().then(() => log.push(\"microtask\"));\n    process.nextTick(() => log.push(\"tick before\"));\n    client.send(\"x\", server.address().port, \"127.0.0.1\", () => log.push(\"send callback\"));\n    process.nextTick(() => log.push(\"tick after\"));\n    log.push(\"sync\");\n    await once(server, \"message\"); log.push(\"message\"); await turn();\n    await closed(client); await closed(server); return log;",
+   "result": [
+    "sync",
+    "microtask",
+    "tick before",
+    "tick after",
+    "send callback",
+    "message",
+    "immediate"
+   ],
+   "routed": false
+  },
+  {
+   "name": "listening is emitted inside the lookup callback",
+   "code": "\n    const log = []; let answer;\n    const socket = dgram.createSocket({ type: \"udp4\", lookup: (host, family, callback) => { answer = callback; } });\n    socket.on(\"listening\", () => log.push(\"listening\")); socket.bind(0, \"127.0.0.1\", () => log.push(\"bind callback\"));\n    log.push(\"before answer\"); answer(null, \"127.0.0.1\", 4); log.push(\"after answer\"); log.push(socket.address().address);\n    await closed(socket); return log;",
+   "result": [
+    "before answer",
+    "listening",
+    "bind callback",
+    "after answer",
+    "127.0.0.1"
+   ],
+   "routed": false
+  },
+  {
+   "name": "message listener from createSocket",
+   "code": "\n    const log = [], server = dgram.createSocket(\"udp4\", (msg, rinfo) => log.push([\"listener\", msg.toString(), rinfo.size])); server.bind(0, \"127.0.0.1\"); await once(server, \"listening\");\n    const client = await bound(); const arrived = once(server, \"message\"); client.send(\"hi\", server.address().port, \"127.0.0.1\"); await arrived;\n    log.push(server.listenerCount(\"message\")); await closed(client); await closed(server); return log;",
+   "result": [
+    [
+     "listener",
+     "hi",
+     2
+    ],
+    1
+   ],
+   "routed": false
+  },
+  {
+   "name": "broadcast needs SO_BROADCAST",
+   "code": "\n    const log = [], socket = await bound(\"udp4\", \"0.0.0.0\");\n    const send = () => new Promise(resolve => socket.send(\"x\", 9, \"255.255.255.255\", (error, bytes) => resolve([error === null ? null : shape(error), bytes])));\n    log.push(await send()); socket.setBroadcast(true); log.push(await send()); socket.setBroadcast(false); log.push((await send())[1]);\n    await closed(socket); return log;",
+   "result": [
+    [
+     {
+      "name": "Error",
+      "message": "send EACCES 255.255.255.255:9",
+      "code": "EACCES",
+      "errno": -13,
+      "syscall": "send",
+      "address": "255.255.255.255",
+      "port": 9
+     },
+     null
+    ],
+    [
+     null,
+     1
+    ],
+    null
+   ],
+   "routed": true
+  }
+ ]
+}

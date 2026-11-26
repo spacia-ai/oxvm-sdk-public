@@ -71,3 +71,17 @@ it("reads process and credential identity from live Linux status without synthes
   source = "Uid:\t4294967296\t1\t2\t3\n";
   expect(() => identity.getuid()).toThrow();
 });
+
+it("lists the supplementary groups and the effective group", () => {
+  let status = "Pid:\t42\nPPid:\t1\nUid:\t0\t0\t0\t0\nGid:\t0\t0\t0\t0\nGroups:\t0 0 1 2 3 4 6 10 11 20 26 27 \n";
+  const identity = createProcessIdentity({ readFileSync: () => status });
+  expect([identity.getgroups.name, identity.getgroups.length, identity.getgroups()]).toEqual(["getgroups", 0, [0, 0, 1, 2, 3, 4, 6, 10, 11, 20, 26, 27]]);
+  status = "Uid:\t1000\t1000\t1000\t1000\nGid:\t1000\t1001\t1000\t1000\nGroups:\t27 100\n";
+  expect(identity.getgroups()).toEqual([27, 100, 1001]);
+  status = "Uid:\t12345\t12345\t12345\t12345\nGid:\t0\t0\t0\t0\nGroups:\t\n";
+  expect(identity.getgroups()).toEqual([0]);
+  status = "Gid:\t0\t0\t0\t0\nGroups:\t1 x\n";
+  expect(() => identity.getgroups()).toThrow("Groups");
+  status = "Gid:\t0\t0\t0\t0\n";
+  expect(() => identity.getgroups()).toThrow("Groups");
+});

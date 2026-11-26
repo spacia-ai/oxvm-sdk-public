@@ -1,0 +1,515 @@
+{
+ "//": "Recorded from Node.js v24.18.1 (node:24.18.1-alpine); the command is the first line of `recorder`.",
+ "recorder": "// docker run --rm -v \"$PWD/rec-ts.js:/rec.js:ro\" node:24.18.1-alpine node /rec.js\nconst Module = require(\"module\");\nconst warnings = []; process.on(\"warning\", w => warnings.push([w.name, w.message, w.code]));\nconst cases = {\n  annot: \"const a: number = 1;\\nlet b: string | undefined;\\nfunction f(x: number, y?: string): void {}\\n\",\n  iface: \"interface A { x: number }\\ntype B = A | null;\\nconst v = 1;\\n\",\n  generics: \"function id<T>(x: T): T { return x; }\\nconst n = id<number>(1);\\nclass Box<T> { value!: T; }\\n\",\n  asSat: \"const x = y as unknown as string;\\nconst z = { a: 1 } satisfies object;\\nconst w = q!;\\nconst u = <any>q2;\\n\",\n  importType: \"import type { A } from './a';\\nimport { type B, c } from './b';\\nexport type { D } from './d';\\nimport { type E } from './e';\\nexport { type F, g } from './g';\\n\",\n  classMembers: \"class C extends D implements I, J {\\n  private a: number = 1;\\n  public readonly b?: string;\\n  protected static c: number;\\n  declare d: string;\\n  constructor(x: number) { super(); }\\n  method<T>(this: C, a: T): T { return a; }\\n  abstract1(): void;\\n  get g(): number { return 1; }\\n  [key: string]: any;\\n}\\n\",\n  abstractClass: \"abstract class A {\\n  abstract m(): void;\\n  abstract x: number;\\n  n(): void {}\\n}\\n\",\n  overloads: \"function f(a: string): string;\\nfunction f(a: number): number;\\nfunction f(a: any): any { return a; }\\ndeclare const g: number;\\ndeclare function h(): void;\\ndeclare module 'x' { export const y: number; }\\n\",\n  arrow: \"const f = async <T,>(x: T): Promise<T> => x;\\nconst g = (a: number,\\n  b: string\\n): void => {};\\nconst h = (x): x is string => true;\\n\",\n  multiline: \"type A = {\\n  x: number;\\n  y: string;\\n};\\nconst a = 1;\\nfoo\\ntype B = 1\\n;(bar)\\n\",\n  asi: \"const a = 1\\ntype B = 1\\n(1)\\nlet c = d as\\n  string\\n[1]\\n\",\n  unicode: \"const s: string = 'żółć 😀';\\ntype T = 'ü';\\nconst t = s as string;\\n\",\n  empty: \"\", js: \"const a = 1;\\nmodule.exports = a;\\n\",\n  optionalMethods: \"class A { m?(): void; x?: number; f(a?: number, ...r: string[]): asserts a {} }\\n\",\n  typeofKeyof: \"let a: typeof b; let c: keyof typeof b; function f<const T extends readonly unknown[]>(x: T) {}\\n\",\n  tsx: \"const a = <div />;\\n\",\n  nsType: \"namespace N { export type T = 1 }\\ndeclare namespace M { const x: number }\\nconst k = 1;\\n\",\n  accessor: \"class A extends B { accessor x: number = 1; static #p?: string; override m(): void {} }\\n\",\n\n  wideCharacters: \"let a: \\\"\\u{1F600}\\\" = b as \\\"\\u{1F600}x\\\";\\ntype T = \\\"\\u{1F600}\\\";\\ntype U = 'ü€';\\nconst c = 1;\",\n  arrowReturnOnNextLine: \"const f = (a: number):\\n  void => {};\\n\",\n  classPropertyLines: \"class A { x: number\\n  [k] = 1; y = 2 as number\\n  ;[z] = 3 }\\n\",\n  satisfiesBeforeTemplate: \"let q = a satisfies B\\n`t`\\n\",\n  genericArrow: \"let w = <T,>(x: T) => x;\\nfor (const k of o as any[]) {}\\n\",\n  instantiation: \"foo<string>`x`; new Foo<T>(); a?.b!.c; let x!: number; const g = f<number>;\\n\",\n  thisParameter: \"function g(this: Window) {} function h(this: W, ...r: any[]) {} const o = { m(this: O, a: number) {} };\\n\",\n  specifiers: \"export { a, type B }; import d, { type E as F, type G } from \\\"m\\\"; import type H from \\\"h\\\"; export * as ns from \\\"m\\\"; export type * from \\\"t\\\";\\n\",\n  classModifiers: \"class K<T> extends L<T> implements M<T> { static readonly a?: number; private static async b(): Promise<void> {} protected get c(): number { return 1 } declare readonly e: string; public constructor() { super() } override f(): void {} }\\n\",\n  typesInExpressions: \"let tup: [a: string, b?: number]; let fn: (x: number) => void; let o2 = { m<T>(x: T): T { return x } };\\nlabel: for (;;) break label;\\n\",\n  declareClass: \"declare class D { x: number }\\ndeclare enum E { A }\\ndeclare global { interface Window { x: number } }\\nexport {};\\n\",\n  destructuring: \"function f({ a, b }: { a: number; b: string }, [c]: number[] = [], d: number = 1) {}\\ncatchIt: try {} catch (e: unknown) {}\\n\",\n  decorators: \"@dec class A { @prop x: number = 1; @meth m(): void {} }\\n\",\n  typeImportEquals: \"import type A = B.C;\\nconst z = 1;\\n\",\n  defaultExport: \"export default interface X { a: 1 }\\nexport interface Y {}\\nexport declare const z: number;\\nexport const q: number = 1;\\n\",\n};\nconst unsupported = {\n  enum: \"enum E { A, B }\\n\", constEnum: \"const enum E { A }\\n\", namespace: \"namespace N { export const x = 1 }\\n\", paramProp: \"class A { constructor(private x: number) {} }\\n\",\n  importEquals: \"import fs = require('fs');\\n\", exportEquals: \"export = 1;\\n\", syntaxError: \"const a: = 1;\\n\", decorators: \"@dec class A {}\\n\", module: \"module M { export const x = 1 }\\n\", legacyCast: \"const u = <any>q;\\n\", importAlias: \"import A = B.C;\\n\",\n};\nconst out = { strip: {}, transform: {}, errors: {}, options: {}, validation: [] };\nconst run = f => { try { return { value: f() }; } catch (e) { return { error: { name: e.constructor.name, code: e.code, message: e.message } }; } };\nfor (const [k, v] of Object.entries(cases)) out.strip[k] = { input: v, ...run(() => Module.stripTypeScriptTypes(v)) };\nfor (const [k, v] of Object.entries(unsupported)) out.errors[k] = { input: v, strip: run(() => Module.stripTypeScriptTypes(v)), transform: run(() => Module.stripTypeScriptTypes(v, { mode: \"transform\" })) };\nfor (const k of [\"annot\", \"iface\", \"generics\", \"classMembers\", \"importType\"]) out.transform[k] = { input: cases[k], ...run(() => Module.stripTypeScriptTypes(cases[k], { mode: \"transform\" })) };\nconst src = \"const a: number = 1;\\n\";\nconst opts = [{ sourceUrl: \"x.ts\" }, { mode: \"strip\", sourceUrl: \"file:///a/x.ts\" }, { mode: \"strip\", sourceMap: true }, { mode: \"strip\", sourceMap: false }, { mode: \"transform\", sourceMap: true }, { mode: \"transform\", sourceMap: true, sourceUrl: \"x.ts\" }, { mode: \"transform\", sourceUrl: \"x.ts\" }, { mode: \"transform\" }, {}, { mode: undefined }, { sourceMap: undefined, sourceUrl: undefined }];\nout.options = opts.map(o => ({ options: o, ...run(() => Module.stripTypeScriptTypes(src, o)) }));\nconst bad = [[5], [undefined], [null], [src, 5], [src, null], [src, \"x\"], [src, { mode: \"x\" }], [src, { mode: 5 }], [src, { sourceMap: 1 }], [src, { sourceUrl: 5 }], [src, { mode: \"strip\", sourceMap: \"yes\" }], [src, []], [src, () => {}], [Buffer.from(src)]];\nout.validation = bad.map(a => ({ args: JSON.stringify(a.map(x => x === undefined ? \"<undefined>\" : typeof x === \"function\" ? \"<fn>\" : x)), ...run(() => Module.stripTypeScriptTypes(...a)) }));\nsetTimeout(() => { out.warnings = warnings; process.stdout.write(JSON.stringify(out, null, 1)); }, 20);\n",
+ "strip": {
+  "annot": {
+   "input": "const a: number = 1;\nlet b: string | undefined;\nfunction f(x: number, y?: string): void {}\n",
+   "value": "const a         = 1;\nlet b                    ;\nfunction f(x        , y         )       {}\n"
+  },
+  "iface": {
+   "input": "interface A { x: number }\ntype B = A | null;\nconst v = 1;\n",
+   "value": "                         \n                  \nconst v = 1;\n"
+  },
+  "generics": {
+   "input": "function id<T>(x: T): T { return x; }\nconst n = id<number>(1);\nclass Box<T> { value!: T; }\n",
+   "value": "function id   (x   )    { return x; }\nconst n = id        (1);\nclass Box    { value    ; }\n"
+  },
+  "asSat": {
+   "input": "const x = y as unknown as string;\nconst z = { a: 1 } satisfies object;\nconst w = q!;\nconst u = <any>q2;\n",
+   "error": {
+    "name": "SyntaxError",
+    "code": "ERR_UNSUPPORTED_TYPESCRIPT_SYNTAX",
+    "message": "The angle-bracket syntax for type assertions, `<T>expr`, is not supported in type strip mode. Instead, use the 'as' syntax: `expr as T`."
+   }
+  },
+  "importType": {
+   "input": "import type { A } from './a';\nimport { type B, c } from './b';\nexport type { D } from './d';\nimport { type E } from './e';\nexport { type F, g } from './g';\n",
+   "value": "                             \nimport {         c } from './b';\n                             \nimport {        } from './e';\nexport {         g } from './g';\n"
+  },
+  "classMembers": {
+   "input": "class C extends D implements I, J {\n  private a: number = 1;\n  public readonly b?: string;\n  protected static c: number;\n  declare d: string;\n  constructor(x: number) { super(); }\n  method<T>(this: C, a: T): T { return a; }\n  abstract1(): void;\n  get g(): number { return 1; }\n  [key: string]: any;\n}\n",
+   "value": "class C extends D                 {\n          a         = 1;\n                  b         ;\n            static c        ;\n                    \n  constructor(x        ) { super(); }\n  method   (         a   )    { return a; }\n                    \n  get g()         { return 1; }\n                     \n}\n"
+  },
+  "abstractClass": {
+   "input": "abstract class A {\n  abstract m(): void;\n  abstract x: number;\n  n(): void {}\n}\n",
+   "value": "         class A {\n                     \n                     \n  n()       {}\n}\n"
+  },
+  "overloads": {
+   "input": "function f(a: string): string;\nfunction f(a: number): number;\nfunction f(a: any): any { return a; }\ndeclare const g: number;\ndeclare function h(): void;\ndeclare module 'x' { export const y: number; }\n",
+   "value": "                              \n                              \nfunction f(a     )      { return a; }\n                        \n                           \n                                              \n"
+  },
+  "arrow": {
+   "input": "const f = async <T,>(x: T): Promise<T> => x;\nconst g = (a: number,\n  b: string\n): void => {};\nconst h = (x): x is string => true;\n",
+   "value": "const f = async     (x   )             => x;\nconst g = (a        ,\n  b        \n)       => {};\nconst h = (x)              => true;\n"
+  },
+  "multiline": {
+   "input": "type A = {\n  x: number;\n  y: string;\n};\nconst a = 1;\nfoo\ntype B = 1\n;(bar)\n",
+   "value": "          \n            \n            \n  \nconst a = 1;\nfoo\n          \n (bar)\n"
+  },
+  "asi": {
+   "input": "const a = 1\ntype B = 1\n(1)\nlet c = d as\n  string\n[1]\n",
+   "value": "const a = 1\n;         \n(1)\nlet c = d ; \n        \n[1]\n"
+  },
+  "unicode": {
+   "input": "const s: string = 'żółć 😀';\ntype T = 'ü';\nconst t = s as string;\n",
+   "value": "const s         = 'żółć 😀';\n             \nconst t = s          ;\n"
+  },
+  "empty": {
+   "input": "",
+   "value": ""
+  },
+  "js": {
+   "input": "const a = 1;\nmodule.exports = a;\n",
+   "value": "const a = 1;\nmodule.exports = a;\n"
+  },
+  "optionalMethods": {
+   "input": "class A { m?(): void; x?: number; f(a?: number, ...r: string[]): asserts a {} }\n",
+   "value": "class A {             x         ; f(a         , ...r          )            {} }\n"
+  },
+  "typeofKeyof": {
+   "input": "let a: typeof b; let c: keyof typeof b; function f<const T extends readonly unknown[]>(x: T) {}\n",
+   "value": "let a          ; let c                ; function f                                    (x   ) {}\n"
+  },
+  "tsx": {
+   "input": "const a = <div />;\n",
+   "error": {
+    "name": "SyntaxError",
+    "code": "ERR_INVALID_TYPESCRIPT_SYNTAX",
+    "message": "Expression expected"
+   }
+  },
+  "nsType": {
+   "input": "namespace N { export type T = 1 }\ndeclare namespace M { const x: number }\nconst k = 1;\n",
+   "value": "                                 \n                                       \nconst k = 1;\n"
+  },
+  "accessor": {
+   "input": "class A extends B { accessor x: number = 1; static #p?: string; override m(): void {} }\n",
+   "value": "class A extends B { accessor x         = 1; static #p         ;          m()       {} }\n"
+  },
+  "wideCharacters": {
+   "input": "let a: \"😀\" = b as \"😀x\";\ntype T = \"😀\";\ntype U = 'ü€';\nconst c = 1;",
+   "value": "let a    ﻿  = b      ﻿  ;\n           ﻿  \n              \nconst c = 1;"
+  },
+  "arrowReturnOnNextLine": {
+   "input": "const f = (a: number):\n  void => {};\n",
+   "value": "const f = (a          \n     ) => {};\n"
+  },
+  "classPropertyLines": {
+   "input": "class A { x: number\n  [k] = 1; y = 2 as number\n  ;[z] = 3 }\n",
+   "value": "class A { x        \n  [k] = 1; y = 2          \n  ;[z] = 3 }\n"
+  },
+  "satisfiesBeforeTemplate": {
+   "input": "let q = a satisfies B\n`t`\n",
+   "value": "let q = a ;          \n`t`\n"
+  },
+  "genericArrow": {
+   "input": "let w = <T,>(x: T) => x;\nfor (const k of o as any[]) {}\n",
+   "value": "let w =     (x   ) => x;\nfor (const k of o         ) {}\n"
+  },
+  "instantiation": {
+   "input": "foo<string>`x`; new Foo<T>(); a?.b!.c; let x!: number; const g = f<number>;\n",
+   "value": "foo        `x`; new Foo   (); a?.b .c; let x         ; const g = f        ;\n"
+  },
+  "thisParameter": {
+   "input": "function g(this: Window) {} function h(this: W, ...r: any[]) {} const o = { m(this: O, a: number) {} };\n",
+   "value": "function g(            ) {} function h(         ...r       ) {} const o = { m(         a        ) {} };\n"
+  },
+  "specifiers": {
+   "input": "export { a, type B }; import d, { type E as F, type G } from \"m\"; import type H from \"h\"; export * as ns from \"m\"; export type * from \"t\";\n",
+   "value": "export { a,        }; import d, {                     } from \"m\";                         export * as ns from \"m\";                        \n"
+  },
+  "classModifiers": {
+   "input": "class K<T> extends L<T> implements M<T> { static readonly a?: number; private static async b(): Promise<void> {} protected get c(): number { return 1 } declare readonly e: string; public constructor() { super() } override f(): void {} }\n",
+   "value": "class K    extends L                    { static          a         ;         static async b()                {}           get c()         { return 1 }                                    constructor() { super() }          f()       {} }\n"
+  },
+  "typesInExpressions": {
+   "input": "let tup: [a: string, b?: number]; let fn: (x: number) => void; let o2 = { m<T>(x: T): T { return x } };\nlabel: for (;;) break label;\n",
+   "value": "let tup                         ; let fn                     ; let o2 = { m   (x   )    { return x } };\nlabel: for (;;) break label;\n"
+  },
+  "declareClass": {
+   "input": "declare class D { x: number }\ndeclare enum E { A }\ndeclare global { interface Window { x: number } }\nexport {};\n",
+   "value": "                             \n                    \n                                                 \nexport {};\n"
+  },
+  "destructuring": {
+   "input": "function f({ a, b }: { a: number; b: string }, [c]: number[] = [], d: number = 1) {}\ncatchIt: try {} catch (e: unknown) {}\n",
+   "value": "function f({ a, b }                          , [c]           = [], d         = 1) {}\ncatchIt: try {} catch (e         ) {}\n"
+  },
+  "decorators": {
+   "input": "@dec class A { @prop x: number = 1; @meth m(): void {} }\n",
+   "value": "@dec class A { @prop x         = 1; @meth m()       {} }\n"
+  },
+  "typeImportEquals": {
+   "input": "import type A = B.C;\nconst z = 1;\n",
+   "value": "                    \nconst z = 1;\n"
+  },
+  "defaultExport": {
+   "input": "export default interface X { a: 1 }\nexport interface Y {}\nexport declare const z: number;\nexport const q: number = 1;\n",
+   "value": "                                   \n                     \n                               \nexport const q         = 1;\n"
+  }
+ },
+ "transform": {
+  "annot": {
+   "input": "const a: number = 1;\nlet b: string | undefined;\nfunction f(x: number, y?: string): void {}\n",
+   "value": "const a = 1;\nlet b;\nfunction f(x, y) {}\n"
+  },
+  "iface": {
+   "input": "interface A { x: number }\ntype B = A | null;\nconst v = 1;\n",
+   "value": "const v = 1;\n"
+  },
+  "generics": {
+   "input": "function id<T>(x: T): T { return x; }\nconst n = id<number>(1);\nclass Box<T> { value!: T; }\n",
+   "value": "function id(x) {\n    return x;\n}\nconst n = id(1);\nclass Box {\n    value;\n}\n"
+  },
+  "classMembers": {
+   "input": "class C extends D implements I, J {\n  private a: number = 1;\n  public readonly b?: string;\n  protected static c: number;\n  declare d: string;\n  constructor(x: number) { super(); }\n  method<T>(this: C, a: T): T { return a; }\n  abstract1(): void;\n  get g(): number { return 1; }\n  [key: string]: any;\n}\n",
+   "value": "class C extends D {\n    a = 1;\n    b;\n    static c;\n    constructor(x){\n        super();\n    }\n    method(a) {\n        return a;\n    }\n    get g() {\n        return 1;\n    }\n}\n"
+  },
+  "importType": {
+   "input": "import type { A } from './a';\nimport { type B, c } from './b';\nexport type { D } from './d';\nimport { type E } from './e';\nexport { type F, g } from './g';\n",
+   "value": "import { c } from './b';\nimport './e';\nexport { g } from './g';\n"
+  }
+ },
+ "errors": {
+  "enum": {
+   "input": "enum E { A, B }\n",
+   "strip": {
+    "error": {
+     "name": "SyntaxError",
+     "code": "ERR_UNSUPPORTED_TYPESCRIPT_SYNTAX",
+     "message": "TypeScript enum is not supported in strip-only mode"
+    }
+   },
+   "transform": {
+    "value": "var E = /*#__PURE__*/ function(E) {\n    E[E[\"A\"] = 0] = \"A\";\n    E[E[\"B\"] = 1] = \"B\";\n    return E;\n}(E || {});\n"
+   }
+  },
+  "constEnum": {
+   "input": "const enum E { A }\n",
+   "strip": {
+    "error": {
+     "name": "SyntaxError",
+     "code": "ERR_UNSUPPORTED_TYPESCRIPT_SYNTAX",
+     "message": "TypeScript enum is not supported in strip-only mode"
+    }
+   },
+   "transform": {
+    "value": "var E = /*#__PURE__*/ function(E) {\n    E[E[\"A\"] = 0] = \"A\";\n    return E;\n}(E || {});\n"
+   }
+  },
+  "namespace": {
+   "input": "namespace N { export const x = 1 }\n",
+   "strip": {
+    "error": {
+     "name": "SyntaxError",
+     "code": "ERR_UNSUPPORTED_TYPESCRIPT_SYNTAX",
+     "message": "TypeScript namespace declaration is not supported in strip-only mode"
+    }
+   },
+   "transform": {
+    "value": "(function(N) {\n    N.x = 1;\n})(N || (N = {}));\nvar N;\n"
+   }
+  },
+  "paramProp": {
+   "input": "class A { constructor(private x: number) {} }\n",
+   "strip": {
+    "error": {
+     "name": "SyntaxError",
+     "code": "ERR_UNSUPPORTED_TYPESCRIPT_SYNTAX",
+     "message": "TypeScript parameter property is not supported in strip-only mode"
+    }
+   },
+   "transform": {
+    "value": "class A {\n    x;\n    constructor(x){\n        this.x = x;\n    }\n}\n"
+   }
+  },
+  "importEquals": {
+   "input": "import fs = require('fs');\n",
+   "strip": {
+    "error": {
+     "name": "SyntaxError",
+     "code": "ERR_UNSUPPORTED_TYPESCRIPT_SYNTAX",
+     "message": "TypeScript import equals declaration is not supported in strip-only mode"
+    }
+   },
+   "transform": {
+    "value": "const fs = require('fs');\n"
+   }
+  },
+  "exportEquals": {
+   "input": "export = 1;\n",
+   "strip": {
+    "error": {
+     "name": "SyntaxError",
+     "code": "ERR_UNSUPPORTED_TYPESCRIPT_SYNTAX",
+     "message": "TypeScript export assignment is not supported in strip-only mode"
+    }
+   },
+   "transform": {
+    "value": "module.exports = 1;\n"
+   }
+  },
+  "syntaxError": {
+   "input": "const a: = 1;\n",
+   "strip": {
+    "error": {
+     "name": "SyntaxError",
+     "code": "ERR_INVALID_TYPESCRIPT_SYNTAX",
+     "message": "Unexpected token `=`. Expected an identifier, void, yield, null, await, break, a string literal, a numeric literal, true, false, `, -, import, this, typeof, {, [, ("
+    }
+   },
+   "transform": {
+    "error": {
+     "name": "SyntaxError",
+     "code": "ERR_INVALID_TYPESCRIPT_SYNTAX",
+     "message": "Unexpected token `=`. Expected an identifier, void, yield, null, await, break, a string literal, a numeric literal, true, false, `, -, import, this, typeof, {, [, ("
+    }
+   }
+  },
+  "decorators": {
+   "input": "@dec class A {}\n",
+   "strip": {
+    "value": "@dec class A {}\n"
+   },
+   "transform": {
+    "value": "@dec\nclass A {\n}\n"
+   }
+  },
+  "module": {
+   "input": "module M { export const x = 1 }\n",
+   "strip": {
+    "error": {
+     "name": "SyntaxError",
+     "code": "ERR_UNSUPPORTED_TYPESCRIPT_SYNTAX",
+     "message": "`module` keyword is not supported. Use `namespace` instead."
+    }
+   },
+   "transform": {
+    "error": {
+     "name": "SyntaxError",
+     "code": "ERR_UNSUPPORTED_TYPESCRIPT_SYNTAX",
+     "message": "`module` keyword is not supported. Use `namespace` instead."
+    }
+   }
+  },
+  "legacyCast": {
+   "input": "const u = <any>q;\n",
+   "strip": {
+    "error": {
+     "name": "SyntaxError",
+     "code": "ERR_UNSUPPORTED_TYPESCRIPT_SYNTAX",
+     "message": "The angle-bracket syntax for type assertions, `<T>expr`, is not supported in type strip mode. Instead, use the 'as' syntax: `expr as T`."
+    }
+   },
+   "transform": {
+    "value": "const u = q;\n"
+   }
+  },
+  "importAlias": {
+   "input": "import A = B.C;\n",
+   "strip": {
+    "error": {
+     "name": "SyntaxError",
+     "code": "ERR_UNSUPPORTED_TYPESCRIPT_SYNTAX",
+     "message": "TypeScript import equals declaration is not supported in strip-only mode"
+    }
+   },
+   "transform": {
+    "value": "const A = B.C;\n"
+   }
+  }
+ },
+ "options": [
+  {
+   "options": {
+    "sourceUrl": "x.ts"
+   },
+   "value": "const a         = 1;\n\n\n//# sourceURL=x.ts"
+  },
+  {
+   "options": {
+    "mode": "strip",
+    "sourceUrl": "file:///a/x.ts"
+   },
+   "value": "const a         = 1;\n\n\n//# sourceURL=file:///a/x.ts"
+  },
+  {
+   "options": {
+    "mode": "strip",
+    "sourceMap": true
+   },
+   "error": {
+    "name": "TypeError",
+    "code": "ERR_INVALID_ARG_VALUE",
+    "message": "The property 'options.sourceMap' must be one of: false, undefined. Received true"
+   }
+  },
+  {
+   "options": {
+    "mode": "strip",
+    "sourceMap": false
+   },
+   "value": "const a         = 1;\n"
+  },
+  {
+   "options": {
+    "mode": "transform",
+    "sourceMap": true
+   },
+   "value": "const a = 1;\n\n\n//# sourceMappingURL=data:application/json;base64,eyJ2ZXJzaW9uIjozLCJzb3VyY2VzIjpbIiJdLCJuYW1lcyI6W10sIm1hcHBpbmdzIjoiQUFBQSxNQUFNLElBQVkifQ=="
+  },
+  {
+   "options": {
+    "mode": "transform",
+    "sourceMap": true,
+    "sourceUrl": "x.ts"
+   },
+   "value": "const a = 1;\n\n\n//# sourceMappingURL=data:application/json;base64,eyJ2ZXJzaW9uIjozLCJzb3VyY2VzIjpbIngudHMiXSwibmFtZXMiOltdLCJtYXBwaW5ncyI6IkFBQUEsTUFBTSxJQUFZIn0="
+  },
+  {
+   "options": {
+    "mode": "transform",
+    "sourceUrl": "x.ts"
+   },
+   "value": "const a = 1;\n\n\n//# sourceURL=x.ts"
+  },
+  {
+   "options": {
+    "mode": "transform"
+   },
+   "value": "const a = 1;\n"
+  },
+  {
+   "options": {},
+   "value": "const a         = 1;\n"
+  },
+  {
+   "options": {},
+   "value": "const a         = 1;\n"
+  },
+  {
+   "options": {},
+   "value": "const a         = 1;\n"
+  }
+ ],
+ "validation": [
+  {
+   "args": "[5]",
+   "error": {
+    "name": "TypeError",
+    "code": "ERR_INVALID_ARG_TYPE",
+    "message": "The \"code\" argument must be of type string. Received type number (5)"
+   }
+  },
+  {
+   "args": "[\"<undefined>\"]",
+   "error": {
+    "name": "TypeError",
+    "code": "ERR_INVALID_ARG_TYPE",
+    "message": "The \"code\" argument must be of type string. Received undefined"
+   }
+  },
+  {
+   "args": "[null]",
+   "error": {
+    "name": "TypeError",
+    "code": "ERR_INVALID_ARG_TYPE",
+    "message": "The \"code\" argument must be of type string. Received null"
+   }
+  },
+  {
+   "args": "[\"const a: number = 1;\\n\",5]",
+   "error": {
+    "name": "TypeError",
+    "code": "ERR_INVALID_ARG_TYPE",
+    "message": "The \"options\" argument must be of type object. Received type number (5)"
+   }
+  },
+  {
+   "args": "[\"const a: number = 1;\\n\",null]",
+   "error": {
+    "name": "TypeError",
+    "code": "ERR_INVALID_ARG_TYPE",
+    "message": "The \"options\" argument must be of type object. Received null"
+   }
+  },
+  {
+   "args": "[\"const a: number = 1;\\n\",\"x\"]",
+   "error": {
+    "name": "TypeError",
+    "code": "ERR_INVALID_ARG_TYPE",
+    "message": "The \"options\" argument must be of type object. Received type string ('x')"
+   }
+  },
+  {
+   "args": "[\"const a: number = 1;\\n\",{\"mode\":\"x\"}]",
+   "error": {
+    "name": "TypeError",
+    "code": "ERR_INVALID_ARG_VALUE",
+    "message": "The property 'options.mode' must be one of: 'strip', 'transform'. Received 'x'"
+   }
+  },
+  {
+   "args": "[\"const a: number = 1;\\n\",{\"mode\":5}]",
+   "error": {
+    "name": "TypeError",
+    "code": "ERR_INVALID_ARG_VALUE",
+    "message": "The property 'options.mode' must be one of: 'strip', 'transform'. Received 5"
+   }
+  },
+  {
+   "args": "[\"const a: number = 1;\\n\",{\"sourceMap\":1}]",
+   "error": {
+    "name": "TypeError",
+    "code": "ERR_INVALID_ARG_TYPE",
+    "message": "The \"options.sourceMap\" property must be of type boolean. Received type number (1)"
+   }
+  },
+  {
+   "args": "[\"const a: number = 1;\\n\",{\"sourceUrl\":5}]",
+   "error": {
+    "name": "TypeError",
+    "code": "ERR_INVALID_ARG_TYPE",
+    "message": "The \"options.sourceUrl\" property must be of type string. Received type number (5)"
+   }
+  },
+  {
+   "args": "[\"const a: number = 1;\\n\",{\"mode\":\"strip\",\"sourceMap\":\"yes\"}]",
+   "error": {
+    "name": "TypeError",
+    "code": "ERR_INVALID_ARG_TYPE",
+    "message": "The \"options.sourceMap\" property must be of type boolean. Received type string ('yes')"
+   }
+  },
+  {
+   "args": "[\"const a: number = 1;\\n\",[]]",
+   "error": {
+    "name": "TypeError",
+    "code": "ERR_INVALID_ARG_TYPE",
+    "message": "The \"options\" argument must be of type object. Received an instance of Array"
+   }
+  },
+  {
+   "args": "[\"const a: number = 1;\\n\",\"<fn>\"]",
+   "error": {
+    "name": "TypeError",
+    "code": "ERR_INVALID_ARG_TYPE",
+    "message": "The \"options\" argument must be of type object. Received function "
+   }
+  },
+  {
+   "args": "[{\"type\":\"Buffer\",\"data\":[99,111,110,115,116,32,97,58,32,110,117,109,98,101,114,32,61,32,49,59,10]}]",
+   "error": {
+    "name": "TypeError",
+    "code": "ERR_INVALID_ARG_TYPE",
+    "message": "The \"code\" argument must be of type string. Received an instance of Buffer"
+   }
+  }
+ ],
+ "warnings": [
+  [
+   "ExperimentalWarning",
+   "stripTypeScriptTypes is an experimental feature and might change at any time",
+   null
+  ]
+ ]
+}

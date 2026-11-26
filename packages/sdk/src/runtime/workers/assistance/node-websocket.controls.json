@@ -1,0 +1,8461 @@
+{
+ "node": {
+  "version": "v24.18.1",
+  "image": "node:24.18.1-alpine",
+  "undici": "7.29.0"
+ },
+ "how": "docker run --rm --init -v $PWD:/w:ro node:24.18.1-alpine node /w/recorder.js /w/scenarios.json  (recorder.js is the text under \"recorder\", scenarios.json the list under \"scenarios\")",
+ "scenarios": [
+  {
+   "name": "echo text and binary",
+   "path": "echo",
+   "on": {
+    "open": [
+     [
+      "get",
+      "bufferedAmount"
+     ],
+     [
+      "send",
+      "text",
+      "hello"
+     ],
+     [
+      "get",
+      "bufferedAmount"
+     ]
+    ],
+    "message": [
+     [
+      [
+       "get",
+       "bufferedAmount"
+      ],
+      [
+       "send",
+       "buffer",
+       "00ff10"
+      ]
+     ],
+     [
+      [
+       "set",
+       "binaryType",
+       "arraybuffer"
+      ],
+      [
+       "send",
+       "view",
+       "a1b2c3"
+      ]
+     ],
+     [
+      [
+       "send",
+       "dataview",
+       "0102"
+      ]
+     ],
+     [
+      [
+       "send",
+       "blob",
+       "beef"
+      ],
+      [
+       "send",
+       "text",
+       "after blob"
+      ],
+      [
+       "get",
+       "bufferedAmount"
+      ]
+     ],
+     [],
+     [
+      [
+       "close",
+       1000,
+       "bye"
+      ],
+      [
+       "get",
+       "readyState"
+      ],
+      [
+       "send",
+       "text",
+       "after close"
+      ],
+      [
+       "close"
+      ]
+     ]
+    ]
+   }
+  },
+  {
+   "name": "larger frames",
+   "path": "echo",
+   "on": {
+    "open": [
+     [
+      "set",
+      "binaryType",
+      "arraybuffer"
+     ],
+     [
+      "send",
+      "fill",
+      200
+     ],
+     [
+      "send",
+      "fill",
+      70000
+     ],
+     [
+      "get",
+      "bufferedAmount"
+     ]
+    ],
+    "message": [
+     [],
+     [
+      [
+       "close"
+      ]
+     ]
+    ]
+   }
+  },
+  {
+   "name": "send converts other values",
+   "path": "echo",
+   "on": {
+    "open": [
+     [
+      "send",
+      "value",
+      42
+     ],
+     [
+      "send",
+      "value",
+      null
+     ],
+     [
+      "send",
+      "none"
+     ],
+     [
+      "send",
+      "text",
+      ""
+     ]
+    ],
+    "message": [
+     [],
+     [],
+     [
+      [
+       "close",
+       3000
+      ]
+     ]
+    ]
+   }
+  },
+  {
+   "name": "server messages then server close",
+   "path": "greet"
+  },
+  {
+   "name": "fragmented messages with a ping between",
+   "path": "fragment",
+   "start": [
+    [
+     "set",
+     "binaryType",
+     "arraybuffer"
+    ]
+   ]
+  },
+  {
+   "name": "ping answered with pong",
+   "path": "ping"
+  },
+  {
+   "name": "unsolicited pong ignored",
+   "path": "pong"
+  },
+  {
+   "name": "frames split across writes",
+   "path": "split",
+   "start": [
+    [
+     "set",
+     "binaryType",
+     "arraybuffer"
+    ]
+   ]
+  },
+  {
+   "name": "64-bit length frame",
+   "path": "big",
+   "start": [
+    [
+     "set",
+     "binaryType",
+     "arraybuffer"
+    ]
+   ]
+  },
+  {
+   "name": "server close 4000 with reason",
+   "path": "close?code=4000&reason=going%20away"
+  },
+  {
+   "name": "server close without a body",
+   "path": "close"
+  },
+  {
+   "name": "server close with reserved code 1005",
+   "path": "close?code=1005"
+  },
+  {
+   "name": "server close with code 999",
+   "path": "close?code=999"
+  },
+  {
+   "name": "server close with a one-byte body",
+   "path": "raw?hex=880103"
+  },
+  {
+   "name": "server close with a non-UTF-8 reason",
+   "path": "raw?hex=880403e8ff80"
+  },
+  {
+   "name": "server drops the connection",
+   "path": "drop"
+  },
+  {
+   "name": "server ends without a close frame",
+   "path": "end"
+  },
+  {
+   "name": "client close",
+   "path": "echo",
+   "on": {
+    "open": [
+     [
+      "close"
+     ],
+     [
+      "get",
+      "readyState"
+     ]
+    ]
+   }
+  },
+  {
+   "name": "client close with reason only code 1000",
+   "path": "echo",
+   "on": {
+    "open": [
+     [
+      "close",
+      1000,
+      "finished"
+     ]
+    ]
+   }
+  },
+  {
+   "name": "close argument validation",
+   "path": "echo",
+   "on": {
+    "open": [
+     [
+      "close",
+      999
+     ],
+     [
+      "close",
+      1001
+     ],
+     [
+      "close",
+      2999
+     ],
+     [
+      "close",
+      5000
+     ],
+     [
+      "close",
+      "3000x"
+     ],
+     [
+      "close",
+      1000,
+      "rrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrr"
+     ],
+     [
+      "get",
+      "readyState"
+     ],
+     [
+      "close",
+      "4999",
+      "ok"
+     ]
+    ]
+   }
+  },
+  {
+   "name": "protocol negotiated",
+   "path": "echo?protocol=b",
+   "args": [
+    [
+     "a",
+     "b"
+    ]
+   ],
+   "on": {
+    "open": [
+     [
+      "close"
+     ]
+    ]
+   }
+  },
+  {
+   "name": "protocol as a string",
+   "path": "echo?protocol=chat",
+   "args": [
+    "chat"
+   ],
+   "on": {
+    "open": [
+     [
+      "close"
+     ]
+    ]
+   }
+  },
+  {
+   "name": "protocol offered but none chosen",
+   "path": "echo",
+   "args": [
+    [
+     "a",
+     "b"
+    ]
+   ]
+  },
+  {
+   "name": "protocol chosen that was not offered",
+   "path": "echo?protocol=c",
+   "args": [
+    [
+     "a",
+     "b"
+    ]
+   ]
+  },
+  {
+   "name": "protocol chosen with none offered",
+   "path": "echo?protocol=c"
+  },
+  {
+   "name": "options object with protocols and headers",
+   "path": "echo?protocol=x",
+   "args": [
+    {
+     "protocols": [
+      "x"
+     ],
+     "headers": {
+      "Authorization": "Bearer t",
+      "X-Custom": "1",
+      "Cookie": "a=b"
+     }
+    }
+   ],
+   "on": {
+    "open": [
+     [
+      "close"
+     ]
+    ]
+   }
+  },
+  {
+   "name": "options object with headers only",
+   "path": "echo",
+   "args": [
+    {
+     "headers": [
+      [
+       "x-one",
+       "1"
+      ],
+      [
+       "x-two",
+       "2"
+      ]
+     ]
+    }
+   ],
+   "on": {
+    "open": [
+     [
+      "close"
+     ]
+    ]
+   }
+  },
+  {
+   "name": "options object empty",
+   "path": "echo",
+   "args": [
+    {}
+   ],
+   "on": {
+    "open": [
+     [
+      "close"
+     ]
+    ]
+   }
+  },
+  {
+   "name": "bad accept key",
+   "path": "bad-accept"
+  },
+  {
+   "name": "missing accept key",
+   "path": "no-accept"
+  },
+  {
+   "name": "status 404",
+   "path": "status?code=404"
+  },
+  {
+   "name": "status 200",
+   "path": "status?code=200"
+  },
+  {
+   "name": "redirect 302",
+   "path": "redirect"
+  },
+  {
+   "name": "not HTTP",
+   "path": "garbage"
+  },
+  {
+   "name": "missing upgrade header",
+   "path": "no-upgrade"
+  },
+  {
+   "name": "upgrade header in another case",
+   "path": "upgrade-case",
+   "on": {
+    "open": [
+     [
+      "close"
+     ]
+    ]
+   }
+  },
+  {
+   "name": "connection header not upgrade",
+   "path": "no-connection"
+  },
+  {
+   "name": "unknown extension accepted by server",
+   "path": "echo?extensions=x-unknown"
+  },
+  {
+   "name": "masked frame from server",
+   "path": "raw?hex=81850102030469676f686e"
+  },
+  {
+   "name": "reserved bit set",
+   "path": "raw?hex=c1026869"
+  },
+  {
+   "name": "reserved bit 2 set",
+   "path": "raw?hex=a1026869"
+  },
+  {
+   "name": "unknown opcode",
+   "path": "raw?hex=83026869"
+  },
+  {
+   "name": "text that is not UTF-8",
+   "path": "raw?hex=8102ff80"
+  },
+  {
+   "name": "oversize 64-bit length",
+   "path": "raw?hex=827f0000000100000000"
+  },
+  {
+   "name": "length above 2^31",
+   "path": "raw?hex=827f00000000ffffffff"
+  },
+  {
+   "name": "length above the 128 MiB bound",
+   "path": "raw?hex=827f0000000008000001"
+  },
+  {
+   "name": "unexpected continuation",
+   "path": "raw?hex=80026869"
+  },
+  {
+   "name": "fragmented control frame",
+   "path": "raw?hex=09026869"
+  },
+  {
+   "name": "control frame above 125 bytes",
+   "path": "raw?hex=897e0080"
+  },
+  {
+   "name": "new message inside a fragmented one",
+   "path": "raw?hex=010268698102686a"
+  },
+  {
+   "name": "message after an error is not delivered",
+   "path": "raw?hex=83026869810268698800"
+  },
+  {
+   "name": "send before open",
+   "path": "echo",
+   "start": [
+    [
+     "send",
+     "text",
+     "early"
+    ],
+    [
+     "get",
+     "readyState"
+    ]
+   ],
+   "on": {
+    "open": [
+     [
+      "close"
+     ]
+    ]
+   }
+  },
+  {
+   "name": "close while connecting",
+   "path": "hang",
+   "start": [
+    [
+     "close"
+    ],
+    [
+     "get",
+     "readyState"
+    ],
+    [
+     "send",
+     "text",
+     "x"
+    ],
+    [
+     "close"
+    ]
+   ]
+  },
+  {
+   "name": "close with invalid code while connecting",
+   "path": "hang",
+   "start": [
+    [
+     "close",
+     1
+    ],
+    [
+     "get",
+     "readyState"
+    ],
+    [
+     "close"
+    ]
+   ]
+  },
+  {
+   "name": "binaryType accepts only blob and arraybuffer",
+   "path": "echo",
+   "start": [
+    [
+     "set",
+     "binaryType",
+     "nodebuffer"
+    ],
+    [
+     "get",
+     "binaryType"
+    ],
+    [
+     "set",
+     "binaryType",
+     "arraybuffer"
+    ],
+    [
+     "get",
+     "binaryType"
+    ],
+    [
+     "set",
+     "binaryType",
+     "text"
+    ],
+    [
+     "get",
+     "binaryType"
+    ]
+   ],
+   "on": {
+    "open": [
+     [
+      "close"
+     ]
+    ]
+   }
+  },
+  {
+   "name": "connection refused",
+   "url": "ws://127.0.0.1:1/"
+  },
+  {
+   "name": "no arguments",
+   "noUrl": true
+  },
+  {
+   "name": "invalid URL",
+   "url": "not a url"
+  },
+  {
+   "name": "relative URL",
+   "url": "/relative"
+  },
+  {
+   "name": "URL with a fragment",
+   "url": "ws://127.0.0.1:1/#frag"
+  },
+  {
+   "name": "URL with an empty fragment",
+   "url": "ws://127.0.0.1:1/path#"
+  },
+  {
+   "name": "URL with another scheme",
+   "url": "ftp://127.0.0.1:1/"
+  },
+  {
+   "name": "duplicate protocols",
+   "url": "ws://127.0.0.1:1/",
+   "args": [
+    [
+     "a",
+     "A"
+    ]
+   ]
+  },
+  {
+   "name": "invalid protocol token",
+   "url": "ws://127.0.0.1:1/",
+   "args": [
+    [
+     "a b"
+    ]
+   ]
+  },
+  {
+   "name": "empty protocol string",
+   "url": "ws://127.0.0.1:1/",
+   "args": [
+    ""
+   ]
+  },
+  {
+   "name": "protocols of another type",
+   "url": "ws://127.0.0.1:1/",
+   "args": [
+    42
+   ]
+  },
+  {
+   "name": "http URL becomes ws",
+   "url": "http://127.0.0.1:1/a?b=1"
+  },
+  {
+   "name": "headers of a wrong type",
+   "url": "ws://127.0.0.1:1/",
+   "args": [
+    {
+     "headers": 5
+    }
+   ]
+  },
+  {
+   "name": "null second argument",
+   "path": "echo",
+   "args": [
+    null
+   ],
+   "on": {
+    "open": [
+     [
+      "close"
+     ]
+    ]
+   }
+  },
+  {
+   "name": "URL credentials",
+   "path": "echo",
+   "userinfo": "user:p%40ss",
+   "on": {
+    "open": [
+     [
+      "close"
+     ]
+    ]
+   }
+  },
+  {
+   "name": "close in the close handler and send after close",
+   "path": "close?code=1000",
+   "on": {
+    "close": [
+     [
+      "send",
+      "text",
+      "late"
+     ],
+     [
+      "close"
+     ],
+     [
+      "get",
+      "readyState"
+     ],
+     [
+      "get",
+      "bufferedAmount"
+     ]
+    ]
+   }
+  },
+  {
+   "name": "close with a reason and no code",
+   "path": "echo",
+   "on": {
+    "open": [
+     [
+      "close",
+      null,
+      "why"
+     ]
+    ]
+   }
+  },
+  {
+   "name": "close code is clamped",
+   "path": "echo",
+   "on": {
+    "open": [
+     [
+      "close",
+      3000.7
+     ],
+     [
+      "get",
+      "readyState"
+     ]
+    ]
+   }
+  },
+  {
+   "name": "close called from the message handler twice",
+   "path": "greet",
+   "on": {
+    "message": [
+     [
+      [
+       "close",
+       3001,
+       "enough"
+      ],
+      [
+       "close",
+       3002,
+       "again"
+      ]
+     ]
+    ]
+   }
+  },
+  {
+   "name": "send in the closing state",
+   "path": "greet",
+   "on": {
+    "message": [
+     [
+      [
+       "close"
+      ],
+      [
+       "send",
+       "text",
+       "dropped"
+      ],
+      [
+       "get",
+       "bufferedAmount"
+      ]
+     ]
+    ]
+   }
+  },
+  {
+   "name": "close from the error handler",
+   "path": "drop",
+   "on": {
+    "error": [
+     [
+      "close"
+     ],
+     [
+      "get",
+      "readyState"
+     ]
+    ]
+   }
+  }
+ ],
+ "cases": {
+  "echo text and binary": {
+   "client": [
+    {
+     "constructed": {
+      "url": "<url>",
+      "readyState": 0,
+      "protocol": "",
+      "extensions": "",
+      "binaryType": "blob",
+      "bufferedAmount": 0
+     }
+    },
+    {
+     "mark": "started",
+     "readyState": 0
+    },
+    {
+     "event": "open",
+     "class": "Event",
+     "readyState": 1,
+     "protocol": "",
+     "extensions": ""
+    },
+    {
+     "get": "bufferedAmount",
+     "value": 0
+    },
+    {
+     "get": "bufferedAmount",
+     "value": 5
+    },
+    {
+     "event": "message",
+     "class": "MessageEvent",
+     "readyState": 1,
+     "origin": "ws://<host>",
+     "lastEventId": "",
+     "source": null,
+     "ports": 0,
+     "data": {
+      "text": "hello"
+     }
+    },
+    {
+     "get": "bufferedAmount",
+     "value": 0
+    },
+    {
+     "event": "message",
+     "class": "MessageEvent",
+     "readyState": 1,
+     "origin": "ws://<host>",
+     "lastEventId": "",
+     "source": null,
+     "ports": 0,
+     "data": {
+      "blob": true,
+      "size": 3,
+      "type": "",
+      "hex": "00ff10"
+     }
+    },
+    {
+     "event": "message",
+     "class": "MessageEvent",
+     "readyState": 1,
+     "origin": "ws://<host>",
+     "lastEventId": "",
+     "source": null,
+     "ports": 0,
+     "data": {
+      "arraybuffer": true,
+      "hex": "a1b2c3"
+     }
+    },
+    {
+     "event": "message",
+     "class": "MessageEvent",
+     "readyState": 1,
+     "origin": "ws://<host>",
+     "lastEventId": "",
+     "source": null,
+     "ports": 0,
+     "data": {
+      "arraybuffer": true,
+      "hex": "0102"
+     }
+    },
+    {
+     "get": "bufferedAmount",
+     "value": 12
+    },
+    {
+     "event": "message",
+     "class": "MessageEvent",
+     "readyState": 1,
+     "origin": "ws://<host>",
+     "lastEventId": "",
+     "source": null,
+     "ports": 0,
+     "data": {
+      "arraybuffer": true,
+      "hex": "beef"
+     }
+    },
+    {
+     "event": "message",
+     "class": "MessageEvent",
+     "readyState": 1,
+     "origin": "ws://<host>",
+     "lastEventId": "",
+     "source": null,
+     "ports": 0,
+     "data": {
+      "text": "after blob"
+     }
+    },
+    {
+     "get": "readyState",
+     "value": 2
+    },
+    {
+     "event": "close",
+     "class": "CloseEvent",
+     "readyState": 3,
+     "code": 1000,
+     "reason": "bye",
+     "wasClean": true
+    }
+   ],
+   "server": [
+    {
+     "event": "request",
+     "line": "GET /echo HTTP/1.1",
+     "headers": [
+      [
+       "accept",
+       "*/*"
+      ],
+      [
+       "accept-encoding",
+       "gzip, deflate"
+      ],
+      [
+       "accept-language",
+       "*"
+      ],
+      [
+       "cache-control",
+       "no-cache"
+      ],
+      [
+       "connection",
+       "upgrade"
+      ],
+      [
+       "host",
+       "<host>"
+      ],
+      [
+       "pragma",
+       "no-cache"
+      ],
+      [
+       "sec-fetch-mode",
+       "websocket"
+      ],
+      [
+       "sec-websocket-extensions",
+       "permessage-deflate; client_max_window_bits"
+      ],
+      [
+       "sec-websocket-key",
+       "<key>"
+      ],
+      [
+       "sec-websocket-version",
+       "13"
+      ],
+      [
+       "upgrade",
+       "websocket"
+      ],
+      [
+       "user-agent",
+       "node"
+      ]
+     ]
+    },
+    {
+     "event": "frame",
+     "fin": true,
+     "opcode": 1,
+     "masked": true,
+     "text": "hello"
+    },
+    {
+     "event": "frame",
+     "fin": true,
+     "opcode": 2,
+     "masked": true,
+     "hex": "00ff10"
+    },
+    {
+     "event": "frame",
+     "fin": true,
+     "opcode": 2,
+     "masked": true,
+     "hex": "a1b2c3"
+    },
+    {
+     "event": "frame",
+     "fin": true,
+     "opcode": 2,
+     "masked": true,
+     "hex": "0102"
+    },
+    {
+     "event": "frame",
+     "fin": true,
+     "opcode": 2,
+     "masked": true,
+     "hex": "beef"
+    },
+    {
+     "event": "frame",
+     "fin": true,
+     "opcode": 1,
+     "masked": true,
+     "text": "after blob"
+    },
+    {
+     "event": "frame",
+     "fin": true,
+     "opcode": 8,
+     "masked": true,
+     "code": 1000,
+     "reason": "bye"
+    },
+    {
+     "event": "closed"
+    }
+   ]
+  },
+  "larger frames": {
+   "client": [
+    {
+     "constructed": {
+      "url": "<url>",
+      "readyState": 0,
+      "protocol": "",
+      "extensions": "",
+      "binaryType": "blob",
+      "bufferedAmount": 0
+     }
+    },
+    {
+     "mark": "started",
+     "readyState": 0
+    },
+    {
+     "event": "open",
+     "class": "Event",
+     "readyState": 1,
+     "protocol": "",
+     "extensions": ""
+    },
+    {
+     "get": "bufferedAmount",
+     "value": 70200
+    },
+    {
+     "event": "message",
+     "class": "MessageEvent",
+     "readyState": 1,
+     "origin": "ws://<host>",
+     "lastEventId": "",
+     "source": null,
+     "ports": 0,
+     "data": {
+      "arraybuffer": true,
+      "length": 200,
+      "head": "0001020304050607",
+      "sum": 19900
+     }
+    },
+    {
+     "event": "message",
+     "class": "MessageEvent",
+     "readyState": 1,
+     "origin": "ws://<host>",
+     "lastEventId": "",
+     "source": null,
+     "ports": 0,
+     "data": {
+      "arraybuffer": true,
+      "length": 70000,
+      "head": "0001020304050607",
+      "sum": 6080
+     }
+    },
+    {
+     "event": "close",
+     "class": "CloseEvent",
+     "readyState": 3,
+     "code": 1005,
+     "reason": "",
+     "wasClean": true
+    }
+   ],
+   "server": [
+    {
+     "event": "request",
+     "line": "GET /echo HTTP/1.1",
+     "headers": [
+      [
+       "accept",
+       "*/*"
+      ],
+      [
+       "accept-encoding",
+       "gzip, deflate"
+      ],
+      [
+       "accept-language",
+       "*"
+      ],
+      [
+       "cache-control",
+       "no-cache"
+      ],
+      [
+       "connection",
+       "upgrade"
+      ],
+      [
+       "host",
+       "<host>"
+      ],
+      [
+       "pragma",
+       "no-cache"
+      ],
+      [
+       "sec-fetch-mode",
+       "websocket"
+      ],
+      [
+       "sec-websocket-extensions",
+       "permessage-deflate; client_max_window_bits"
+      ],
+      [
+       "sec-websocket-key",
+       "<key>"
+      ],
+      [
+       "sec-websocket-version",
+       "13"
+      ],
+      [
+       "upgrade",
+       "websocket"
+      ],
+      [
+       "user-agent",
+       "node"
+      ]
+     ]
+    },
+    {
+     "event": "frame",
+     "fin": true,
+     "opcode": 2,
+     "masked": true,
+     "length": 200,
+     "head": "0001020304050607",
+     "sum": 19900
+    },
+    {
+     "event": "frame",
+     "fin": true,
+     "opcode": 2,
+     "masked": true,
+     "length": 70000,
+     "head": "0001020304050607",
+     "sum": 6080
+    },
+    {
+     "event": "frame",
+     "fin": true,
+     "opcode": 8,
+     "masked": true,
+     "hex": ""
+    },
+    {
+     "event": "closed"
+    }
+   ]
+  },
+  "send converts other values": {
+   "client": [
+    {
+     "constructed": {
+      "url": "<url>",
+      "readyState": 0,
+      "protocol": "",
+      "extensions": "",
+      "binaryType": "blob",
+      "bufferedAmount": 0
+     }
+    },
+    {
+     "mark": "started",
+     "readyState": 0
+    },
+    {
+     "event": "open",
+     "class": "Event",
+     "readyState": 1,
+     "protocol": "",
+     "extensions": ""
+    },
+    {
+     "threw": {
+      "class": "TypeError",
+      "name": "TypeError",
+      "message": "WebSocket.send: 1 argument required, but 0 found."
+     },
+     "by": "send"
+    },
+    {
+     "event": "message",
+     "class": "MessageEvent",
+     "readyState": 1,
+     "origin": "ws://<host>",
+     "lastEventId": "",
+     "source": null,
+     "ports": 0,
+     "data": {
+      "text": "42"
+     }
+    },
+    {
+     "event": "message",
+     "class": "MessageEvent",
+     "readyState": 1,
+     "origin": "ws://<host>",
+     "lastEventId": "",
+     "source": null,
+     "ports": 0,
+     "data": {
+      "text": "null"
+     }
+    },
+    {
+     "event": "message",
+     "class": "MessageEvent",
+     "readyState": 1,
+     "origin": "ws://<host>",
+     "lastEventId": "",
+     "source": null,
+     "ports": 0,
+     "data": {
+      "text": ""
+     }
+    },
+    {
+     "event": "close",
+     "class": "CloseEvent",
+     "readyState": 3,
+     "code": 3000,
+     "reason": "",
+     "wasClean": true
+    }
+   ],
+   "server": [
+    {
+     "event": "request",
+     "line": "GET /echo HTTP/1.1",
+     "headers": [
+      [
+       "accept",
+       "*/*"
+      ],
+      [
+       "accept-encoding",
+       "gzip, deflate"
+      ],
+      [
+       "accept-language",
+       "*"
+      ],
+      [
+       "cache-control",
+       "no-cache"
+      ],
+      [
+       "connection",
+       "upgrade"
+      ],
+      [
+       "host",
+       "<host>"
+      ],
+      [
+       "pragma",
+       "no-cache"
+      ],
+      [
+       "sec-fetch-mode",
+       "websocket"
+      ],
+      [
+       "sec-websocket-extensions",
+       "permessage-deflate; client_max_window_bits"
+      ],
+      [
+       "sec-websocket-key",
+       "<key>"
+      ],
+      [
+       "sec-websocket-version",
+       "13"
+      ],
+      [
+       "upgrade",
+       "websocket"
+      ],
+      [
+       "user-agent",
+       "node"
+      ]
+     ]
+    },
+    {
+     "event": "frame",
+     "fin": true,
+     "opcode": 1,
+     "masked": true,
+     "text": "42"
+    },
+    {
+     "event": "frame",
+     "fin": true,
+     "opcode": 1,
+     "masked": true,
+     "text": "null"
+    },
+    {
+     "event": "frame",
+     "fin": true,
+     "opcode": 1,
+     "masked": true,
+     "text": ""
+    },
+    {
+     "event": "frame",
+     "fin": true,
+     "opcode": 8,
+     "masked": true,
+     "code": 3000,
+     "reason": ""
+    },
+    {
+     "event": "closed"
+    }
+   ]
+  },
+  "server messages then server close": {
+   "client": [
+    {
+     "constructed": {
+      "url": "<url>",
+      "readyState": 0,
+      "protocol": "",
+      "extensions": "",
+      "binaryType": "blob",
+      "bufferedAmount": 0
+     }
+    },
+    {
+     "mark": "started",
+     "readyState": 0
+    },
+    {
+     "event": "open",
+     "class": "Event",
+     "readyState": 1,
+     "protocol": "",
+     "extensions": ""
+    },
+    {
+     "event": "message",
+     "class": "MessageEvent",
+     "readyState": 1,
+     "origin": "ws://<host>",
+     "lastEventId": "",
+     "source": null,
+     "ports": 0,
+     "data": {
+      "text": "hello"
+     }
+    },
+    {
+     "event": "message",
+     "class": "MessageEvent",
+     "readyState": 1,
+     "origin": "ws://<host>",
+     "lastEventId": "",
+     "source": null,
+     "ports": 0,
+     "data": {
+      "blob": true,
+      "size": 3,
+      "type": "",
+      "hex": "010203"
+     }
+    },
+    {
+     "event": "message",
+     "class": "MessageEvent",
+     "readyState": 1,
+     "origin": "ws://<host>",
+     "lastEventId": "",
+     "source": null,
+     "ports": 0,
+     "data": {
+      "text": ""
+     }
+    },
+    {
+     "event": "message",
+     "class": "MessageEvent",
+     "readyState": 1,
+     "origin": "ws://<host>",
+     "lastEventId": "",
+     "source": null,
+     "ports": 0,
+     "data": {
+      "text": "zażółć 🙂"
+     }
+    },
+    {
+     "event": "close",
+     "class": "CloseEvent",
+     "readyState": 3,
+     "code": 1000,
+     "reason": "done",
+     "wasClean": true
+    }
+   ],
+   "server": [
+    {
+     "event": "request",
+     "line": "GET /greet HTTP/1.1",
+     "headers": [
+      [
+       "accept",
+       "*/*"
+      ],
+      [
+       "accept-encoding",
+       "gzip, deflate"
+      ],
+      [
+       "accept-language",
+       "*"
+      ],
+      [
+       "cache-control",
+       "no-cache"
+      ],
+      [
+       "connection",
+       "upgrade"
+      ],
+      [
+       "host",
+       "<host>"
+      ],
+      [
+       "pragma",
+       "no-cache"
+      ],
+      [
+       "sec-fetch-mode",
+       "websocket"
+      ],
+      [
+       "sec-websocket-extensions",
+       "permessage-deflate; client_max_window_bits"
+      ],
+      [
+       "sec-websocket-key",
+       "<key>"
+      ],
+      [
+       "sec-websocket-version",
+       "13"
+      ],
+      [
+       "upgrade",
+       "websocket"
+      ],
+      [
+       "user-agent",
+       "node"
+      ]
+     ]
+    },
+    {
+     "event": "frame",
+     "fin": true,
+     "opcode": 8,
+     "masked": true,
+     "code": 1000,
+     "reason": ""
+    },
+    {
+     "event": "closed"
+    }
+   ]
+  },
+  "fragmented messages with a ping between": {
+   "client": [
+    {
+     "constructed": {
+      "url": "<url>",
+      "readyState": 0,
+      "protocol": "",
+      "extensions": "",
+      "binaryType": "blob",
+      "bufferedAmount": 0
+     }
+    },
+    {
+     "mark": "started",
+     "readyState": 0
+    },
+    {
+     "event": "open",
+     "class": "Event",
+     "readyState": 1,
+     "protocol": "",
+     "extensions": ""
+    },
+    {
+     "event": "message",
+     "class": "MessageEvent",
+     "readyState": 1,
+     "origin": "ws://<host>",
+     "lastEventId": "",
+     "source": null,
+     "ports": 0,
+     "data": {
+      "text": "fragmented"
+     }
+    },
+    {
+     "event": "message",
+     "class": "MessageEvent",
+     "readyState": 1,
+     "origin": "ws://<host>",
+     "lastEventId": "",
+     "source": null,
+     "ports": 0,
+     "data": {
+      "arraybuffer": true,
+      "hex": "010203"
+     }
+    },
+    {
+     "event": "close",
+     "class": "CloseEvent",
+     "readyState": 3,
+     "code": 1000,
+     "reason": "",
+     "wasClean": true
+    }
+   ],
+   "server": [
+    {
+     "event": "request",
+     "line": "GET /fragment HTTP/1.1",
+     "headers": [
+      [
+       "accept",
+       "*/*"
+      ],
+      [
+       "accept-encoding",
+       "gzip, deflate"
+      ],
+      [
+       "accept-language",
+       "*"
+      ],
+      [
+       "cache-control",
+       "no-cache"
+      ],
+      [
+       "connection",
+       "upgrade"
+      ],
+      [
+       "host",
+       "<host>"
+      ],
+      [
+       "pragma",
+       "no-cache"
+      ],
+      [
+       "sec-fetch-mode",
+       "websocket"
+      ],
+      [
+       "sec-websocket-extensions",
+       "permessage-deflate; client_max_window_bits"
+      ],
+      [
+       "sec-websocket-key",
+       "<key>"
+      ],
+      [
+       "sec-websocket-version",
+       "13"
+      ],
+      [
+       "upgrade",
+       "websocket"
+      ],
+      [
+       "user-agent",
+       "node"
+      ]
+     ]
+    },
+    {
+     "event": "frame",
+     "fin": true,
+     "opcode": 10,
+     "masked": true,
+     "hex": "70"
+    },
+    {
+     "event": "frame",
+     "fin": true,
+     "opcode": 8,
+     "masked": true,
+     "code": 1000,
+     "reason": ""
+    },
+    {
+     "event": "closed"
+    }
+   ]
+  },
+  "ping answered with pong": {
+   "client": [
+    {
+     "constructed": {
+      "url": "<url>",
+      "readyState": 0,
+      "protocol": "",
+      "extensions": "",
+      "binaryType": "blob",
+      "bufferedAmount": 0
+     }
+    },
+    {
+     "mark": "started",
+     "readyState": 0
+    },
+    {
+     "event": "open",
+     "class": "Event",
+     "readyState": 1,
+     "protocol": "",
+     "extensions": ""
+    },
+    {
+     "event": "close",
+     "class": "CloseEvent",
+     "readyState": 3,
+     "code": 1000,
+     "reason": "ponged",
+     "wasClean": true
+    }
+   ],
+   "server": [
+    {
+     "event": "request",
+     "line": "GET /ping HTTP/1.1",
+     "headers": [
+      [
+       "accept",
+       "*/*"
+      ],
+      [
+       "accept-encoding",
+       "gzip, deflate"
+      ],
+      [
+       "accept-language",
+       "*"
+      ],
+      [
+       "cache-control",
+       "no-cache"
+      ],
+      [
+       "connection",
+       "upgrade"
+      ],
+      [
+       "host",
+       "<host>"
+      ],
+      [
+       "pragma",
+       "no-cache"
+      ],
+      [
+       "sec-fetch-mode",
+       "websocket"
+      ],
+      [
+       "sec-websocket-extensions",
+       "permessage-deflate; client_max_window_bits"
+      ],
+      [
+       "sec-websocket-key",
+       "<key>"
+      ],
+      [
+       "sec-websocket-version",
+       "13"
+      ],
+      [
+       "upgrade",
+       "websocket"
+      ],
+      [
+       "user-agent",
+       "node"
+      ]
+     ]
+    },
+    {
+     "event": "frame",
+     "fin": true,
+     "opcode": 10,
+     "masked": true,
+     "hex": "7070"
+    },
+    {
+     "event": "frame",
+     "fin": true,
+     "opcode": 8,
+     "masked": true,
+     "code": 1000,
+     "reason": ""
+    },
+    {
+     "event": "closed"
+    }
+   ]
+  },
+  "unsolicited pong ignored": {
+   "client": [
+    {
+     "constructed": {
+      "url": "<url>",
+      "readyState": 0,
+      "protocol": "",
+      "extensions": "",
+      "binaryType": "blob",
+      "bufferedAmount": 0
+     }
+    },
+    {
+     "mark": "started",
+     "readyState": 0
+    },
+    {
+     "event": "open",
+     "class": "Event",
+     "readyState": 1,
+     "protocol": "",
+     "extensions": ""
+    },
+    {
+     "event": "message",
+     "class": "MessageEvent",
+     "readyState": 1,
+     "origin": "ws://<host>",
+     "lastEventId": "",
+     "source": null,
+     "ports": 0,
+     "data": {
+      "text": "after pong"
+     }
+    },
+    {
+     "event": "close",
+     "class": "CloseEvent",
+     "readyState": 3,
+     "code": 1000,
+     "reason": "",
+     "wasClean": true
+    }
+   ],
+   "server": [
+    {
+     "event": "request",
+     "line": "GET /pong HTTP/1.1",
+     "headers": [
+      [
+       "accept",
+       "*/*"
+      ],
+      [
+       "accept-encoding",
+       "gzip, deflate"
+      ],
+      [
+       "accept-language",
+       "*"
+      ],
+      [
+       "cache-control",
+       "no-cache"
+      ],
+      [
+       "connection",
+       "upgrade"
+      ],
+      [
+       "host",
+       "<host>"
+      ],
+      [
+       "pragma",
+       "no-cache"
+      ],
+      [
+       "sec-fetch-mode",
+       "websocket"
+      ],
+      [
+       "sec-websocket-extensions",
+       "permessage-deflate; client_max_window_bits"
+      ],
+      [
+       "sec-websocket-key",
+       "<key>"
+      ],
+      [
+       "sec-websocket-version",
+       "13"
+      ],
+      [
+       "upgrade",
+       "websocket"
+      ],
+      [
+       "user-agent",
+       "node"
+      ]
+     ]
+    },
+    {
+     "event": "frame",
+     "fin": true,
+     "opcode": 8,
+     "masked": true,
+     "code": 1000,
+     "reason": ""
+    },
+    {
+     "event": "closed"
+    }
+   ]
+  },
+  "frames split across writes": {
+   "client": [
+    {
+     "constructed": {
+      "url": "<url>",
+      "readyState": 0,
+      "protocol": "",
+      "extensions": "",
+      "binaryType": "blob",
+      "bufferedAmount": 0
+     }
+    },
+    {
+     "mark": "started",
+     "readyState": 0
+    },
+    {
+     "event": "open",
+     "class": "Event",
+     "readyState": 1,
+     "protocol": "",
+     "extensions": ""
+    },
+    {
+     "event": "message",
+     "class": "MessageEvent",
+     "readyState": 1,
+     "origin": "ws://<host>",
+     "lastEventId": "",
+     "source": null,
+     "ports": 0,
+     "data": {
+      "text": "split across writes"
+     }
+    },
+    {
+     "event": "message",
+     "class": "MessageEvent",
+     "readyState": 1,
+     "origin": "ws://<host>",
+     "lastEventId": "",
+     "source": null,
+     "ports": 0,
+     "data": {
+      "arraybuffer": true,
+      "length": 300,
+      "head": "0707070707070707",
+      "sum": 2100
+     }
+    },
+    {
+     "event": "close",
+     "class": "CloseEvent",
+     "readyState": 3,
+     "code": 1000,
+     "reason": "split",
+     "wasClean": true
+    }
+   ],
+   "server": [
+    {
+     "event": "request",
+     "line": "GET /split HTTP/1.1",
+     "headers": [
+      [
+       "accept",
+       "*/*"
+      ],
+      [
+       "accept-encoding",
+       "gzip, deflate"
+      ],
+      [
+       "accept-language",
+       "*"
+      ],
+      [
+       "cache-control",
+       "no-cache"
+      ],
+      [
+       "connection",
+       "upgrade"
+      ],
+      [
+       "host",
+       "<host>"
+      ],
+      [
+       "pragma",
+       "no-cache"
+      ],
+      [
+       "sec-fetch-mode",
+       "websocket"
+      ],
+      [
+       "sec-websocket-extensions",
+       "permessage-deflate; client_max_window_bits"
+      ],
+      [
+       "sec-websocket-key",
+       "<key>"
+      ],
+      [
+       "sec-websocket-version",
+       "13"
+      ],
+      [
+       "upgrade",
+       "websocket"
+      ],
+      [
+       "user-agent",
+       "node"
+      ]
+     ]
+    },
+    {
+     "event": "frame",
+     "fin": true,
+     "opcode": 8,
+     "masked": true,
+     "code": 1000,
+     "reason": ""
+    },
+    {
+     "event": "closed"
+    }
+   ]
+  },
+  "64-bit length frame": {
+   "client": [
+    {
+     "constructed": {
+      "url": "<url>",
+      "readyState": 0,
+      "protocol": "",
+      "extensions": "",
+      "binaryType": "blob",
+      "bufferedAmount": 0
+     }
+    },
+    {
+     "mark": "started",
+     "readyState": 0
+    },
+    {
+     "event": "open",
+     "class": "Event",
+     "readyState": 1,
+     "protocol": "",
+     "extensions": ""
+    },
+    {
+     "event": "message",
+     "class": "MessageEvent",
+     "readyState": 1,
+     "origin": "ws://<host>",
+     "lastEventId": "",
+     "source": null,
+     "ports": 0,
+     "data": {
+      "arraybuffer": true,
+      "length": 70000,
+      "head": "0909090909090909",
+      "sum": 40311
+     }
+    },
+    {
+     "event": "close",
+     "class": "CloseEvent",
+     "readyState": 3,
+     "code": 1000,
+     "reason": "",
+     "wasClean": true
+    }
+   ],
+   "server": [
+    {
+     "event": "request",
+     "line": "GET /big HTTP/1.1",
+     "headers": [
+      [
+       "accept",
+       "*/*"
+      ],
+      [
+       "accept-encoding",
+       "gzip, deflate"
+      ],
+      [
+       "accept-language",
+       "*"
+      ],
+      [
+       "cache-control",
+       "no-cache"
+      ],
+      [
+       "connection",
+       "upgrade"
+      ],
+      [
+       "host",
+       "<host>"
+      ],
+      [
+       "pragma",
+       "no-cache"
+      ],
+      [
+       "sec-fetch-mode",
+       "websocket"
+      ],
+      [
+       "sec-websocket-extensions",
+       "permessage-deflate; client_max_window_bits"
+      ],
+      [
+       "sec-websocket-key",
+       "<key>"
+      ],
+      [
+       "sec-websocket-version",
+       "13"
+      ],
+      [
+       "upgrade",
+       "websocket"
+      ],
+      [
+       "user-agent",
+       "node"
+      ]
+     ]
+    },
+    {
+     "event": "frame",
+     "fin": true,
+     "opcode": 8,
+     "masked": true,
+     "code": 1000,
+     "reason": ""
+    },
+    {
+     "event": "closed"
+    }
+   ]
+  },
+  "server close 4000 with reason": {
+   "client": [
+    {
+     "constructed": {
+      "url": "<url>",
+      "readyState": 0,
+      "protocol": "",
+      "extensions": "",
+      "binaryType": "blob",
+      "bufferedAmount": 0
+     }
+    },
+    {
+     "mark": "started",
+     "readyState": 0
+    },
+    {
+     "event": "open",
+     "class": "Event",
+     "readyState": 1,
+     "protocol": "",
+     "extensions": ""
+    },
+    {
+     "event": "close",
+     "class": "CloseEvent",
+     "readyState": 3,
+     "code": 4000,
+     "reason": "going away",
+     "wasClean": true
+    }
+   ],
+   "server": [
+    {
+     "event": "request",
+     "line": "GET /close?code=4000&reason=going%20away HTTP/1.1",
+     "headers": [
+      [
+       "accept",
+       "*/*"
+      ],
+      [
+       "accept-encoding",
+       "gzip, deflate"
+      ],
+      [
+       "accept-language",
+       "*"
+      ],
+      [
+       "cache-control",
+       "no-cache"
+      ],
+      [
+       "connection",
+       "upgrade"
+      ],
+      [
+       "host",
+       "<host>"
+      ],
+      [
+       "pragma",
+       "no-cache"
+      ],
+      [
+       "sec-fetch-mode",
+       "websocket"
+      ],
+      [
+       "sec-websocket-extensions",
+       "permessage-deflate; client_max_window_bits"
+      ],
+      [
+       "sec-websocket-key",
+       "<key>"
+      ],
+      [
+       "sec-websocket-version",
+       "13"
+      ],
+      [
+       "upgrade",
+       "websocket"
+      ],
+      [
+       "user-agent",
+       "node"
+      ]
+     ]
+    },
+    {
+     "event": "frame",
+     "fin": true,
+     "opcode": 8,
+     "masked": true,
+     "code": 4000,
+     "reason": ""
+    },
+    {
+     "event": "closed"
+    }
+   ]
+  },
+  "server close without a body": {
+   "client": [
+    {
+     "constructed": {
+      "url": "<url>",
+      "readyState": 0,
+      "protocol": "",
+      "extensions": "",
+      "binaryType": "blob",
+      "bufferedAmount": 0
+     }
+    },
+    {
+     "mark": "started",
+     "readyState": 0
+    },
+    {
+     "event": "open",
+     "class": "Event",
+     "readyState": 1,
+     "protocol": "",
+     "extensions": ""
+    },
+    {
+     "event": "close",
+     "class": "CloseEvent",
+     "readyState": 3,
+     "code": 1005,
+     "reason": "",
+     "wasClean": true
+    }
+   ],
+   "server": [
+    {
+     "event": "request",
+     "line": "GET /close HTTP/1.1",
+     "headers": [
+      [
+       "accept",
+       "*/*"
+      ],
+      [
+       "accept-encoding",
+       "gzip, deflate"
+      ],
+      [
+       "accept-language",
+       "*"
+      ],
+      [
+       "cache-control",
+       "no-cache"
+      ],
+      [
+       "connection",
+       "upgrade"
+      ],
+      [
+       "host",
+       "<host>"
+      ],
+      [
+       "pragma",
+       "no-cache"
+      ],
+      [
+       "sec-fetch-mode",
+       "websocket"
+      ],
+      [
+       "sec-websocket-extensions",
+       "permessage-deflate; client_max_window_bits"
+      ],
+      [
+       "sec-websocket-key",
+       "<key>"
+      ],
+      [
+       "sec-websocket-version",
+       "13"
+      ],
+      [
+       "upgrade",
+       "websocket"
+      ],
+      [
+       "user-agent",
+       "node"
+      ]
+     ]
+    },
+    {
+     "event": "frame",
+     "fin": true,
+     "opcode": 8,
+     "masked": true,
+     "hex": ""
+    },
+    {
+     "event": "closed"
+    }
+   ]
+  },
+  "server close with reserved code 1005": {
+   "client": [
+    {
+     "constructed": {
+      "url": "<url>",
+      "readyState": 0,
+      "protocol": "",
+      "extensions": "",
+      "binaryType": "blob",
+      "bufferedAmount": 0
+     }
+    },
+    {
+     "mark": "started",
+     "readyState": 0
+    },
+    {
+     "event": "open",
+     "class": "Event",
+     "readyState": 1,
+     "protocol": "",
+     "extensions": ""
+    },
+    {
+     "event": "error",
+     "class": "ErrorEvent",
+     "readyState": 3,
+     "message": "",
+     "error": {
+      "class": "TypeError",
+      "name": "TypeError",
+      "message": ""
+     }
+    },
+    {
+     "event": "close",
+     "class": "CloseEvent",
+     "readyState": 3,
+     "code": 1006,
+     "reason": "",
+     "wasClean": false
+    }
+   ],
+   "server": [
+    {
+     "event": "request",
+     "line": "GET /close?code=1005 HTTP/1.1",
+     "headers": [
+      [
+       "accept",
+       "*/*"
+      ],
+      [
+       "accept-encoding",
+       "gzip, deflate"
+      ],
+      [
+       "accept-language",
+       "*"
+      ],
+      [
+       "cache-control",
+       "no-cache"
+      ],
+      [
+       "connection",
+       "upgrade"
+      ],
+      [
+       "host",
+       "<host>"
+      ],
+      [
+       "pragma",
+       "no-cache"
+      ],
+      [
+       "sec-fetch-mode",
+       "websocket"
+      ],
+      [
+       "sec-websocket-extensions",
+       "permessage-deflate; client_max_window_bits"
+      ],
+      [
+       "sec-websocket-key",
+       "<key>"
+      ],
+      [
+       "sec-websocket-version",
+       "13"
+      ],
+      [
+       "upgrade",
+       "websocket"
+      ],
+      [
+       "user-agent",
+       "node"
+      ]
+     ]
+    },
+    {
+     "event": "frame",
+     "fin": true,
+     "opcode": 8,
+     "masked": true,
+     "code": 1002,
+     "reason": "Invalid status code"
+    },
+    {
+     "event": "closed"
+    }
+   ]
+  },
+  "server close with code 999": {
+   "client": [
+    {
+     "constructed": {
+      "url": "<url>",
+      "readyState": 0,
+      "protocol": "",
+      "extensions": "",
+      "binaryType": "blob",
+      "bufferedAmount": 0
+     }
+    },
+    {
+     "mark": "started",
+     "readyState": 0
+    },
+    {
+     "event": "open",
+     "class": "Event",
+     "readyState": 1,
+     "protocol": "",
+     "extensions": ""
+    },
+    {
+     "event": "error",
+     "class": "ErrorEvent",
+     "readyState": 3,
+     "message": "",
+     "error": {
+      "class": "TypeError",
+      "name": "TypeError",
+      "message": ""
+     }
+    },
+    {
+     "event": "close",
+     "class": "CloseEvent",
+     "readyState": 3,
+     "code": 1006,
+     "reason": "",
+     "wasClean": false
+    }
+   ],
+   "server": [
+    {
+     "event": "request",
+     "line": "GET /close?code=999 HTTP/1.1",
+     "headers": [
+      [
+       "accept",
+       "*/*"
+      ],
+      [
+       "accept-encoding",
+       "gzip, deflate"
+      ],
+      [
+       "accept-language",
+       "*"
+      ],
+      [
+       "cache-control",
+       "no-cache"
+      ],
+      [
+       "connection",
+       "upgrade"
+      ],
+      [
+       "host",
+       "<host>"
+      ],
+      [
+       "pragma",
+       "no-cache"
+      ],
+      [
+       "sec-fetch-mode",
+       "websocket"
+      ],
+      [
+       "sec-websocket-extensions",
+       "permessage-deflate; client_max_window_bits"
+      ],
+      [
+       "sec-websocket-key",
+       "<key>"
+      ],
+      [
+       "sec-websocket-version",
+       "13"
+      ],
+      [
+       "upgrade",
+       "websocket"
+      ],
+      [
+       "user-agent",
+       "node"
+      ]
+     ]
+    },
+    {
+     "event": "frame",
+     "fin": true,
+     "opcode": 8,
+     "masked": true,
+     "code": 1002,
+     "reason": "Invalid status code"
+    },
+    {
+     "event": "closed"
+    }
+   ]
+  },
+  "server close with a one-byte body": {
+   "client": [
+    {
+     "constructed": {
+      "url": "<url>",
+      "readyState": 0,
+      "protocol": "",
+      "extensions": "",
+      "binaryType": "blob",
+      "bufferedAmount": 0
+     }
+    },
+    {
+     "mark": "started",
+     "readyState": 0
+    },
+    {
+     "event": "open",
+     "class": "Event",
+     "readyState": 1,
+     "protocol": "",
+     "extensions": ""
+    },
+    {
+     "event": "error",
+     "class": "ErrorEvent",
+     "readyState": 3,
+     "message": "",
+     "error": {
+      "class": "TypeError",
+      "name": "TypeError",
+      "message": ""
+     }
+    },
+    {
+     "event": "close",
+     "class": "CloseEvent",
+     "readyState": 3,
+     "code": 1006,
+     "reason": "",
+     "wasClean": false
+    }
+   ],
+   "server": [
+    {
+     "event": "request",
+     "line": "GET /raw?hex=880103 HTTP/1.1",
+     "headers": [
+      [
+       "accept",
+       "*/*"
+      ],
+      [
+       "accept-encoding",
+       "gzip, deflate"
+      ],
+      [
+       "accept-language",
+       "*"
+      ],
+      [
+       "cache-control",
+       "no-cache"
+      ],
+      [
+       "connection",
+       "upgrade"
+      ],
+      [
+       "host",
+       "<host>"
+      ],
+      [
+       "pragma",
+       "no-cache"
+      ],
+      [
+       "sec-fetch-mode",
+       "websocket"
+      ],
+      [
+       "sec-websocket-extensions",
+       "permessage-deflate; client_max_window_bits"
+      ],
+      [
+       "sec-websocket-key",
+       "<key>"
+      ],
+      [
+       "sec-websocket-version",
+       "13"
+      ],
+      [
+       "upgrade",
+       "websocket"
+      ],
+      [
+       "user-agent",
+       "node"
+      ]
+     ]
+    },
+    {
+     "event": "frame",
+     "fin": true,
+     "opcode": 8,
+     "masked": true,
+     "code": 1002,
+     "reason": "Received close frame with a 1-byte body."
+    },
+    {
+     "event": "closed"
+    }
+   ]
+  },
+  "server close with a non-UTF-8 reason": {
+   "client": [
+    {
+     "constructed": {
+      "url": "<url>",
+      "readyState": 0,
+      "protocol": "",
+      "extensions": "",
+      "binaryType": "blob",
+      "bufferedAmount": 0
+     }
+    },
+    {
+     "mark": "started",
+     "readyState": 0
+    },
+    {
+     "event": "open",
+     "class": "Event",
+     "readyState": 1,
+     "protocol": "",
+     "extensions": ""
+    },
+    {
+     "event": "error",
+     "class": "ErrorEvent",
+     "readyState": 3,
+     "message": "",
+     "error": {
+      "class": "TypeError",
+      "name": "TypeError",
+      "message": ""
+     }
+    },
+    {
+     "event": "close",
+     "class": "CloseEvent",
+     "readyState": 3,
+     "code": 1006,
+     "reason": "",
+     "wasClean": false
+    }
+   ],
+   "server": [
+    {
+     "event": "request",
+     "line": "GET /raw?hex=880403e8ff80 HTTP/1.1",
+     "headers": [
+      [
+       "accept",
+       "*/*"
+      ],
+      [
+       "accept-encoding",
+       "gzip, deflate"
+      ],
+      [
+       "accept-language",
+       "*"
+      ],
+      [
+       "cache-control",
+       "no-cache"
+      ],
+      [
+       "connection",
+       "upgrade"
+      ],
+      [
+       "host",
+       "<host>"
+      ],
+      [
+       "pragma",
+       "no-cache"
+      ],
+      [
+       "sec-fetch-mode",
+       "websocket"
+      ],
+      [
+       "sec-websocket-extensions",
+       "permessage-deflate; client_max_window_bits"
+      ],
+      [
+       "sec-websocket-key",
+       "<key>"
+      ],
+      [
+       "sec-websocket-version",
+       "13"
+      ],
+      [
+       "upgrade",
+       "websocket"
+      ],
+      [
+       "user-agent",
+       "node"
+      ]
+     ]
+    },
+    {
+     "event": "frame",
+     "fin": true,
+     "opcode": 8,
+     "masked": true,
+     "code": 1007,
+     "reason": "Invalid UTF-8"
+    },
+    {
+     "event": "closed"
+    }
+   ]
+  },
+  "server drops the connection": {
+   "client": [
+    {
+     "constructed": {
+      "url": "<url>",
+      "readyState": 0,
+      "protocol": "",
+      "extensions": "",
+      "binaryType": "blob",
+      "bufferedAmount": 0
+     }
+    },
+    {
+     "mark": "started",
+     "readyState": 0
+    },
+    {
+     "event": "open",
+     "class": "Event",
+     "readyState": 1,
+     "protocol": "",
+     "extensions": ""
+    },
+    {
+     "event": "error",
+     "class": "ErrorEvent",
+     "readyState": 3,
+     "message": "",
+     "error": {
+      "class": "TypeError",
+      "name": "TypeError",
+      "message": ""
+     }
+    },
+    {
+     "event": "close",
+     "class": "CloseEvent",
+     "readyState": 3,
+     "code": 1006,
+     "reason": "",
+     "wasClean": false
+    }
+   ],
+   "server": [
+    {
+     "event": "request",
+     "line": "GET /drop HTTP/1.1",
+     "headers": [
+      [
+       "accept",
+       "*/*"
+      ],
+      [
+       "accept-encoding",
+       "gzip, deflate"
+      ],
+      [
+       "accept-language",
+       "*"
+      ],
+      [
+       "cache-control",
+       "no-cache"
+      ],
+      [
+       "connection",
+       "upgrade"
+      ],
+      [
+       "host",
+       "<host>"
+      ],
+      [
+       "pragma",
+       "no-cache"
+      ],
+      [
+       "sec-fetch-mode",
+       "websocket"
+      ],
+      [
+       "sec-websocket-extensions",
+       "permessage-deflate; client_max_window_bits"
+      ],
+      [
+       "sec-websocket-key",
+       "<key>"
+      ],
+      [
+       "sec-websocket-version",
+       "13"
+      ],
+      [
+       "upgrade",
+       "websocket"
+      ],
+      [
+       "user-agent",
+       "node"
+      ]
+     ]
+    },
+    {
+     "event": "closed"
+    }
+   ]
+  },
+  "server ends without a close frame": {
+   "client": [
+    {
+     "constructed": {
+      "url": "<url>",
+      "readyState": 0,
+      "protocol": "",
+      "extensions": "",
+      "binaryType": "blob",
+      "bufferedAmount": 0
+     }
+    },
+    {
+     "mark": "started",
+     "readyState": 0
+    },
+    {
+     "event": "open",
+     "class": "Event",
+     "readyState": 1,
+     "protocol": "",
+     "extensions": ""
+    },
+    {
+     "event": "error",
+     "class": "ErrorEvent",
+     "readyState": 3,
+     "message": "",
+     "error": {
+      "class": "TypeError",
+      "name": "TypeError",
+      "message": ""
+     }
+    },
+    {
+     "event": "close",
+     "class": "CloseEvent",
+     "readyState": 3,
+     "code": 1006,
+     "reason": "",
+     "wasClean": false
+    }
+   ],
+   "server": [
+    {
+     "event": "request",
+     "line": "GET /end HTTP/1.1",
+     "headers": [
+      [
+       "accept",
+       "*/*"
+      ],
+      [
+       "accept-encoding",
+       "gzip, deflate"
+      ],
+      [
+       "accept-language",
+       "*"
+      ],
+      [
+       "cache-control",
+       "no-cache"
+      ],
+      [
+       "connection",
+       "upgrade"
+      ],
+      [
+       "host",
+       "<host>"
+      ],
+      [
+       "pragma",
+       "no-cache"
+      ],
+      [
+       "sec-fetch-mode",
+       "websocket"
+      ],
+      [
+       "sec-websocket-extensions",
+       "permessage-deflate; client_max_window_bits"
+      ],
+      [
+       "sec-websocket-key",
+       "<key>"
+      ],
+      [
+       "sec-websocket-version",
+       "13"
+      ],
+      [
+       "upgrade",
+       "websocket"
+      ],
+      [
+       "user-agent",
+       "node"
+      ]
+     ]
+    },
+    {
+     "event": "closed"
+    }
+   ]
+  },
+  "client close": {
+   "client": [
+    {
+     "constructed": {
+      "url": "<url>",
+      "readyState": 0,
+      "protocol": "",
+      "extensions": "",
+      "binaryType": "blob",
+      "bufferedAmount": 0
+     }
+    },
+    {
+     "mark": "started",
+     "readyState": 0
+    },
+    {
+     "event": "open",
+     "class": "Event",
+     "readyState": 1,
+     "protocol": "",
+     "extensions": ""
+    },
+    {
+     "get": "readyState",
+     "value": 2
+    },
+    {
+     "event": "close",
+     "class": "CloseEvent",
+     "readyState": 3,
+     "code": 1005,
+     "reason": "",
+     "wasClean": true
+    }
+   ],
+   "server": [
+    {
+     "event": "request",
+     "line": "GET /echo HTTP/1.1",
+     "headers": [
+      [
+       "accept",
+       "*/*"
+      ],
+      [
+       "accept-encoding",
+       "gzip, deflate"
+      ],
+      [
+       "accept-language",
+       "*"
+      ],
+      [
+       "cache-control",
+       "no-cache"
+      ],
+      [
+       "connection",
+       "upgrade"
+      ],
+      [
+       "host",
+       "<host>"
+      ],
+      [
+       "pragma",
+       "no-cache"
+      ],
+      [
+       "sec-fetch-mode",
+       "websocket"
+      ],
+      [
+       "sec-websocket-extensions",
+       "permessage-deflate; client_max_window_bits"
+      ],
+      [
+       "sec-websocket-key",
+       "<key>"
+      ],
+      [
+       "sec-websocket-version",
+       "13"
+      ],
+      [
+       "upgrade",
+       "websocket"
+      ],
+      [
+       "user-agent",
+       "node"
+      ]
+     ]
+    },
+    {
+     "event": "frame",
+     "fin": true,
+     "opcode": 8,
+     "masked": true,
+     "hex": ""
+    },
+    {
+     "event": "closed"
+    }
+   ]
+  },
+  "client close with reason only code 1000": {
+   "client": [
+    {
+     "constructed": {
+      "url": "<url>",
+      "readyState": 0,
+      "protocol": "",
+      "extensions": "",
+      "binaryType": "blob",
+      "bufferedAmount": 0
+     }
+    },
+    {
+     "mark": "started",
+     "readyState": 0
+    },
+    {
+     "event": "open",
+     "class": "Event",
+     "readyState": 1,
+     "protocol": "",
+     "extensions": ""
+    },
+    {
+     "event": "close",
+     "class": "CloseEvent",
+     "readyState": 3,
+     "code": 1000,
+     "reason": "finished",
+     "wasClean": true
+    }
+   ],
+   "server": [
+    {
+     "event": "request",
+     "line": "GET /echo HTTP/1.1",
+     "headers": [
+      [
+       "accept",
+       "*/*"
+      ],
+      [
+       "accept-encoding",
+       "gzip, deflate"
+      ],
+      [
+       "accept-language",
+       "*"
+      ],
+      [
+       "cache-control",
+       "no-cache"
+      ],
+      [
+       "connection",
+       "upgrade"
+      ],
+      [
+       "host",
+       "<host>"
+      ],
+      [
+       "pragma",
+       "no-cache"
+      ],
+      [
+       "sec-fetch-mode",
+       "websocket"
+      ],
+      [
+       "sec-websocket-extensions",
+       "permessage-deflate; client_max_window_bits"
+      ],
+      [
+       "sec-websocket-key",
+       "<key>"
+      ],
+      [
+       "sec-websocket-version",
+       "13"
+      ],
+      [
+       "upgrade",
+       "websocket"
+      ],
+      [
+       "user-agent",
+       "node"
+      ]
+     ]
+    },
+    {
+     "event": "frame",
+     "fin": true,
+     "opcode": 8,
+     "masked": true,
+     "code": 1000,
+     "reason": "finished"
+    },
+    {
+     "event": "closed"
+    }
+   ]
+  },
+  "close argument validation": {
+   "client": [
+    {
+     "constructed": {
+      "url": "<url>",
+      "readyState": 0,
+      "protocol": "",
+      "extensions": "",
+      "binaryType": "blob",
+      "bufferedAmount": 0
+     }
+    },
+    {
+     "mark": "started",
+     "readyState": 0
+    },
+    {
+     "event": "open",
+     "class": "Event",
+     "readyState": 1,
+     "protocol": "",
+     "extensions": ""
+    },
+    {
+     "threw": {
+      "class": "DOMException",
+      "name": "InvalidAccessError",
+      "message": "invalid code",
+      "code": 15
+     },
+     "by": "close"
+    },
+    {
+     "threw": {
+      "class": "DOMException",
+      "name": "InvalidAccessError",
+      "message": "invalid code",
+      "code": 15
+     },
+     "by": "close"
+    },
+    {
+     "threw": {
+      "class": "DOMException",
+      "name": "InvalidAccessError",
+      "message": "invalid code",
+      "code": 15
+     },
+     "by": "close"
+    },
+    {
+     "threw": {
+      "class": "DOMException",
+      "name": "InvalidAccessError",
+      "message": "invalid code",
+      "code": 15
+     },
+     "by": "close"
+    },
+    {
+     "threw": {
+      "class": "DOMException",
+      "name": "InvalidAccessError",
+      "message": "invalid code",
+      "code": 15
+     },
+     "by": "close"
+    },
+    {
+     "threw": {
+      "class": "DOMException",
+      "name": "SyntaxError",
+      "message": "Reason must be less than 123 bytes; received 140",
+      "code": 12
+     },
+     "by": "close"
+    },
+    {
+     "get": "readyState",
+     "value": 1
+    },
+    {
+     "event": "close",
+     "class": "CloseEvent",
+     "readyState": 3,
+     "code": 4999,
+     "reason": "ok",
+     "wasClean": true
+    }
+   ],
+   "server": [
+    {
+     "event": "request",
+     "line": "GET /echo HTTP/1.1",
+     "headers": [
+      [
+       "accept",
+       "*/*"
+      ],
+      [
+       "accept-encoding",
+       "gzip, deflate"
+      ],
+      [
+       "accept-language",
+       "*"
+      ],
+      [
+       "cache-control",
+       "no-cache"
+      ],
+      [
+       "connection",
+       "upgrade"
+      ],
+      [
+       "host",
+       "<host>"
+      ],
+      [
+       "pragma",
+       "no-cache"
+      ],
+      [
+       "sec-fetch-mode",
+       "websocket"
+      ],
+      [
+       "sec-websocket-extensions",
+       "permessage-deflate; client_max_window_bits"
+      ],
+      [
+       "sec-websocket-key",
+       "<key>"
+      ],
+      [
+       "sec-websocket-version",
+       "13"
+      ],
+      [
+       "upgrade",
+       "websocket"
+      ],
+      [
+       "user-agent",
+       "node"
+      ]
+     ]
+    },
+    {
+     "event": "frame",
+     "fin": true,
+     "opcode": 8,
+     "masked": true,
+     "code": 4999,
+     "reason": "ok"
+    },
+    {
+     "event": "closed"
+    }
+   ]
+  },
+  "protocol negotiated": {
+   "client": [
+    {
+     "constructed": {
+      "url": "<url>",
+      "readyState": 0,
+      "protocol": "",
+      "extensions": "",
+      "binaryType": "blob",
+      "bufferedAmount": 0
+     }
+    },
+    {
+     "mark": "started",
+     "readyState": 0
+    },
+    {
+     "event": "open",
+     "class": "Event",
+     "readyState": 1,
+     "protocol": "b",
+     "extensions": ""
+    },
+    {
+     "event": "close",
+     "class": "CloseEvent",
+     "readyState": 3,
+     "code": 1005,
+     "reason": "",
+     "wasClean": true
+    }
+   ],
+   "server": [
+    {
+     "event": "request",
+     "line": "GET /echo?protocol=b HTTP/1.1",
+     "headers": [
+      [
+       "accept",
+       "*/*"
+      ],
+      [
+       "accept-encoding",
+       "gzip, deflate"
+      ],
+      [
+       "accept-language",
+       "*"
+      ],
+      [
+       "cache-control",
+       "no-cache"
+      ],
+      [
+       "connection",
+       "upgrade"
+      ],
+      [
+       "host",
+       "<host>"
+      ],
+      [
+       "pragma",
+       "no-cache"
+      ],
+      [
+       "sec-fetch-mode",
+       "websocket"
+      ],
+      [
+       "sec-websocket-extensions",
+       "permessage-deflate; client_max_window_bits"
+      ],
+      [
+       "sec-websocket-key",
+       "<key>"
+      ],
+      [
+       "sec-websocket-protocol",
+       "a, b"
+      ],
+      [
+       "sec-websocket-version",
+       "13"
+      ],
+      [
+       "upgrade",
+       "websocket"
+      ],
+      [
+       "user-agent",
+       "node"
+      ]
+     ]
+    },
+    {
+     "event": "frame",
+     "fin": true,
+     "opcode": 8,
+     "masked": true,
+     "hex": ""
+    },
+    {
+     "event": "closed"
+    }
+   ]
+  },
+  "protocol as a string": {
+   "client": [
+    {
+     "constructed": {
+      "url": "<url>",
+      "readyState": 0,
+      "protocol": "",
+      "extensions": "",
+      "binaryType": "blob",
+      "bufferedAmount": 0
+     }
+    },
+    {
+     "mark": "started",
+     "readyState": 0
+    },
+    {
+     "event": "open",
+     "class": "Event",
+     "readyState": 1,
+     "protocol": "chat",
+     "extensions": ""
+    },
+    {
+     "event": "close",
+     "class": "CloseEvent",
+     "readyState": 3,
+     "code": 1005,
+     "reason": "",
+     "wasClean": true
+    }
+   ],
+   "server": [
+    {
+     "event": "request",
+     "line": "GET /echo?protocol=chat HTTP/1.1",
+     "headers": [
+      [
+       "accept",
+       "*/*"
+      ],
+      [
+       "accept-encoding",
+       "gzip, deflate"
+      ],
+      [
+       "accept-language",
+       "*"
+      ],
+      [
+       "cache-control",
+       "no-cache"
+      ],
+      [
+       "connection",
+       "upgrade"
+      ],
+      [
+       "host",
+       "<host>"
+      ],
+      [
+       "pragma",
+       "no-cache"
+      ],
+      [
+       "sec-fetch-mode",
+       "websocket"
+      ],
+      [
+       "sec-websocket-extensions",
+       "permessage-deflate; client_max_window_bits"
+      ],
+      [
+       "sec-websocket-key",
+       "<key>"
+      ],
+      [
+       "sec-websocket-protocol",
+       "chat"
+      ],
+      [
+       "sec-websocket-version",
+       "13"
+      ],
+      [
+       "upgrade",
+       "websocket"
+      ],
+      [
+       "user-agent",
+       "node"
+      ]
+     ]
+    },
+    {
+     "event": "frame",
+     "fin": true,
+     "opcode": 8,
+     "masked": true,
+     "hex": ""
+    },
+    {
+     "event": "closed"
+    }
+   ]
+  },
+  "protocol offered but none chosen": {
+   "client": [
+    {
+     "constructed": {
+      "url": "<url>",
+      "readyState": 0,
+      "protocol": "",
+      "extensions": "",
+      "binaryType": "blob",
+      "bufferedAmount": 0
+     }
+    },
+    {
+     "mark": "started",
+     "readyState": 0
+    },
+    {
+     "event": "error",
+     "class": "ErrorEvent",
+     "readyState": 3,
+     "message": "",
+     "error": {
+      "class": "TypeError",
+      "name": "TypeError",
+      "message": ""
+     }
+    },
+    {
+     "event": "close",
+     "class": "CloseEvent",
+     "readyState": 3,
+     "code": 1006,
+     "reason": "",
+     "wasClean": false
+    }
+   ],
+   "server": [
+    {
+     "event": "request",
+     "line": "GET /echo HTTP/1.1",
+     "headers": [
+      [
+       "accept",
+       "*/*"
+      ],
+      [
+       "accept-encoding",
+       "gzip, deflate"
+      ],
+      [
+       "accept-language",
+       "*"
+      ],
+      [
+       "cache-control",
+       "no-cache"
+      ],
+      [
+       "connection",
+       "upgrade"
+      ],
+      [
+       "host",
+       "<host>"
+      ],
+      [
+       "pragma",
+       "no-cache"
+      ],
+      [
+       "sec-fetch-mode",
+       "websocket"
+      ],
+      [
+       "sec-websocket-extensions",
+       "permessage-deflate; client_max_window_bits"
+      ],
+      [
+       "sec-websocket-key",
+       "<key>"
+      ],
+      [
+       "sec-websocket-protocol",
+       "a, b"
+      ],
+      [
+       "sec-websocket-version",
+       "13"
+      ],
+      [
+       "upgrade",
+       "websocket"
+      ],
+      [
+       "user-agent",
+       "node"
+      ]
+     ]
+    },
+    {
+     "event": "closed"
+    }
+   ]
+  },
+  "protocol chosen that was not offered": {
+   "client": [
+    {
+     "constructed": {
+      "url": "<url>",
+      "readyState": 0,
+      "protocol": "",
+      "extensions": "",
+      "binaryType": "blob",
+      "bufferedAmount": 0
+     }
+    },
+    {
+     "mark": "started",
+     "readyState": 0
+    },
+    {
+     "event": "error",
+     "class": "ErrorEvent",
+     "readyState": 3,
+     "message": "",
+     "error": {
+      "class": "TypeError",
+      "name": "TypeError",
+      "message": ""
+     }
+    },
+    {
+     "event": "close",
+     "class": "CloseEvent",
+     "readyState": 3,
+     "code": 1006,
+     "reason": "",
+     "wasClean": false
+    }
+   ],
+   "server": [
+    {
+     "event": "request",
+     "line": "GET /echo?protocol=c HTTP/1.1",
+     "headers": [
+      [
+       "accept",
+       "*/*"
+      ],
+      [
+       "accept-encoding",
+       "gzip, deflate"
+      ],
+      [
+       "accept-language",
+       "*"
+      ],
+      [
+       "cache-control",
+       "no-cache"
+      ],
+      [
+       "connection",
+       "upgrade"
+      ],
+      [
+       "host",
+       "<host>"
+      ],
+      [
+       "pragma",
+       "no-cache"
+      ],
+      [
+       "sec-fetch-mode",
+       "websocket"
+      ],
+      [
+       "sec-websocket-extensions",
+       "permessage-deflate; client_max_window_bits"
+      ],
+      [
+       "sec-websocket-key",
+       "<key>"
+      ],
+      [
+       "sec-websocket-protocol",
+       "a, b"
+      ],
+      [
+       "sec-websocket-version",
+       "13"
+      ],
+      [
+       "upgrade",
+       "websocket"
+      ],
+      [
+       "user-agent",
+       "node"
+      ]
+     ]
+    },
+    {
+     "event": "closed"
+    }
+   ]
+  },
+  "protocol chosen with none offered": {
+   "client": [
+    {
+     "constructed": {
+      "url": "<url>",
+      "readyState": 0,
+      "protocol": "",
+      "extensions": "",
+      "binaryType": "blob",
+      "bufferedAmount": 0
+     }
+    },
+    {
+     "mark": "started",
+     "readyState": 0
+    },
+    {
+     "uncaught": {
+      "class": "TypeError",
+      "name": "TypeError",
+      "message": "Cannot read properties of null (reading 'includes')"
+     }
+    },
+    {
+     "mark": "timeout",
+     "readyState": 0
+    }
+   ],
+   "server": [
+    {
+     "event": "request",
+     "line": "GET /echo?protocol=c HTTP/1.1",
+     "headers": [
+      [
+       "accept",
+       "*/*"
+      ],
+      [
+       "accept-encoding",
+       "gzip, deflate"
+      ],
+      [
+       "accept-language",
+       "*"
+      ],
+      [
+       "cache-control",
+       "no-cache"
+      ],
+      [
+       "connection",
+       "upgrade"
+      ],
+      [
+       "host",
+       "<host>"
+      ],
+      [
+       "pragma",
+       "no-cache"
+      ],
+      [
+       "sec-fetch-mode",
+       "websocket"
+      ],
+      [
+       "sec-websocket-extensions",
+       "permessage-deflate; client_max_window_bits"
+      ],
+      [
+       "sec-websocket-key",
+       "<key>"
+      ],
+      [
+       "sec-websocket-version",
+       "13"
+      ],
+      [
+       "upgrade",
+       "websocket"
+      ],
+      [
+       "user-agent",
+       "node"
+      ]
+     ]
+    }
+   ]
+  },
+  "options object with protocols and headers": {
+   "client": [
+    {
+     "constructed": {
+      "url": "<url>",
+      "readyState": 0,
+      "protocol": "",
+      "extensions": "",
+      "binaryType": "blob",
+      "bufferedAmount": 0
+     }
+    },
+    {
+     "mark": "started",
+     "readyState": 0
+    },
+    {
+     "event": "open",
+     "class": "Event",
+     "readyState": 1,
+     "protocol": "x",
+     "extensions": ""
+    },
+    {
+     "event": "close",
+     "class": "CloseEvent",
+     "readyState": 3,
+     "code": 1005,
+     "reason": "",
+     "wasClean": true
+    }
+   ],
+   "server": [
+    {
+     "event": "request",
+     "line": "GET /echo?protocol=x HTTP/1.1",
+     "headers": [
+      [
+       "accept",
+       "*/*"
+      ],
+      [
+       "accept-encoding",
+       "gzip, deflate"
+      ],
+      [
+       "accept-language",
+       "*"
+      ],
+      [
+       "authorization",
+       "Bearer t"
+      ],
+      [
+       "cache-control",
+       "no-cache"
+      ],
+      [
+       "connection",
+       "upgrade"
+      ],
+      [
+       "cookie",
+       "a=b"
+      ],
+      [
+       "host",
+       "<host>"
+      ],
+      [
+       "pragma",
+       "no-cache"
+      ],
+      [
+       "sec-fetch-mode",
+       "websocket"
+      ],
+      [
+       "sec-websocket-extensions",
+       "permessage-deflate; client_max_window_bits"
+      ],
+      [
+       "sec-websocket-key",
+       "<key>"
+      ],
+      [
+       "sec-websocket-protocol",
+       "x"
+      ],
+      [
+       "sec-websocket-version",
+       "13"
+      ],
+      [
+       "upgrade",
+       "websocket"
+      ],
+      [
+       "user-agent",
+       "node"
+      ],
+      [
+       "x-custom",
+       "1"
+      ]
+     ]
+    },
+    {
+     "event": "frame",
+     "fin": true,
+     "opcode": 8,
+     "masked": true,
+     "hex": ""
+    },
+    {
+     "event": "closed"
+    }
+   ]
+  },
+  "options object with headers only": {
+   "client": [
+    {
+     "constructed": {
+      "url": "<url>",
+      "readyState": 0,
+      "protocol": "",
+      "extensions": "",
+      "binaryType": "blob",
+      "bufferedAmount": 0
+     }
+    },
+    {
+     "mark": "started",
+     "readyState": 0
+    },
+    {
+     "event": "open",
+     "class": "Event",
+     "readyState": 1,
+     "protocol": "",
+     "extensions": ""
+    },
+    {
+     "event": "close",
+     "class": "CloseEvent",
+     "readyState": 3,
+     "code": 1005,
+     "reason": "",
+     "wasClean": true
+    }
+   ],
+   "server": [
+    {
+     "event": "request",
+     "line": "GET /echo HTTP/1.1",
+     "headers": [
+      [
+       "accept",
+       "*/*"
+      ],
+      [
+       "accept-encoding",
+       "gzip, deflate"
+      ],
+      [
+       "accept-language",
+       "*"
+      ],
+      [
+       "cache-control",
+       "no-cache"
+      ],
+      [
+       "connection",
+       "upgrade"
+      ],
+      [
+       "host",
+       "<host>"
+      ],
+      [
+       "pragma",
+       "no-cache"
+      ],
+      [
+       "sec-fetch-mode",
+       "websocket"
+      ],
+      [
+       "sec-websocket-extensions",
+       "permessage-deflate; client_max_window_bits"
+      ],
+      [
+       "sec-websocket-key",
+       "<key>"
+      ],
+      [
+       "sec-websocket-version",
+       "13"
+      ],
+      [
+       "upgrade",
+       "websocket"
+      ],
+      [
+       "user-agent",
+       "node"
+      ],
+      [
+       "x-one",
+       "1"
+      ],
+      [
+       "x-two",
+       "2"
+      ]
+     ]
+    },
+    {
+     "event": "frame",
+     "fin": true,
+     "opcode": 8,
+     "masked": true,
+     "hex": ""
+    },
+    {
+     "event": "closed"
+    }
+   ]
+  },
+  "options object empty": {
+   "client": [
+    {
+     "constructed": {
+      "url": "<url>",
+      "readyState": 0,
+      "protocol": "",
+      "extensions": "",
+      "binaryType": "blob",
+      "bufferedAmount": 0
+     }
+    },
+    {
+     "mark": "started",
+     "readyState": 0
+    },
+    {
+     "event": "open",
+     "class": "Event",
+     "readyState": 1,
+     "protocol": "",
+     "extensions": ""
+    },
+    {
+     "event": "close",
+     "class": "CloseEvent",
+     "readyState": 3,
+     "code": 1005,
+     "reason": "",
+     "wasClean": true
+    }
+   ],
+   "server": [
+    {
+     "event": "request",
+     "line": "GET /echo HTTP/1.1",
+     "headers": [
+      [
+       "accept",
+       "*/*"
+      ],
+      [
+       "accept-encoding",
+       "gzip, deflate"
+      ],
+      [
+       "accept-language",
+       "*"
+      ],
+      [
+       "cache-control",
+       "no-cache"
+      ],
+      [
+       "connection",
+       "upgrade"
+      ],
+      [
+       "host",
+       "<host>"
+      ],
+      [
+       "pragma",
+       "no-cache"
+      ],
+      [
+       "sec-fetch-mode",
+       "websocket"
+      ],
+      [
+       "sec-websocket-extensions",
+       "permessage-deflate; client_max_window_bits"
+      ],
+      [
+       "sec-websocket-key",
+       "<key>"
+      ],
+      [
+       "sec-websocket-version",
+       "13"
+      ],
+      [
+       "upgrade",
+       "websocket"
+      ],
+      [
+       "user-agent",
+       "node"
+      ]
+     ]
+    },
+    {
+     "event": "frame",
+     "fin": true,
+     "opcode": 8,
+     "masked": true,
+     "hex": ""
+    },
+    {
+     "event": "closed"
+    }
+   ]
+  },
+  "bad accept key": {
+   "client": [
+    {
+     "constructed": {
+      "url": "<url>",
+      "readyState": 0,
+      "protocol": "",
+      "extensions": "",
+      "binaryType": "blob",
+      "bufferedAmount": 0
+     }
+    },
+    {
+     "mark": "started",
+     "readyState": 0
+    },
+    {
+     "event": "error",
+     "class": "ErrorEvent",
+     "readyState": 3,
+     "message": "",
+     "error": {
+      "class": "TypeError",
+      "name": "TypeError",
+      "message": ""
+     }
+    },
+    {
+     "event": "close",
+     "class": "CloseEvent",
+     "readyState": 3,
+     "code": 1006,
+     "reason": "",
+     "wasClean": false
+    }
+   ],
+   "server": [
+    {
+     "event": "request",
+     "line": "GET /bad-accept HTTP/1.1",
+     "headers": [
+      [
+       "accept",
+       "*/*"
+      ],
+      [
+       "accept-encoding",
+       "gzip, deflate"
+      ],
+      [
+       "accept-language",
+       "*"
+      ],
+      [
+       "cache-control",
+       "no-cache"
+      ],
+      [
+       "connection",
+       "upgrade"
+      ],
+      [
+       "host",
+       "<host>"
+      ],
+      [
+       "pragma",
+       "no-cache"
+      ],
+      [
+       "sec-fetch-mode",
+       "websocket"
+      ],
+      [
+       "sec-websocket-extensions",
+       "permessage-deflate; client_max_window_bits"
+      ],
+      [
+       "sec-websocket-key",
+       "<key>"
+      ],
+      [
+       "sec-websocket-version",
+       "13"
+      ],
+      [
+       "upgrade",
+       "websocket"
+      ],
+      [
+       "user-agent",
+       "node"
+      ]
+     ]
+    },
+    {
+     "event": "closed"
+    }
+   ]
+  },
+  "missing accept key": {
+   "client": [
+    {
+     "constructed": {
+      "url": "<url>",
+      "readyState": 0,
+      "protocol": "",
+      "extensions": "",
+      "binaryType": "blob",
+      "bufferedAmount": 0
+     }
+    },
+    {
+     "mark": "started",
+     "readyState": 0
+    },
+    {
+     "event": "error",
+     "class": "ErrorEvent",
+     "readyState": 3,
+     "message": "",
+     "error": {
+      "class": "TypeError",
+      "name": "TypeError",
+      "message": ""
+     }
+    },
+    {
+     "event": "close",
+     "class": "CloseEvent",
+     "readyState": 3,
+     "code": 1006,
+     "reason": "",
+     "wasClean": false
+    }
+   ],
+   "server": [
+    {
+     "event": "request",
+     "line": "GET /no-accept HTTP/1.1",
+     "headers": [
+      [
+       "accept",
+       "*/*"
+      ],
+      [
+       "accept-encoding",
+       "gzip, deflate"
+      ],
+      [
+       "accept-language",
+       "*"
+      ],
+      [
+       "cache-control",
+       "no-cache"
+      ],
+      [
+       "connection",
+       "upgrade"
+      ],
+      [
+       "host",
+       "<host>"
+      ],
+      [
+       "pragma",
+       "no-cache"
+      ],
+      [
+       "sec-fetch-mode",
+       "websocket"
+      ],
+      [
+       "sec-websocket-extensions",
+       "permessage-deflate; client_max_window_bits"
+      ],
+      [
+       "sec-websocket-key",
+       "<key>"
+      ],
+      [
+       "sec-websocket-version",
+       "13"
+      ],
+      [
+       "upgrade",
+       "websocket"
+      ],
+      [
+       "user-agent",
+       "node"
+      ]
+     ]
+    },
+    {
+     "event": "closed"
+    }
+   ]
+  },
+  "status 404": {
+   "client": [
+    {
+     "constructed": {
+      "url": "<url>",
+      "readyState": 0,
+      "protocol": "",
+      "extensions": "",
+      "binaryType": "blob",
+      "bufferedAmount": 0
+     }
+    },
+    {
+     "mark": "started",
+     "readyState": 0
+    },
+    {
+     "event": "error",
+     "class": "ErrorEvent",
+     "readyState": 3,
+     "message": "",
+     "error": {
+      "class": "TypeError",
+      "name": "TypeError",
+      "message": ""
+     }
+    },
+    {
+     "event": "close",
+     "class": "CloseEvent",
+     "readyState": 3,
+     "code": 1006,
+     "reason": "",
+     "wasClean": false
+    }
+   ],
+   "server": [
+    {
+     "event": "request",
+     "line": "GET /status?code=404 HTTP/1.1",
+     "headers": [
+      [
+       "accept",
+       "*/*"
+      ],
+      [
+       "accept-encoding",
+       "gzip, deflate"
+      ],
+      [
+       "accept-language",
+       "*"
+      ],
+      [
+       "cache-control",
+       "no-cache"
+      ],
+      [
+       "connection",
+       "upgrade"
+      ],
+      [
+       "host",
+       "<host>"
+      ],
+      [
+       "pragma",
+       "no-cache"
+      ],
+      [
+       "sec-fetch-mode",
+       "websocket"
+      ],
+      [
+       "sec-websocket-extensions",
+       "permessage-deflate; client_max_window_bits"
+      ],
+      [
+       "sec-websocket-key",
+       "<key>"
+      ],
+      [
+       "sec-websocket-version",
+       "13"
+      ],
+      [
+       "upgrade",
+       "websocket"
+      ],
+      [
+       "user-agent",
+       "node"
+      ]
+     ]
+    },
+    {
+     "event": "closed"
+    }
+   ]
+  },
+  "status 200": {
+   "client": [
+    {
+     "constructed": {
+      "url": "<url>",
+      "readyState": 0,
+      "protocol": "",
+      "extensions": "",
+      "binaryType": "blob",
+      "bufferedAmount": 0
+     }
+    },
+    {
+     "mark": "started",
+     "readyState": 0
+    },
+    {
+     "event": "error",
+     "class": "ErrorEvent",
+     "readyState": 3,
+     "message": "",
+     "error": {
+      "class": "TypeError",
+      "name": "TypeError",
+      "message": ""
+     }
+    },
+    {
+     "event": "close",
+     "class": "CloseEvent",
+     "readyState": 3,
+     "code": 1006,
+     "reason": "",
+     "wasClean": false
+    }
+   ],
+   "server": [
+    {
+     "event": "request",
+     "line": "GET /status?code=200 HTTP/1.1",
+     "headers": [
+      [
+       "accept",
+       "*/*"
+      ],
+      [
+       "accept-encoding",
+       "gzip, deflate"
+      ],
+      [
+       "accept-language",
+       "*"
+      ],
+      [
+       "cache-control",
+       "no-cache"
+      ],
+      [
+       "connection",
+       "upgrade"
+      ],
+      [
+       "host",
+       "<host>"
+      ],
+      [
+       "pragma",
+       "no-cache"
+      ],
+      [
+       "sec-fetch-mode",
+       "websocket"
+      ],
+      [
+       "sec-websocket-extensions",
+       "permessage-deflate; client_max_window_bits"
+      ],
+      [
+       "sec-websocket-key",
+       "<key>"
+      ],
+      [
+       "sec-websocket-version",
+       "13"
+      ],
+      [
+       "upgrade",
+       "websocket"
+      ],
+      [
+       "user-agent",
+       "node"
+      ]
+     ]
+    },
+    {
+     "event": "closed"
+    }
+   ]
+  },
+  "redirect 302": {
+   "client": [
+    {
+     "constructed": {
+      "url": "<url>",
+      "readyState": 0,
+      "protocol": "",
+      "extensions": "",
+      "binaryType": "blob",
+      "bufferedAmount": 0
+     }
+    },
+    {
+     "mark": "started",
+     "readyState": 0
+    },
+    {
+     "event": "error",
+     "class": "ErrorEvent",
+     "readyState": 3,
+     "message": "",
+     "error": {
+      "class": "TypeError",
+      "name": "TypeError",
+      "message": ""
+     }
+    },
+    {
+     "event": "close",
+     "class": "CloseEvent",
+     "readyState": 3,
+     "code": 1006,
+     "reason": "",
+     "wasClean": false
+    }
+   ],
+   "server": [
+    {
+     "event": "request",
+     "line": "GET /redirect HTTP/1.1",
+     "headers": [
+      [
+       "accept",
+       "*/*"
+      ],
+      [
+       "accept-encoding",
+       "gzip, deflate"
+      ],
+      [
+       "accept-language",
+       "*"
+      ],
+      [
+       "cache-control",
+       "no-cache"
+      ],
+      [
+       "connection",
+       "upgrade"
+      ],
+      [
+       "host",
+       "<host>"
+      ],
+      [
+       "pragma",
+       "no-cache"
+      ],
+      [
+       "sec-fetch-mode",
+       "websocket"
+      ],
+      [
+       "sec-websocket-extensions",
+       "permessage-deflate; client_max_window_bits"
+      ],
+      [
+       "sec-websocket-key",
+       "<key>"
+      ],
+      [
+       "sec-websocket-version",
+       "13"
+      ],
+      [
+       "upgrade",
+       "websocket"
+      ],
+      [
+       "user-agent",
+       "node"
+      ]
+     ]
+    },
+    {
+     "event": "closed"
+    }
+   ]
+  },
+  "not HTTP": {
+   "client": [
+    {
+     "constructed": {
+      "url": "<url>",
+      "readyState": 0,
+      "protocol": "",
+      "extensions": "",
+      "binaryType": "blob",
+      "bufferedAmount": 0
+     }
+    },
+    {
+     "mark": "started",
+     "readyState": 0
+    },
+    {
+     "event": "error",
+     "class": "ErrorEvent",
+     "readyState": 3,
+     "message": "",
+     "error": {
+      "class": "TypeError",
+      "name": "TypeError",
+      "message": ""
+     }
+    },
+    {
+     "event": "close",
+     "class": "CloseEvent",
+     "readyState": 3,
+     "code": 1006,
+     "reason": "",
+     "wasClean": false
+    }
+   ],
+   "server": [
+    {
+     "event": "request",
+     "line": "GET /garbage HTTP/1.1",
+     "headers": [
+      [
+       "accept",
+       "*/*"
+      ],
+      [
+       "accept-encoding",
+       "gzip, deflate"
+      ],
+      [
+       "accept-language",
+       "*"
+      ],
+      [
+       "cache-control",
+       "no-cache"
+      ],
+      [
+       "connection",
+       "upgrade"
+      ],
+      [
+       "host",
+       "<host>"
+      ],
+      [
+       "pragma",
+       "no-cache"
+      ],
+      [
+       "sec-fetch-mode",
+       "websocket"
+      ],
+      [
+       "sec-websocket-extensions",
+       "permessage-deflate; client_max_window_bits"
+      ],
+      [
+       "sec-websocket-key",
+       "<key>"
+      ],
+      [
+       "sec-websocket-version",
+       "13"
+      ],
+      [
+       "upgrade",
+       "websocket"
+      ],
+      [
+       "user-agent",
+       "node"
+      ]
+     ]
+    },
+    {
+     "event": "closed"
+    }
+   ]
+  },
+  "missing upgrade header": {
+   "client": [
+    {
+     "constructed": {
+      "url": "<url>",
+      "readyState": 0,
+      "protocol": "",
+      "extensions": "",
+      "binaryType": "blob",
+      "bufferedAmount": 0
+     }
+    },
+    {
+     "mark": "started",
+     "readyState": 0
+    },
+    {
+     "event": "error",
+     "class": "ErrorEvent",
+     "readyState": 3,
+     "message": "",
+     "error": {
+      "class": "TypeError",
+      "name": "TypeError",
+      "message": ""
+     }
+    },
+    {
+     "event": "close",
+     "class": "CloseEvent",
+     "readyState": 3,
+     "code": 1006,
+     "reason": "",
+     "wasClean": false
+    }
+   ],
+   "server": [
+    {
+     "event": "request",
+     "line": "GET /no-upgrade HTTP/1.1",
+     "headers": [
+      [
+       "accept",
+       "*/*"
+      ],
+      [
+       "accept-encoding",
+       "gzip, deflate"
+      ],
+      [
+       "accept-language",
+       "*"
+      ],
+      [
+       "cache-control",
+       "no-cache"
+      ],
+      [
+       "connection",
+       "upgrade"
+      ],
+      [
+       "host",
+       "<host>"
+      ],
+      [
+       "pragma",
+       "no-cache"
+      ],
+      [
+       "sec-fetch-mode",
+       "websocket"
+      ],
+      [
+       "sec-websocket-extensions",
+       "permessage-deflate; client_max_window_bits"
+      ],
+      [
+       "sec-websocket-key",
+       "<key>"
+      ],
+      [
+       "sec-websocket-version",
+       "13"
+      ],
+      [
+       "upgrade",
+       "websocket"
+      ],
+      [
+       "user-agent",
+       "node"
+      ]
+     ]
+    },
+    {
+     "event": "closed"
+    }
+   ]
+  },
+  "upgrade header in another case": {
+   "client": [
+    {
+     "constructed": {
+      "url": "<url>",
+      "readyState": 0,
+      "protocol": "",
+      "extensions": "",
+      "binaryType": "blob",
+      "bufferedAmount": 0
+     }
+    },
+    {
+     "mark": "started",
+     "readyState": 0
+    },
+    {
+     "event": "open",
+     "class": "Event",
+     "readyState": 1,
+     "protocol": "",
+     "extensions": ""
+    },
+    {
+     "event": "close",
+     "class": "CloseEvent",
+     "readyState": 3,
+     "code": 1005,
+     "reason": "",
+     "wasClean": true
+    }
+   ],
+   "server": [
+    {
+     "event": "request",
+     "line": "GET /upgrade-case HTTP/1.1",
+     "headers": [
+      [
+       "accept",
+       "*/*"
+      ],
+      [
+       "accept-encoding",
+       "gzip, deflate"
+      ],
+      [
+       "accept-language",
+       "*"
+      ],
+      [
+       "cache-control",
+       "no-cache"
+      ],
+      [
+       "connection",
+       "upgrade"
+      ],
+      [
+       "host",
+       "<host>"
+      ],
+      [
+       "pragma",
+       "no-cache"
+      ],
+      [
+       "sec-fetch-mode",
+       "websocket"
+      ],
+      [
+       "sec-websocket-extensions",
+       "permessage-deflate; client_max_window_bits"
+      ],
+      [
+       "sec-websocket-key",
+       "<key>"
+      ],
+      [
+       "sec-websocket-version",
+       "13"
+      ],
+      [
+       "upgrade",
+       "websocket"
+      ],
+      [
+       "user-agent",
+       "node"
+      ]
+     ]
+    },
+    {
+     "event": "frame",
+     "fin": true,
+     "opcode": 8,
+     "masked": true,
+     "hex": ""
+    },
+    {
+     "event": "closed"
+    }
+   ]
+  },
+  "connection header not upgrade": {
+   "client": [
+    {
+     "constructed": {
+      "url": "<url>",
+      "readyState": 0,
+      "protocol": "",
+      "extensions": "",
+      "binaryType": "blob",
+      "bufferedAmount": 0
+     }
+    },
+    {
+     "mark": "started",
+     "readyState": 0
+    },
+    {
+     "event": "error",
+     "class": "ErrorEvent",
+     "readyState": 3,
+     "message": "",
+     "error": {
+      "class": "TypeError",
+      "name": "TypeError",
+      "message": ""
+     }
+    },
+    {
+     "event": "close",
+     "class": "CloseEvent",
+     "readyState": 3,
+     "code": 1006,
+     "reason": "",
+     "wasClean": false
+    }
+   ],
+   "server": [
+    {
+     "event": "request",
+     "line": "GET /no-connection HTTP/1.1",
+     "headers": [
+      [
+       "accept",
+       "*/*"
+      ],
+      [
+       "accept-encoding",
+       "gzip, deflate"
+      ],
+      [
+       "accept-language",
+       "*"
+      ],
+      [
+       "cache-control",
+       "no-cache"
+      ],
+      [
+       "connection",
+       "upgrade"
+      ],
+      [
+       "host",
+       "<host>"
+      ],
+      [
+       "pragma",
+       "no-cache"
+      ],
+      [
+       "sec-fetch-mode",
+       "websocket"
+      ],
+      [
+       "sec-websocket-extensions",
+       "permessage-deflate; client_max_window_bits"
+      ],
+      [
+       "sec-websocket-key",
+       "<key>"
+      ],
+      [
+       "sec-websocket-version",
+       "13"
+      ],
+      [
+       "upgrade",
+       "websocket"
+      ],
+      [
+       "user-agent",
+       "node"
+      ]
+     ]
+    },
+    {
+     "event": "closed"
+    }
+   ]
+  },
+  "unknown extension accepted by server": {
+   "client": [
+    {
+     "constructed": {
+      "url": "<url>",
+      "readyState": 0,
+      "protocol": "",
+      "extensions": "",
+      "binaryType": "blob",
+      "bufferedAmount": 0
+     }
+    },
+    {
+     "mark": "started",
+     "readyState": 0
+    },
+    {
+     "event": "error",
+     "class": "ErrorEvent",
+     "readyState": 3,
+     "message": "",
+     "error": {
+      "class": "TypeError",
+      "name": "TypeError",
+      "message": ""
+     }
+    },
+    {
+     "event": "close",
+     "class": "CloseEvent",
+     "readyState": 3,
+     "code": 1006,
+     "reason": "",
+     "wasClean": false
+    }
+   ],
+   "server": [
+    {
+     "event": "request",
+     "line": "GET /echo?extensions=x-unknown HTTP/1.1",
+     "headers": [
+      [
+       "accept",
+       "*/*"
+      ],
+      [
+       "accept-encoding",
+       "gzip, deflate"
+      ],
+      [
+       "accept-language",
+       "*"
+      ],
+      [
+       "cache-control",
+       "no-cache"
+      ],
+      [
+       "connection",
+       "upgrade"
+      ],
+      [
+       "host",
+       "<host>"
+      ],
+      [
+       "pragma",
+       "no-cache"
+      ],
+      [
+       "sec-fetch-mode",
+       "websocket"
+      ],
+      [
+       "sec-websocket-extensions",
+       "permessage-deflate; client_max_window_bits"
+      ],
+      [
+       "sec-websocket-key",
+       "<key>"
+      ],
+      [
+       "sec-websocket-version",
+       "13"
+      ],
+      [
+       "upgrade",
+       "websocket"
+      ],
+      [
+       "user-agent",
+       "node"
+      ]
+     ]
+    },
+    {
+     "event": "closed"
+    }
+   ]
+  },
+  "masked frame from server": {
+   "client": [
+    {
+     "constructed": {
+      "url": "<url>",
+      "readyState": 0,
+      "protocol": "",
+      "extensions": "",
+      "binaryType": "blob",
+      "bufferedAmount": 0
+     }
+    },
+    {
+     "mark": "started",
+     "readyState": 0
+    },
+    {
+     "event": "open",
+     "class": "Event",
+     "readyState": 1,
+     "protocol": "",
+     "extensions": ""
+    },
+    {
+     "event": "error",
+     "class": "ErrorEvent",
+     "readyState": 3,
+     "message": "",
+     "error": {
+      "class": "TypeError",
+      "name": "TypeError",
+      "message": ""
+     }
+    },
+    {
+     "event": "close",
+     "class": "CloseEvent",
+     "readyState": 3,
+     "code": 1006,
+     "reason": "",
+     "wasClean": false
+    }
+   ],
+   "server": [
+    {
+     "event": "request",
+     "line": "GET /raw?hex=81850102030469676f686e HTTP/1.1",
+     "headers": [
+      [
+       "accept",
+       "*/*"
+      ],
+      [
+       "accept-encoding",
+       "gzip, deflate"
+      ],
+      [
+       "accept-language",
+       "*"
+      ],
+      [
+       "cache-control",
+       "no-cache"
+      ],
+      [
+       "connection",
+       "upgrade"
+      ],
+      [
+       "host",
+       "<host>"
+      ],
+      [
+       "pragma",
+       "no-cache"
+      ],
+      [
+       "sec-fetch-mode",
+       "websocket"
+      ],
+      [
+       "sec-websocket-extensions",
+       "permessage-deflate; client_max_window_bits"
+      ],
+      [
+       "sec-websocket-key",
+       "<key>"
+      ],
+      [
+       "sec-websocket-version",
+       "13"
+      ],
+      [
+       "upgrade",
+       "websocket"
+      ],
+      [
+       "user-agent",
+       "node"
+      ]
+     ]
+    },
+    {
+     "event": "frame",
+     "fin": true,
+     "opcode": 8,
+     "masked": true,
+     "code": 1002,
+     "reason": "Frame cannot be masked"
+    },
+    {
+     "event": "closed"
+    }
+   ]
+  },
+  "reserved bit set": {
+   "client": [
+    {
+     "constructed": {
+      "url": "<url>",
+      "readyState": 0,
+      "protocol": "",
+      "extensions": "",
+      "binaryType": "blob",
+      "bufferedAmount": 0
+     }
+    },
+    {
+     "mark": "started",
+     "readyState": 0
+    },
+    {
+     "event": "open",
+     "class": "Event",
+     "readyState": 1,
+     "protocol": "",
+     "extensions": ""
+    },
+    {
+     "event": "error",
+     "class": "ErrorEvent",
+     "readyState": 3,
+     "message": "",
+     "error": {
+      "class": "TypeError",
+      "name": "TypeError",
+      "message": ""
+     }
+    },
+    {
+     "event": "close",
+     "class": "CloseEvent",
+     "readyState": 3,
+     "code": 1006,
+     "reason": "",
+     "wasClean": false
+    }
+   ],
+   "server": [
+    {
+     "event": "request",
+     "line": "GET /raw?hex=c1026869 HTTP/1.1",
+     "headers": [
+      [
+       "accept",
+       "*/*"
+      ],
+      [
+       "accept-encoding",
+       "gzip, deflate"
+      ],
+      [
+       "accept-language",
+       "*"
+      ],
+      [
+       "cache-control",
+       "no-cache"
+      ],
+      [
+       "connection",
+       "upgrade"
+      ],
+      [
+       "host",
+       "<host>"
+      ],
+      [
+       "pragma",
+       "no-cache"
+      ],
+      [
+       "sec-fetch-mode",
+       "websocket"
+      ],
+      [
+       "sec-websocket-extensions",
+       "permessage-deflate; client_max_window_bits"
+      ],
+      [
+       "sec-websocket-key",
+       "<key>"
+      ],
+      [
+       "sec-websocket-version",
+       "13"
+      ],
+      [
+       "upgrade",
+       "websocket"
+      ],
+      [
+       "user-agent",
+       "node"
+      ]
+     ]
+    },
+    {
+     "event": "frame",
+     "fin": true,
+     "opcode": 8,
+     "masked": true,
+     "code": 1002,
+     "reason": "Expected RSV1 to be clear."
+    },
+    {
+     "event": "closed"
+    }
+   ]
+  },
+  "reserved bit 2 set": {
+   "client": [
+    {
+     "constructed": {
+      "url": "<url>",
+      "readyState": 0,
+      "protocol": "",
+      "extensions": "",
+      "binaryType": "blob",
+      "bufferedAmount": 0
+     }
+    },
+    {
+     "mark": "started",
+     "readyState": 0
+    },
+    {
+     "event": "open",
+     "class": "Event",
+     "readyState": 1,
+     "protocol": "",
+     "extensions": ""
+    },
+    {
+     "event": "error",
+     "class": "ErrorEvent",
+     "readyState": 3,
+     "message": "",
+     "error": {
+      "class": "TypeError",
+      "name": "TypeError",
+      "message": ""
+     }
+    },
+    {
+     "event": "close",
+     "class": "CloseEvent",
+     "readyState": 3,
+     "code": 1006,
+     "reason": "",
+     "wasClean": false
+    }
+   ],
+   "server": [
+    {
+     "event": "request",
+     "line": "GET /raw?hex=a1026869 HTTP/1.1",
+     "headers": [
+      [
+       "accept",
+       "*/*"
+      ],
+      [
+       "accept-encoding",
+       "gzip, deflate"
+      ],
+      [
+       "accept-language",
+       "*"
+      ],
+      [
+       "cache-control",
+       "no-cache"
+      ],
+      [
+       "connection",
+       "upgrade"
+      ],
+      [
+       "host",
+       "<host>"
+      ],
+      [
+       "pragma",
+       "no-cache"
+      ],
+      [
+       "sec-fetch-mode",
+       "websocket"
+      ],
+      [
+       "sec-websocket-extensions",
+       "permessage-deflate; client_max_window_bits"
+      ],
+      [
+       "sec-websocket-key",
+       "<key>"
+      ],
+      [
+       "sec-websocket-version",
+       "13"
+      ],
+      [
+       "upgrade",
+       "websocket"
+      ],
+      [
+       "user-agent",
+       "node"
+      ]
+     ]
+    },
+    {
+     "event": "frame",
+     "fin": true,
+     "opcode": 8,
+     "masked": true,
+     "code": 1002,
+     "reason": "RSV1, RSV2, RSV3 must be clear"
+    },
+    {
+     "event": "closed"
+    }
+   ]
+  },
+  "unknown opcode": {
+   "client": [
+    {
+     "constructed": {
+      "url": "<url>",
+      "readyState": 0,
+      "protocol": "",
+      "extensions": "",
+      "binaryType": "blob",
+      "bufferedAmount": 0
+     }
+    },
+    {
+     "mark": "started",
+     "readyState": 0
+    },
+    {
+     "event": "open",
+     "class": "Event",
+     "readyState": 1,
+     "protocol": "",
+     "extensions": ""
+    },
+    {
+     "event": "error",
+     "class": "ErrorEvent",
+     "readyState": 3,
+     "message": "",
+     "error": {
+      "class": "TypeError",
+      "name": "TypeError",
+      "message": ""
+     }
+    },
+    {
+     "event": "close",
+     "class": "CloseEvent",
+     "readyState": 3,
+     "code": 1006,
+     "reason": "",
+     "wasClean": false
+    }
+   ],
+   "server": [
+    {
+     "event": "request",
+     "line": "GET /raw?hex=83026869 HTTP/1.1",
+     "headers": [
+      [
+       "accept",
+       "*/*"
+      ],
+      [
+       "accept-encoding",
+       "gzip, deflate"
+      ],
+      [
+       "accept-language",
+       "*"
+      ],
+      [
+       "cache-control",
+       "no-cache"
+      ],
+      [
+       "connection",
+       "upgrade"
+      ],
+      [
+       "host",
+       "<host>"
+      ],
+      [
+       "pragma",
+       "no-cache"
+      ],
+      [
+       "sec-fetch-mode",
+       "websocket"
+      ],
+      [
+       "sec-websocket-extensions",
+       "permessage-deflate; client_max_window_bits"
+      ],
+      [
+       "sec-websocket-key",
+       "<key>"
+      ],
+      [
+       "sec-websocket-version",
+       "13"
+      ],
+      [
+       "upgrade",
+       "websocket"
+      ],
+      [
+       "user-agent",
+       "node"
+      ]
+     ]
+    },
+    {
+     "event": "frame",
+     "fin": true,
+     "opcode": 8,
+     "masked": true,
+     "code": 1002,
+     "reason": "Invalid opcode received"
+    },
+    {
+     "event": "closed"
+    }
+   ]
+  },
+  "text that is not UTF-8": {
+   "client": [
+    {
+     "constructed": {
+      "url": "<url>",
+      "readyState": 0,
+      "protocol": "",
+      "extensions": "",
+      "binaryType": "blob",
+      "bufferedAmount": 0
+     }
+    },
+    {
+     "mark": "started",
+     "readyState": 0
+    },
+    {
+     "event": "open",
+     "class": "Event",
+     "readyState": 1,
+     "protocol": "",
+     "extensions": ""
+    },
+    {
+     "event": "error",
+     "class": "ErrorEvent",
+     "readyState": 3,
+     "message": "",
+     "error": {
+      "class": "TypeError",
+      "name": "TypeError",
+      "message": ""
+     }
+    },
+    {
+     "event": "close",
+     "class": "CloseEvent",
+     "readyState": 3,
+     "code": 1006,
+     "reason": "",
+     "wasClean": false
+    }
+   ],
+   "server": [
+    {
+     "event": "request",
+     "line": "GET /raw?hex=8102ff80 HTTP/1.1",
+     "headers": [
+      [
+       "accept",
+       "*/*"
+      ],
+      [
+       "accept-encoding",
+       "gzip, deflate"
+      ],
+      [
+       "accept-language",
+       "*"
+      ],
+      [
+       "cache-control",
+       "no-cache"
+      ],
+      [
+       "connection",
+       "upgrade"
+      ],
+      [
+       "host",
+       "<host>"
+      ],
+      [
+       "pragma",
+       "no-cache"
+      ],
+      [
+       "sec-fetch-mode",
+       "websocket"
+      ],
+      [
+       "sec-websocket-extensions",
+       "permessage-deflate; client_max_window_bits"
+      ],
+      [
+       "sec-websocket-key",
+       "<key>"
+      ],
+      [
+       "sec-websocket-version",
+       "13"
+      ],
+      [
+       "upgrade",
+       "websocket"
+      ],
+      [
+       "user-agent",
+       "node"
+      ]
+     ]
+    },
+    {
+     "event": "frame",
+     "fin": true,
+     "opcode": 8,
+     "masked": true,
+     "code": 1007,
+     "reason": "Received invalid UTF-8 in text frame."
+    },
+    {
+     "event": "closed"
+    }
+   ]
+  },
+  "oversize 64-bit length": {
+   "client": [
+    {
+     "constructed": {
+      "url": "<url>",
+      "readyState": 0,
+      "protocol": "",
+      "extensions": "",
+      "binaryType": "blob",
+      "bufferedAmount": 0
+     }
+    },
+    {
+     "mark": "started",
+     "readyState": 0
+    },
+    {
+     "event": "open",
+     "class": "Event",
+     "readyState": 1,
+     "protocol": "",
+     "extensions": ""
+    },
+    {
+     "event": "error",
+     "class": "ErrorEvent",
+     "readyState": 3,
+     "message": "",
+     "error": {
+      "class": "TypeError",
+      "name": "TypeError",
+      "message": ""
+     }
+    },
+    {
+     "event": "close",
+     "class": "CloseEvent",
+     "readyState": 3,
+     "code": 1006,
+     "reason": "",
+     "wasClean": false
+    }
+   ],
+   "server": [
+    {
+     "event": "request",
+     "line": "GET /raw?hex=827f0000000100000000 HTTP/1.1",
+     "headers": [
+      [
+       "accept",
+       "*/*"
+      ],
+      [
+       "accept-encoding",
+       "gzip, deflate"
+      ],
+      [
+       "accept-language",
+       "*"
+      ],
+      [
+       "cache-control",
+       "no-cache"
+      ],
+      [
+       "connection",
+       "upgrade"
+      ],
+      [
+       "host",
+       "<host>"
+      ],
+      [
+       "pragma",
+       "no-cache"
+      ],
+      [
+       "sec-fetch-mode",
+       "websocket"
+      ],
+      [
+       "sec-websocket-extensions",
+       "permessage-deflate; client_max_window_bits"
+      ],
+      [
+       "sec-websocket-key",
+       "<key>"
+      ],
+      [
+       "sec-websocket-version",
+       "13"
+      ],
+      [
+       "upgrade",
+       "websocket"
+      ],
+      [
+       "user-agent",
+       "node"
+      ]
+     ]
+    },
+    {
+     "event": "frame",
+     "fin": true,
+     "opcode": 8,
+     "masked": true,
+     "code": 1009,
+     "reason": "Received payload length > 2^31 bytes."
+    },
+    {
+     "event": "closed"
+    }
+   ]
+  },
+  "length above 2^31": {
+   "client": [
+    {
+     "constructed": {
+      "url": "<url>",
+      "readyState": 0,
+      "protocol": "",
+      "extensions": "",
+      "binaryType": "blob",
+      "bufferedAmount": 0
+     }
+    },
+    {
+     "mark": "started",
+     "readyState": 0
+    },
+    {
+     "event": "open",
+     "class": "Event",
+     "readyState": 1,
+     "protocol": "",
+     "extensions": ""
+    },
+    {
+     "event": "error",
+     "class": "ErrorEvent",
+     "readyState": 3,
+     "message": "",
+     "error": {
+      "class": "TypeError",
+      "name": "TypeError",
+      "message": ""
+     }
+    },
+    {
+     "event": "close",
+     "class": "CloseEvent",
+     "readyState": 3,
+     "code": 1006,
+     "reason": "",
+     "wasClean": false
+    }
+   ],
+   "server": [
+    {
+     "event": "request",
+     "line": "GET /raw?hex=827f00000000ffffffff HTTP/1.1",
+     "headers": [
+      [
+       "accept",
+       "*/*"
+      ],
+      [
+       "accept-encoding",
+       "gzip, deflate"
+      ],
+      [
+       "accept-language",
+       "*"
+      ],
+      [
+       "cache-control",
+       "no-cache"
+      ],
+      [
+       "connection",
+       "upgrade"
+      ],
+      [
+       "host",
+       "<host>"
+      ],
+      [
+       "pragma",
+       "no-cache"
+      ],
+      [
+       "sec-fetch-mode",
+       "websocket"
+      ],
+      [
+       "sec-websocket-extensions",
+       "permessage-deflate; client_max_window_bits"
+      ],
+      [
+       "sec-websocket-key",
+       "<key>"
+      ],
+      [
+       "sec-websocket-version",
+       "13"
+      ],
+      [
+       "upgrade",
+       "websocket"
+      ],
+      [
+       "user-agent",
+       "node"
+      ]
+     ]
+    },
+    {
+     "event": "frame",
+     "fin": true,
+     "opcode": 8,
+     "masked": true,
+     "code": 1009,
+     "reason": "Received payload length > 2^31 bytes."
+    },
+    {
+     "event": "closed"
+    }
+   ]
+  },
+  "length above the 128 MiB bound": {
+   "client": [
+    {
+     "constructed": {
+      "url": "<url>",
+      "readyState": 0,
+      "protocol": "",
+      "extensions": "",
+      "binaryType": "blob",
+      "bufferedAmount": 0
+     }
+    },
+    {
+     "mark": "started",
+     "readyState": 0
+    },
+    {
+     "event": "open",
+     "class": "Event",
+     "readyState": 1,
+     "protocol": "",
+     "extensions": ""
+    },
+    {
+     "event": "error",
+     "class": "ErrorEvent",
+     "readyState": 3,
+     "message": "",
+     "error": {
+      "class": "TypeError",
+      "name": "TypeError",
+      "message": ""
+     }
+    },
+    {
+     "event": "close",
+     "class": "CloseEvent",
+     "readyState": 3,
+     "code": 1006,
+     "reason": "",
+     "wasClean": false
+    }
+   ],
+   "server": [
+    {
+     "event": "request",
+     "line": "GET /raw?hex=827f0000000008000001 HTTP/1.1",
+     "headers": [
+      [
+       "accept",
+       "*/*"
+      ],
+      [
+       "accept-encoding",
+       "gzip, deflate"
+      ],
+      [
+       "accept-language",
+       "*"
+      ],
+      [
+       "cache-control",
+       "no-cache"
+      ],
+      [
+       "connection",
+       "upgrade"
+      ],
+      [
+       "host",
+       "<host>"
+      ],
+      [
+       "pragma",
+       "no-cache"
+      ],
+      [
+       "sec-fetch-mode",
+       "websocket"
+      ],
+      [
+       "sec-websocket-extensions",
+       "permessage-deflate; client_max_window_bits"
+      ],
+      [
+       "sec-websocket-key",
+       "<key>"
+      ],
+      [
+       "sec-websocket-version",
+       "13"
+      ],
+      [
+       "upgrade",
+       "websocket"
+      ],
+      [
+       "user-agent",
+       "node"
+      ]
+     ]
+    },
+    {
+     "event": "frame",
+     "fin": true,
+     "opcode": 8,
+     "masked": true,
+     "code": 1009,
+     "reason": "Payload size exceeds maximum allowed size"
+    },
+    {
+     "event": "closed"
+    }
+   ]
+  },
+  "unexpected continuation": {
+   "client": [
+    {
+     "constructed": {
+      "url": "<url>",
+      "readyState": 0,
+      "protocol": "",
+      "extensions": "",
+      "binaryType": "blob",
+      "bufferedAmount": 0
+     }
+    },
+    {
+     "mark": "started",
+     "readyState": 0
+    },
+    {
+     "event": "open",
+     "class": "Event",
+     "readyState": 1,
+     "protocol": "",
+     "extensions": ""
+    },
+    {
+     "event": "error",
+     "class": "ErrorEvent",
+     "readyState": 3,
+     "message": "",
+     "error": {
+      "class": "TypeError",
+      "name": "TypeError",
+      "message": ""
+     }
+    },
+    {
+     "event": "close",
+     "class": "CloseEvent",
+     "readyState": 3,
+     "code": 1006,
+     "reason": "",
+     "wasClean": false
+    }
+   ],
+   "server": [
+    {
+     "event": "request",
+     "line": "GET /raw?hex=80026869 HTTP/1.1",
+     "headers": [
+      [
+       "accept",
+       "*/*"
+      ],
+      [
+       "accept-encoding",
+       "gzip, deflate"
+      ],
+      [
+       "accept-language",
+       "*"
+      ],
+      [
+       "cache-control",
+       "no-cache"
+      ],
+      [
+       "connection",
+       "upgrade"
+      ],
+      [
+       "host",
+       "<host>"
+      ],
+      [
+       "pragma",
+       "no-cache"
+      ],
+      [
+       "sec-fetch-mode",
+       "websocket"
+      ],
+      [
+       "sec-websocket-extensions",
+       "permessage-deflate; client_max_window_bits"
+      ],
+      [
+       "sec-websocket-key",
+       "<key>"
+      ],
+      [
+       "sec-websocket-version",
+       "13"
+      ],
+      [
+       "upgrade",
+       "websocket"
+      ],
+      [
+       "user-agent",
+       "node"
+      ]
+     ]
+    },
+    {
+     "event": "frame",
+     "fin": true,
+     "opcode": 8,
+     "masked": true,
+     "code": 1002,
+     "reason": "Unexpected continuation frame"
+    },
+    {
+     "event": "closed"
+    }
+   ]
+  },
+  "fragmented control frame": {
+   "client": [
+    {
+     "constructed": {
+      "url": "<url>",
+      "readyState": 0,
+      "protocol": "",
+      "extensions": "",
+      "binaryType": "blob",
+      "bufferedAmount": 0
+     }
+    },
+    {
+     "mark": "started",
+     "readyState": 0
+    },
+    {
+     "event": "open",
+     "class": "Event",
+     "readyState": 1,
+     "protocol": "",
+     "extensions": ""
+    },
+    {
+     "event": "error",
+     "class": "ErrorEvent",
+     "readyState": 3,
+     "message": "",
+     "error": {
+      "class": "TypeError",
+      "name": "TypeError",
+      "message": ""
+     }
+    },
+    {
+     "event": "close",
+     "class": "CloseEvent",
+     "readyState": 3,
+     "code": 1006,
+     "reason": "",
+     "wasClean": false
+    }
+   ],
+   "server": [
+    {
+     "event": "request",
+     "line": "GET /raw?hex=09026869 HTTP/1.1",
+     "headers": [
+      [
+       "accept",
+       "*/*"
+      ],
+      [
+       "accept-encoding",
+       "gzip, deflate"
+      ],
+      [
+       "accept-language",
+       "*"
+      ],
+      [
+       "cache-control",
+       "no-cache"
+      ],
+      [
+       "connection",
+       "upgrade"
+      ],
+      [
+       "host",
+       "<host>"
+      ],
+      [
+       "pragma",
+       "no-cache"
+      ],
+      [
+       "sec-fetch-mode",
+       "websocket"
+      ],
+      [
+       "sec-websocket-extensions",
+       "permessage-deflate; client_max_window_bits"
+      ],
+      [
+       "sec-websocket-key",
+       "<key>"
+      ],
+      [
+       "sec-websocket-version",
+       "13"
+      ],
+      [
+       "upgrade",
+       "websocket"
+      ],
+      [
+       "user-agent",
+       "node"
+      ]
+     ]
+    },
+    {
+     "event": "frame",
+     "fin": true,
+     "opcode": 8,
+     "masked": true,
+     "code": 1002,
+     "reason": "Invalid frame type was fragmented."
+    },
+    {
+     "event": "closed"
+    }
+   ]
+  },
+  "control frame above 125 bytes": {
+   "client": [
+    {
+     "constructed": {
+      "url": "<url>",
+      "readyState": 0,
+      "protocol": "",
+      "extensions": "",
+      "binaryType": "blob",
+      "bufferedAmount": 0
+     }
+    },
+    {
+     "mark": "started",
+     "readyState": 0
+    },
+    {
+     "event": "open",
+     "class": "Event",
+     "readyState": 1,
+     "protocol": "",
+     "extensions": ""
+    },
+    {
+     "event": "error",
+     "class": "ErrorEvent",
+     "readyState": 3,
+     "message": "",
+     "error": {
+      "class": "TypeError",
+      "name": "TypeError",
+      "message": ""
+     }
+    },
+    {
+     "event": "close",
+     "class": "CloseEvent",
+     "readyState": 3,
+     "code": 1006,
+     "reason": "",
+     "wasClean": false
+    }
+   ],
+   "server": [
+    {
+     "event": "request",
+     "line": "GET /raw?hex=897e0080 HTTP/1.1",
+     "headers": [
+      [
+       "accept",
+       "*/*"
+      ],
+      [
+       "accept-encoding",
+       "gzip, deflate"
+      ],
+      [
+       "accept-language",
+       "*"
+      ],
+      [
+       "cache-control",
+       "no-cache"
+      ],
+      [
+       "connection",
+       "upgrade"
+      ],
+      [
+       "host",
+       "<host>"
+      ],
+      [
+       "pragma",
+       "no-cache"
+      ],
+      [
+       "sec-fetch-mode",
+       "websocket"
+      ],
+      [
+       "sec-websocket-extensions",
+       "permessage-deflate; client_max_window_bits"
+      ],
+      [
+       "sec-websocket-key",
+       "<key>"
+      ],
+      [
+       "sec-websocket-version",
+       "13"
+      ],
+      [
+       "upgrade",
+       "websocket"
+      ],
+      [
+       "user-agent",
+       "node"
+      ]
+     ]
+    },
+    {
+     "event": "frame",
+     "fin": true,
+     "opcode": 8,
+     "masked": true,
+     "code": 1002,
+     "reason": "Control frame either too large or fragmented"
+    },
+    {
+     "event": "closed"
+    }
+   ]
+  },
+  "new message inside a fragmented one": {
+   "client": [
+    {
+     "constructed": {
+      "url": "<url>",
+      "readyState": 0,
+      "protocol": "",
+      "extensions": "",
+      "binaryType": "blob",
+      "bufferedAmount": 0
+     }
+    },
+    {
+     "mark": "started",
+     "readyState": 0
+    },
+    {
+     "event": "open",
+     "class": "Event",
+     "readyState": 1,
+     "protocol": "",
+     "extensions": ""
+    },
+    {
+     "event": "error",
+     "class": "ErrorEvent",
+     "readyState": 3,
+     "message": "",
+     "error": {
+      "class": "TypeError",
+      "name": "TypeError",
+      "message": ""
+     }
+    },
+    {
+     "event": "close",
+     "class": "CloseEvent",
+     "readyState": 3,
+     "code": 1006,
+     "reason": "",
+     "wasClean": false
+    }
+   ],
+   "server": [
+    {
+     "event": "request",
+     "line": "GET /raw?hex=010268698102686a HTTP/1.1",
+     "headers": [
+      [
+       "accept",
+       "*/*"
+      ],
+      [
+       "accept-encoding",
+       "gzip, deflate"
+      ],
+      [
+       "accept-language",
+       "*"
+      ],
+      [
+       "cache-control",
+       "no-cache"
+      ],
+      [
+       "connection",
+       "upgrade"
+      ],
+      [
+       "host",
+       "<host>"
+      ],
+      [
+       "pragma",
+       "no-cache"
+      ],
+      [
+       "sec-fetch-mode",
+       "websocket"
+      ],
+      [
+       "sec-websocket-extensions",
+       "permessage-deflate; client_max_window_bits"
+      ],
+      [
+       "sec-websocket-key",
+       "<key>"
+      ],
+      [
+       "sec-websocket-version",
+       "13"
+      ],
+      [
+       "upgrade",
+       "websocket"
+      ],
+      [
+       "user-agent",
+       "node"
+      ]
+     ]
+    },
+    {
+     "event": "frame",
+     "fin": true,
+     "opcode": 8,
+     "masked": true,
+     "code": 1002,
+     "reason": "Expected continuation frame"
+    },
+    {
+     "event": "closed"
+    }
+   ]
+  },
+  "message after an error is not delivered": {
+   "client": [
+    {
+     "constructed": {
+      "url": "<url>",
+      "readyState": 0,
+      "protocol": "",
+      "extensions": "",
+      "binaryType": "blob",
+      "bufferedAmount": 0
+     }
+    },
+    {
+     "mark": "started",
+     "readyState": 0
+    },
+    {
+     "event": "open",
+     "class": "Event",
+     "readyState": 1,
+     "protocol": "",
+     "extensions": ""
+    },
+    {
+     "event": "error",
+     "class": "ErrorEvent",
+     "readyState": 3,
+     "message": "",
+     "error": {
+      "class": "TypeError",
+      "name": "TypeError",
+      "message": ""
+     }
+    },
+    {
+     "event": "close",
+     "class": "CloseEvent",
+     "readyState": 3,
+     "code": 1006,
+     "reason": "",
+     "wasClean": false
+    }
+   ],
+   "server": [
+    {
+     "event": "request",
+     "line": "GET /raw?hex=83026869810268698800 HTTP/1.1",
+     "headers": [
+      [
+       "accept",
+       "*/*"
+      ],
+      [
+       "accept-encoding",
+       "gzip, deflate"
+      ],
+      [
+       "accept-language",
+       "*"
+      ],
+      [
+       "cache-control",
+       "no-cache"
+      ],
+      [
+       "connection",
+       "upgrade"
+      ],
+      [
+       "host",
+       "<host>"
+      ],
+      [
+       "pragma",
+       "no-cache"
+      ],
+      [
+       "sec-fetch-mode",
+       "websocket"
+      ],
+      [
+       "sec-websocket-extensions",
+       "permessage-deflate; client_max_window_bits"
+      ],
+      [
+       "sec-websocket-key",
+       "<key>"
+      ],
+      [
+       "sec-websocket-version",
+       "13"
+      ],
+      [
+       "upgrade",
+       "websocket"
+      ],
+      [
+       "user-agent",
+       "node"
+      ]
+     ]
+    },
+    {
+     "event": "frame",
+     "fin": true,
+     "opcode": 8,
+     "masked": true,
+     "code": 1002,
+     "reason": "Invalid opcode received"
+    },
+    {
+     "event": "closed"
+    }
+   ]
+  },
+  "send before open": {
+   "client": [
+    {
+     "constructed": {
+      "url": "<url>",
+      "readyState": 0,
+      "protocol": "",
+      "extensions": "",
+      "binaryType": "blob",
+      "bufferedAmount": 0
+     }
+    },
+    {
+     "threw": {
+      "class": "DOMException",
+      "name": "InvalidStateError",
+      "message": "Sent before connected.",
+      "code": 11
+     },
+     "by": "send"
+    },
+    {
+     "get": "readyState",
+     "value": 0
+    },
+    {
+     "mark": "started",
+     "readyState": 0
+    },
+    {
+     "event": "open",
+     "class": "Event",
+     "readyState": 1,
+     "protocol": "",
+     "extensions": ""
+    },
+    {
+     "event": "close",
+     "class": "CloseEvent",
+     "readyState": 3,
+     "code": 1005,
+     "reason": "",
+     "wasClean": true
+    }
+   ],
+   "server": [
+    {
+     "event": "request",
+     "line": "GET /echo HTTP/1.1",
+     "headers": [
+      [
+       "accept",
+       "*/*"
+      ],
+      [
+       "accept-encoding",
+       "gzip, deflate"
+      ],
+      [
+       "accept-language",
+       "*"
+      ],
+      [
+       "cache-control",
+       "no-cache"
+      ],
+      [
+       "connection",
+       "upgrade"
+      ],
+      [
+       "host",
+       "<host>"
+      ],
+      [
+       "pragma",
+       "no-cache"
+      ],
+      [
+       "sec-fetch-mode",
+       "websocket"
+      ],
+      [
+       "sec-websocket-extensions",
+       "permessage-deflate; client_max_window_bits"
+      ],
+      [
+       "sec-websocket-key",
+       "<key>"
+      ],
+      [
+       "sec-websocket-version",
+       "13"
+      ],
+      [
+       "upgrade",
+       "websocket"
+      ],
+      [
+       "user-agent",
+       "node"
+      ]
+     ]
+    },
+    {
+     "event": "frame",
+     "fin": true,
+     "opcode": 8,
+     "masked": true,
+     "hex": ""
+    },
+    {
+     "event": "closed"
+    }
+   ]
+  },
+  "close while connecting": {
+   "client": [
+    {
+     "constructed": {
+      "url": "<url>",
+      "readyState": 0,
+      "protocol": "",
+      "extensions": "",
+      "binaryType": "blob",
+      "bufferedAmount": 0
+     }
+    },
+    {
+     "event": "error",
+     "class": "ErrorEvent",
+     "readyState": 3,
+     "message": "",
+     "error": {
+      "class": "TypeError",
+      "name": "TypeError",
+      "message": ""
+     }
+    },
+    {
+     "event": "close",
+     "class": "CloseEvent",
+     "readyState": 3,
+     "code": 1006,
+     "reason": "",
+     "wasClean": false
+    },
+    {
+     "get": "readyState",
+     "value": 2
+    },
+    {
+     "mark": "started",
+     "readyState": 2
+    }
+   ],
+   "server": [
+    {
+     "event": "closed"
+    }
+   ]
+  },
+  "close with invalid code while connecting": {
+   "client": [
+    {
+     "constructed": {
+      "url": "<url>",
+      "readyState": 0,
+      "protocol": "",
+      "extensions": "",
+      "binaryType": "blob",
+      "bufferedAmount": 0
+     }
+    },
+    {
+     "threw": {
+      "class": "DOMException",
+      "name": "InvalidAccessError",
+      "message": "invalid code",
+      "code": 15
+     },
+     "by": "close"
+    },
+    {
+     "get": "readyState",
+     "value": 0
+    },
+    {
+     "event": "error",
+     "class": "ErrorEvent",
+     "readyState": 3,
+     "message": "",
+     "error": {
+      "class": "TypeError",
+      "name": "TypeError",
+      "message": ""
+     }
+    },
+    {
+     "event": "close",
+     "class": "CloseEvent",
+     "readyState": 3,
+     "code": 1006,
+     "reason": "",
+     "wasClean": false
+    },
+    {
+     "mark": "started",
+     "readyState": 2
+    }
+   ],
+   "server": [
+    {
+     "event": "closed"
+    }
+   ]
+  },
+  "binaryType accepts only blob and arraybuffer": {
+   "client": [
+    {
+     "constructed": {
+      "url": "<url>",
+      "readyState": 0,
+      "protocol": "",
+      "extensions": "",
+      "binaryType": "blob",
+      "bufferedAmount": 0
+     }
+    },
+    {
+     "get": "binaryType",
+     "value": "blob"
+    },
+    {
+     "get": "binaryType",
+     "value": "arraybuffer"
+    },
+    {
+     "get": "binaryType",
+     "value": "blob"
+    },
+    {
+     "mark": "started",
+     "readyState": 0
+    },
+    {
+     "event": "open",
+     "class": "Event",
+     "readyState": 1,
+     "protocol": "",
+     "extensions": ""
+    },
+    {
+     "event": "close",
+     "class": "CloseEvent",
+     "readyState": 3,
+     "code": 1005,
+     "reason": "",
+     "wasClean": true
+    }
+   ],
+   "server": [
+    {
+     "event": "request",
+     "line": "GET /echo HTTP/1.1",
+     "headers": [
+      [
+       "accept",
+       "*/*"
+      ],
+      [
+       "accept-encoding",
+       "gzip, deflate"
+      ],
+      [
+       "accept-language",
+       "*"
+      ],
+      [
+       "cache-control",
+       "no-cache"
+      ],
+      [
+       "connection",
+       "upgrade"
+      ],
+      [
+       "host",
+       "<host>"
+      ],
+      [
+       "pragma",
+       "no-cache"
+      ],
+      [
+       "sec-fetch-mode",
+       "websocket"
+      ],
+      [
+       "sec-websocket-extensions",
+       "permessage-deflate; client_max_window_bits"
+      ],
+      [
+       "sec-websocket-key",
+       "<key>"
+      ],
+      [
+       "sec-websocket-version",
+       "13"
+      ],
+      [
+       "upgrade",
+       "websocket"
+      ],
+      [
+       "user-agent",
+       "node"
+      ]
+     ]
+    },
+    {
+     "event": "frame",
+     "fin": true,
+     "opcode": 8,
+     "masked": true,
+     "hex": ""
+    },
+    {
+     "event": "closed"
+    }
+   ]
+  },
+  "connection refused": {
+   "client": [
+    {
+     "constructed": {
+      "url": "<url>",
+      "readyState": 0,
+      "protocol": "",
+      "extensions": "",
+      "binaryType": "blob",
+      "bufferedAmount": 0
+     }
+    },
+    {
+     "mark": "started",
+     "readyState": 0
+    },
+    {
+     "event": "error",
+     "class": "ErrorEvent",
+     "readyState": 3,
+     "message": "",
+     "error": {
+      "class": "TypeError",
+      "name": "TypeError",
+      "message": ""
+     }
+    },
+    {
+     "event": "close",
+     "class": "CloseEvent",
+     "readyState": 3,
+     "code": 1006,
+     "reason": "",
+     "wasClean": false
+    }
+   ],
+   "server": []
+  },
+  "no arguments": {
+   "client": [
+    {
+     "threw": {
+      "class": "TypeError",
+      "name": "TypeError",
+      "message": "WebSocket constructor: 1 argument required, but 0 found."
+     },
+     "by": "constructor"
+    }
+   ],
+   "server": []
+  },
+  "invalid URL": {
+   "client": [
+    {
+     "threw": {
+      "class": "DOMException",
+      "name": "SyntaxError",
+      "message": "TypeError: Invalid URL",
+      "code": 12
+     },
+     "by": "constructor"
+    }
+   ],
+   "server": []
+  },
+  "relative URL": {
+   "client": [
+    {
+     "threw": {
+      "class": "DOMException",
+      "name": "SyntaxError",
+      "message": "TypeError: Invalid URL",
+      "code": 12
+     },
+     "by": "constructor"
+    }
+   ],
+   "server": []
+  },
+  "URL with a fragment": {
+   "client": [
+    {
+     "threw": {
+      "class": "DOMException",
+      "name": "SyntaxError",
+      "message": "hash",
+      "code": 12
+     },
+     "by": "constructor"
+    }
+   ],
+   "server": []
+  },
+  "URL with an empty fragment": {
+   "client": [
+    {
+     "threw": {
+      "class": "DOMException",
+      "name": "SyntaxError",
+      "message": "hash",
+      "code": 12
+     },
+     "by": "constructor"
+    }
+   ],
+   "server": []
+  },
+  "URL with another scheme": {
+   "client": [
+    {
+     "threw": {
+      "class": "DOMException",
+      "name": "SyntaxError",
+      "message": "expected a ws: or wss: url",
+      "code": 12
+     },
+     "by": "constructor"
+    }
+   ],
+   "server": []
+  },
+  "duplicate protocols": {
+   "client": [
+    {
+     "threw": {
+      "class": "DOMException",
+      "name": "SyntaxError",
+      "message": "Invalid Sec-WebSocket-Protocol value",
+      "code": 12
+     },
+     "by": "constructor"
+    }
+   ],
+   "server": []
+  },
+  "invalid protocol token": {
+   "client": [
+    {
+     "threw": {
+      "class": "DOMException",
+      "name": "SyntaxError",
+      "message": "Invalid Sec-WebSocket-Protocol value",
+      "code": 12
+     },
+     "by": "constructor"
+    }
+   ],
+   "server": []
+  },
+  "empty protocol string": {
+   "client": [
+    {
+     "threw": {
+      "class": "DOMException",
+      "name": "SyntaxError",
+      "message": "Invalid Sec-WebSocket-Protocol value",
+      "code": 12
+     },
+     "by": "constructor"
+    }
+   ],
+   "server": []
+  },
+  "protocols of another type": {
+   "client": [
+    {
+     "constructed": {
+      "url": "<url>",
+      "readyState": 0,
+      "protocol": "",
+      "extensions": "",
+      "binaryType": "blob",
+      "bufferedAmount": 0
+     }
+    },
+    {
+     "mark": "started",
+     "readyState": 0
+    },
+    {
+     "event": "error",
+     "class": "ErrorEvent",
+     "readyState": 3,
+     "message": "",
+     "error": {
+      "class": "TypeError",
+      "name": "TypeError",
+      "message": ""
+     }
+    },
+    {
+     "event": "close",
+     "class": "CloseEvent",
+     "readyState": 3,
+     "code": 1006,
+     "reason": "",
+     "wasClean": false
+    }
+   ],
+   "server": []
+  },
+  "http URL becomes ws": {
+   "client": [
+    {
+     "constructed": {
+      "url": "ws://<host>/a?b=1",
+      "readyState": 0,
+      "protocol": "",
+      "extensions": "",
+      "binaryType": "blob",
+      "bufferedAmount": 0
+     }
+    },
+    {
+     "mark": "started",
+     "readyState": 0
+    },
+    {
+     "event": "error",
+     "class": "ErrorEvent",
+     "readyState": 3,
+     "message": "",
+     "error": {
+      "class": "TypeError",
+      "name": "TypeError",
+      "message": ""
+     }
+    },
+    {
+     "event": "close",
+     "class": "CloseEvent",
+     "readyState": 3,
+     "code": 1006,
+     "reason": "",
+     "wasClean": false
+    }
+   ],
+   "server": []
+  },
+  "headers of a wrong type": {
+   "client": [
+    {
+     "threw": {
+      "class": "TypeError",
+      "name": "TypeError",
+      "message": "Headers constructor: Argument 1 could not be converted to one of: sequence<sequence<ByteString>>, record<ByteString, ByteString>."
+     },
+     "by": "constructor"
+    }
+   ],
+   "server": []
+  },
+  "null second argument": {
+   "client": [
+    {
+     "constructed": {
+      "url": "<url>",
+      "readyState": 0,
+      "protocol": "",
+      "extensions": "",
+      "binaryType": "blob",
+      "bufferedAmount": 0
+     }
+    },
+    {
+     "mark": "started",
+     "readyState": 0
+    },
+    {
+     "event": "error",
+     "class": "ErrorEvent",
+     "readyState": 3,
+     "message": "",
+     "error": {
+      "class": "TypeError",
+      "name": "TypeError",
+      "message": ""
+     }
+    },
+    {
+     "event": "close",
+     "class": "CloseEvent",
+     "readyState": 3,
+     "code": 1006,
+     "reason": "",
+     "wasClean": false
+    }
+   ],
+   "server": [
+    {
+     "event": "request",
+     "line": "GET /echo HTTP/1.1",
+     "headers": [
+      [
+       "accept",
+       "*/*"
+      ],
+      [
+       "accept-encoding",
+       "gzip, deflate"
+      ],
+      [
+       "accept-language",
+       "*"
+      ],
+      [
+       "cache-control",
+       "no-cache"
+      ],
+      [
+       "connection",
+       "upgrade"
+      ],
+      [
+       "host",
+       "<host>"
+      ],
+      [
+       "pragma",
+       "no-cache"
+      ],
+      [
+       "sec-fetch-mode",
+       "websocket"
+      ],
+      [
+       "sec-websocket-extensions",
+       "permessage-deflate; client_max_window_bits"
+      ],
+      [
+       "sec-websocket-key",
+       "<key>"
+      ],
+      [
+       "sec-websocket-protocol",
+       "null"
+      ],
+      [
+       "sec-websocket-version",
+       "13"
+      ],
+      [
+       "upgrade",
+       "websocket"
+      ],
+      [
+       "user-agent",
+       "node"
+      ]
+     ]
+    },
+    {
+     "event": "closed"
+    }
+   ]
+  },
+  "URL credentials": {
+   "client": [
+    {
+     "constructed": {
+      "url": "<url>",
+      "readyState": 0,
+      "protocol": "",
+      "extensions": "",
+      "binaryType": "blob",
+      "bufferedAmount": 0
+     }
+    },
+    {
+     "mark": "started",
+     "readyState": 0
+    },
+    {
+     "event": "open",
+     "class": "Event",
+     "readyState": 1,
+     "protocol": "",
+     "extensions": ""
+    },
+    {
+     "event": "close",
+     "class": "CloseEvent",
+     "readyState": 3,
+     "code": 1005,
+     "reason": "",
+     "wasClean": true
+    }
+   ],
+   "server": [
+    {
+     "event": "request",
+     "line": "GET /echo HTTP/1.1",
+     "headers": [
+      [
+       "accept",
+       "*/*"
+      ],
+      [
+       "accept-encoding",
+       "gzip, deflate"
+      ],
+      [
+       "accept-language",
+       "*"
+      ],
+      [
+       "cache-control",
+       "no-cache"
+      ],
+      [
+       "connection",
+       "upgrade"
+      ],
+      [
+       "host",
+       "<host>"
+      ],
+      [
+       "pragma",
+       "no-cache"
+      ],
+      [
+       "sec-fetch-mode",
+       "websocket"
+      ],
+      [
+       "sec-websocket-extensions",
+       "permessage-deflate; client_max_window_bits"
+      ],
+      [
+       "sec-websocket-key",
+       "<key>"
+      ],
+      [
+       "sec-websocket-version",
+       "13"
+      ],
+      [
+       "upgrade",
+       "websocket"
+      ],
+      [
+       "user-agent",
+       "node"
+      ]
+     ]
+    },
+    {
+     "event": "frame",
+     "fin": true,
+     "opcode": 8,
+     "masked": true,
+     "hex": ""
+    },
+    {
+     "event": "closed"
+    }
+   ]
+  },
+  "close in the close handler and send after close": {
+   "client": [
+    {
+     "constructed": {
+      "url": "<url>",
+      "readyState": 0,
+      "protocol": "",
+      "extensions": "",
+      "binaryType": "blob",
+      "bufferedAmount": 0
+     }
+    },
+    {
+     "mark": "started",
+     "readyState": 0
+    },
+    {
+     "event": "open",
+     "class": "Event",
+     "readyState": 1,
+     "protocol": "",
+     "extensions": ""
+    },
+    {
+     "event": "close",
+     "class": "CloseEvent",
+     "readyState": 3,
+     "code": 1000,
+     "reason": "",
+     "wasClean": true
+    },
+    {
+     "get": "readyState",
+     "value": 3
+    },
+    {
+     "get": "bufferedAmount",
+     "value": 0
+    }
+   ],
+   "server": [
+    {
+     "event": "request",
+     "line": "GET /close?code=1000 HTTP/1.1",
+     "headers": [
+      [
+       "accept",
+       "*/*"
+      ],
+      [
+       "accept-encoding",
+       "gzip, deflate"
+      ],
+      [
+       "accept-language",
+       "*"
+      ],
+      [
+       "cache-control",
+       "no-cache"
+      ],
+      [
+       "connection",
+       "upgrade"
+      ],
+      [
+       "host",
+       "<host>"
+      ],
+      [
+       "pragma",
+       "no-cache"
+      ],
+      [
+       "sec-fetch-mode",
+       "websocket"
+      ],
+      [
+       "sec-websocket-extensions",
+       "permessage-deflate; client_max_window_bits"
+      ],
+      [
+       "sec-websocket-key",
+       "<key>"
+      ],
+      [
+       "sec-websocket-version",
+       "13"
+      ],
+      [
+       "upgrade",
+       "websocket"
+      ],
+      [
+       "user-agent",
+       "node"
+      ]
+     ]
+    },
+    {
+     "event": "frame",
+     "fin": true,
+     "opcode": 8,
+     "masked": true,
+     "code": 1000,
+     "reason": ""
+    },
+    {
+     "event": "closed"
+    }
+   ]
+  },
+  "close with a reason and no code": {
+   "client": [
+    {
+     "constructed": {
+      "url": "<url>",
+      "readyState": 0,
+      "protocol": "",
+      "extensions": "",
+      "binaryType": "blob",
+      "bufferedAmount": 0
+     }
+    },
+    {
+     "mark": "started",
+     "readyState": 0
+    },
+    {
+     "event": "open",
+     "class": "Event",
+     "readyState": 1,
+     "protocol": "",
+     "extensions": ""
+    },
+    {
+     "threw": {
+      "class": "DOMException",
+      "name": "InvalidAccessError",
+      "message": "invalid code",
+      "code": 15
+     },
+     "by": "close"
+    },
+    {
+     "mark": "timeout",
+     "readyState": 1
+    }
+   ],
+   "server": [
+    {
+     "event": "request",
+     "line": "GET /echo HTTP/1.1",
+     "headers": [
+      [
+       "accept",
+       "*/*"
+      ],
+      [
+       "accept-encoding",
+       "gzip, deflate"
+      ],
+      [
+       "accept-language",
+       "*"
+      ],
+      [
+       "cache-control",
+       "no-cache"
+      ],
+      [
+       "connection",
+       "upgrade"
+      ],
+      [
+       "host",
+       "<host>"
+      ],
+      [
+       "pragma",
+       "no-cache"
+      ],
+      [
+       "sec-fetch-mode",
+       "websocket"
+      ],
+      [
+       "sec-websocket-extensions",
+       "permessage-deflate; client_max_window_bits"
+      ],
+      [
+       "sec-websocket-key",
+       "<key>"
+      ],
+      [
+       "sec-websocket-version",
+       "13"
+      ],
+      [
+       "upgrade",
+       "websocket"
+      ],
+      [
+       "user-agent",
+       "node"
+      ]
+     ]
+    }
+   ]
+  },
+  "close code is clamped": {
+   "client": [
+    {
+     "constructed": {
+      "url": "<url>",
+      "readyState": 0,
+      "protocol": "",
+      "extensions": "",
+      "binaryType": "blob",
+      "bufferedAmount": 0
+     }
+    },
+    {
+     "mark": "started",
+     "readyState": 0
+    },
+    {
+     "event": "open",
+     "class": "Event",
+     "readyState": 1,
+     "protocol": "",
+     "extensions": ""
+    },
+    {
+     "get": "readyState",
+     "value": 2
+    },
+    {
+     "event": "close",
+     "class": "CloseEvent",
+     "readyState": 3,
+     "code": 3000,
+     "reason": "",
+     "wasClean": true
+    }
+   ],
+   "server": [
+    {
+     "event": "request",
+     "line": "GET /echo HTTP/1.1",
+     "headers": [
+      [
+       "accept",
+       "*/*"
+      ],
+      [
+       "accept-encoding",
+       "gzip, deflate"
+      ],
+      [
+       "accept-language",
+       "*"
+      ],
+      [
+       "cache-control",
+       "no-cache"
+      ],
+      [
+       "connection",
+       "upgrade"
+      ],
+      [
+       "host",
+       "<host>"
+      ],
+      [
+       "pragma",
+       "no-cache"
+      ],
+      [
+       "sec-fetch-mode",
+       "websocket"
+      ],
+      [
+       "sec-websocket-extensions",
+       "permessage-deflate; client_max_window_bits"
+      ],
+      [
+       "sec-websocket-key",
+       "<key>"
+      ],
+      [
+       "sec-websocket-version",
+       "13"
+      ],
+      [
+       "upgrade",
+       "websocket"
+      ],
+      [
+       "user-agent",
+       "node"
+      ]
+     ]
+    },
+    {
+     "event": "frame",
+     "fin": true,
+     "opcode": 8,
+     "masked": true,
+     "code": 3000,
+     "reason": ""
+    },
+    {
+     "event": "closed"
+    }
+   ]
+  },
+  "close called from the message handler twice": {
+   "client": [
+    {
+     "constructed": {
+      "url": "<url>",
+      "readyState": 0,
+      "protocol": "",
+      "extensions": "",
+      "binaryType": "blob",
+      "bufferedAmount": 0
+     }
+    },
+    {
+     "mark": "started",
+     "readyState": 0
+    },
+    {
+     "event": "open",
+     "class": "Event",
+     "readyState": 1,
+     "protocol": "",
+     "extensions": ""
+    },
+    {
+     "event": "message",
+     "class": "MessageEvent",
+     "readyState": 1,
+     "origin": "ws://<host>",
+     "lastEventId": "",
+     "source": null,
+     "ports": 0,
+     "data": {
+      "text": "hello"
+     }
+    },
+    {
+     "event": "close",
+     "class": "CloseEvent",
+     "readyState": 3,
+     "code": 1000,
+     "reason": "done",
+     "wasClean": true
+    }
+   ],
+   "server": [
+    {
+     "event": "request",
+     "line": "GET /greet HTTP/1.1",
+     "headers": [
+      [
+       "accept",
+       "*/*"
+      ],
+      [
+       "accept-encoding",
+       "gzip, deflate"
+      ],
+      [
+       "accept-language",
+       "*"
+      ],
+      [
+       "cache-control",
+       "no-cache"
+      ],
+      [
+       "connection",
+       "upgrade"
+      ],
+      [
+       "host",
+       "<host>"
+      ],
+      [
+       "pragma",
+       "no-cache"
+      ],
+      [
+       "sec-fetch-mode",
+       "websocket"
+      ],
+      [
+       "sec-websocket-extensions",
+       "permessage-deflate; client_max_window_bits"
+      ],
+      [
+       "sec-websocket-key",
+       "<key>"
+      ],
+      [
+       "sec-websocket-version",
+       "13"
+      ],
+      [
+       "upgrade",
+       "websocket"
+      ],
+      [
+       "user-agent",
+       "node"
+      ]
+     ]
+    },
+    {
+     "event": "frame",
+     "fin": true,
+     "opcode": 8,
+     "masked": true,
+     "code": 3001,
+     "reason": "enough"
+    },
+    {
+     "event": "closed"
+    }
+   ]
+  },
+  "send in the closing state": {
+   "client": [
+    {
+     "constructed": {
+      "url": "<url>",
+      "readyState": 0,
+      "protocol": "",
+      "extensions": "",
+      "binaryType": "blob",
+      "bufferedAmount": 0
+     }
+    },
+    {
+     "mark": "started",
+     "readyState": 0
+    },
+    {
+     "event": "open",
+     "class": "Event",
+     "readyState": 1,
+     "protocol": "",
+     "extensions": ""
+    },
+    {
+     "event": "message",
+     "class": "MessageEvent",
+     "readyState": 1,
+     "origin": "ws://<host>",
+     "lastEventId": "",
+     "source": null,
+     "ports": 0,
+     "data": {
+      "text": "hello"
+     }
+    },
+    {
+     "get": "bufferedAmount",
+     "value": 0
+    },
+    {
+     "event": "close",
+     "class": "CloseEvent",
+     "readyState": 3,
+     "code": 1000,
+     "reason": "done",
+     "wasClean": true
+    }
+   ],
+   "server": [
+    {
+     "event": "request",
+     "line": "GET /greet HTTP/1.1",
+     "headers": [
+      [
+       "accept",
+       "*/*"
+      ],
+      [
+       "accept-encoding",
+       "gzip, deflate"
+      ],
+      [
+       "accept-language",
+       "*"
+      ],
+      [
+       "cache-control",
+       "no-cache"
+      ],
+      [
+       "connection",
+       "upgrade"
+      ],
+      [
+       "host",
+       "<host>"
+      ],
+      [
+       "pragma",
+       "no-cache"
+      ],
+      [
+       "sec-fetch-mode",
+       "websocket"
+      ],
+      [
+       "sec-websocket-extensions",
+       "permessage-deflate; client_max_window_bits"
+      ],
+      [
+       "sec-websocket-key",
+       "<key>"
+      ],
+      [
+       "sec-websocket-version",
+       "13"
+      ],
+      [
+       "upgrade",
+       "websocket"
+      ],
+      [
+       "user-agent",
+       "node"
+      ]
+     ]
+    },
+    {
+     "event": "frame",
+     "fin": true,
+     "opcode": 8,
+     "masked": true,
+     "hex": ""
+    },
+    {
+     "event": "closed"
+    }
+   ]
+  },
+  "close from the error handler": {
+   "client": [
+    {
+     "constructed": {
+      "url": "<url>",
+      "readyState": 0,
+      "protocol": "",
+      "extensions": "",
+      "binaryType": "blob",
+      "bufferedAmount": 0
+     }
+    },
+    {
+     "mark": "started",
+     "readyState": 0
+    },
+    {
+     "event": "open",
+     "class": "Event",
+     "readyState": 1,
+     "protocol": "",
+     "extensions": ""
+    },
+    {
+     "event": "error",
+     "class": "ErrorEvent",
+     "readyState": 3,
+     "message": "",
+     "error": {
+      "class": "TypeError",
+      "name": "TypeError",
+      "message": ""
+     }
+    },
+    {
+     "get": "readyState",
+     "value": 3
+    },
+    {
+     "event": "close",
+     "class": "CloseEvent",
+     "readyState": 3,
+     "code": 1006,
+     "reason": "",
+     "wasClean": false
+    }
+   ],
+   "server": [
+    {
+     "event": "request",
+     "line": "GET /drop HTTP/1.1",
+     "headers": [
+      [
+       "accept",
+       "*/*"
+      ],
+      [
+       "accept-encoding",
+       "gzip, deflate"
+      ],
+      [
+       "accept-language",
+       "*"
+      ],
+      [
+       "cache-control",
+       "no-cache"
+      ],
+      [
+       "connection",
+       "upgrade"
+      ],
+      [
+       "host",
+       "<host>"
+      ],
+      [
+       "pragma",
+       "no-cache"
+      ],
+      [
+       "sec-fetch-mode",
+       "websocket"
+      ],
+      [
+       "sec-websocket-extensions",
+       "permessage-deflate; client_max_window_bits"
+      ],
+      [
+       "sec-websocket-key",
+       "<key>"
+      ],
+      [
+       "sec-websocket-version",
+       "13"
+      ],
+      [
+       "upgrade",
+       "websocket"
+      ],
+      [
+       "user-agent",
+       "node"
+      ]
+     ]
+    },
+    {
+     "event": "closed"
+    }
+   ]
+  }
+ },
+ "shape": {
+  "name": "WebSocket",
+  "length": 1,
+  "statics": {
+   "length": [
+    "-c-",
+    1
+   ],
+   "name": [
+    "-c-",
+    "WebSocket"
+   ],
+   "prototype": [
+    "---",
+    "object"
+   ],
+   "CONNECTING": [
+    "e--",
+    0
+   ],
+   "OPEN": [
+    "e--",
+    1
+   ],
+   "CLOSING": [
+    "e--",
+    2
+   ],
+   "CLOSED": [
+    "e--",
+    3
+   ]
+  },
+  "prototype": {
+   "constructor": [
+    "-cw",
+    "function WebSocket/1"
+   ],
+   "close": [
+    "ecw",
+    "function close/0"
+   ],
+   "send": [
+    "ecw",
+    "function send/1"
+   ],
+   "readyState": [
+    "ec",
+    "get get readyState",
+    "no setter"
+   ],
+   "bufferedAmount": [
+    "ec",
+    "get get bufferedAmount",
+    "no setter"
+   ],
+   "url": [
+    "ec",
+    "get get url",
+    "no setter"
+   ],
+   "extensions": [
+    "ec",
+    "get get extensions",
+    "no setter"
+   ],
+   "protocol": [
+    "ec",
+    "get get protocol",
+    "no setter"
+   ],
+   "onopen": [
+    "ec",
+    "get get onopen",
+    "set set onopen/1"
+   ],
+   "onerror": [
+    "ec",
+    "get get onerror",
+    "set set onerror/1"
+   ],
+   "onclose": [
+    "ec",
+    "get get onclose",
+    "set set onclose/1"
+   ],
+   "onmessage": [
+    "ec",
+    "get get onmessage",
+    "set set onmessage/1"
+   ],
+   "binaryType": [
+    "ec",
+    "get get binaryType",
+    "set set binaryType/1"
+   ],
+   "CONNECTING": [
+    "e--",
+    0
+   ],
+   "OPEN": [
+    "e--",
+    1
+   ],
+   "CLOSING": [
+    "e--",
+    2
+   ],
+   "CLOSED": [
+    "e--",
+    3
+   ],
+   "Symbol(Symbol.toStringTag)": [
+    "-c-",
+    "WebSocket"
+   ]
+  },
+  "tag": "[object WebSocket]",
+  "ownKeys": [
+   "Symbol(kEvents)",
+   "Symbol(events.maxEventTargetListeners)",
+   "Symbol(events.maxEventTargetListenersWarned)",
+   "Symbol(kHandlers)"
+  ],
+  "extendsEventTarget": true,
+  "instanceConstants": [
+   0,
+   1,
+   2,
+   3
+  ],
+  "http": {
+   "same": true,
+   "closeEvent": true,
+   "messageEvent": true,
+   "descriptor": "ec"
+  },
+  "globals": {
+   "WebSocket": "-cw",
+   "CloseEvent": "-cw",
+   "MessageEvent": "-cw"
+  },
+  "withoutNew": {
+   "threw": {
+    "class": "TypeError",
+    "name": "TypeError",
+    "message": "Class constructor _WebSocket cannot be invoked without 'new'"
+   }
+  },
+  "brand": {
+   "readyState": {
+    "threw": {
+     "class": "TypeError",
+     "name": "TypeError",
+     "message": "Illegal invocation",
+     "code": "ERR_INVALID_THIS"
+    }
+   },
+   "send": {
+    "threw": {
+     "class": "TypeError",
+     "name": "TypeError",
+     "message": "Illegal invocation",
+     "code": "ERR_INVALID_THIS"
+    }
+   },
+   "close": {
+    "threw": {
+     "class": "TypeError",
+     "name": "TypeError",
+     "message": "Illegal invocation",
+     "code": "ERR_INVALID_THIS"
+    }
+   },
+   "onopen": {
+    "threw": {
+     "class": "TypeError",
+     "name": "TypeError",
+     "message": "Illegal invocation",
+     "code": "ERR_INVALID_THIS"
+    }
+   }
+  },
+  "handlers": {
+   "number": "null",
+   "object": "kept",
+   "null": "kept",
+   "undefined": "null",
+   "string": "null"
+  },
+  "handlerKept": true,
+  "dispatcher": {
+   "undefined": {
+    "value": 0
+   },
+   "null": {
+    "threw": {
+     "class": "AssertionError",
+     "name": "AssertionError",
+     "message": "The expression evaluated to a falsy value:\n\n  assert(dispatcher)\n",
+     "code": "ERR_ASSERTION"
+    }
+   }
+  },
+  "closeEvent": {
+   "name": "CloseEvent",
+   "length": 1,
+   "defaults": [
+    "close",
+    false,
+    0,
+    ""
+   ]
+  },
+  "messageEvent": {
+   "name": "MessageEvent",
+   "length": 1,
+   "defaults": [
+    "message",
+    null,
+    "",
+    "",
+    null,
+    0
+   ]
+  }
+ },
+ "recorder": "// Records what Node's WebSocket (undici) does against a tiny RFC 6455 server. Run inside node:24.18.1-alpine:\n//   node recorder.js scenarios.json > recorded.json\nconst net = require(\"node:net\"), crypto = require(\"node:crypto\"), fs = require(\"node:fs\");\nconst GUID = \"258EAFA5-E914-47DA-95CA-C5AB0DC85B11\";\nconst hex = bytes => Buffer.from(bytes).toString(\"hex\");\nconst bytesOf = bytes => bytes.length > 64 ? { length: bytes.length, head: hex(bytes.subarray(0, 8)), sum: bytes.reduce((sum, byte) => (sum + byte) % 65521, 0) } : { hex: hex(bytes) };\nfunction frame(opcode, payload, fin = true) {\n  const body = Buffer.from(payload), length = body.length;\n  const head = length < 126 ? Buffer.from([(fin ? 0x80 : 0) | opcode, length]) : length < 65536 ? Buffer.from([(fin ? 0x80 : 0) | opcode, 126, length >> 8, length & 255]) : Buffer.concat([Buffer.from([(fin ? 0x80 : 0) | opcode, 127, 0, 0, 0, 0]), Buffer.from([length >>> 24, (length >>> 16) & 255, (length >>> 8) & 255, length & 255])]);\n  return Buffer.concat([head, body]);\n}\nconst closeFrame = (code, reason = \"\") => frame(8, code === undefined ? Buffer.alloc(0) : Buffer.concat([Buffer.from([code >> 8, code & 255]), Buffer.from(reason)]));\n\n/** One connection of the server. The request path picks the behaviour. */\nfunction serve(socket, log, done) {\n  let buffer = Buffer.alloc(0), mode = \"\", upgraded = false, closeSent = false;\n  const send = bytes => { if (!socket.destroyed) socket.write(bytes); };\n  const sendClose = (code, reason) => { closeSent = true; send(closeFrame(code, reason)); };\n  function handshake(head) {\n    const lines = head.split(\"\\r\\n\"), headers = new Map();\n    for (const line of lines.slice(1)) { const colon = line.indexOf(\":\"); headers.set(line.slice(0, colon).toLowerCase(), line.slice(colon + 1).trim()); }\n    const url = new URL((lines[0] ?? \"\").split(\" \")[1] ?? \"/\", \"http://server\"), key = headers.get(\"sec-websocket-key\") ?? \"\";\n    log.push({ event: \"request\", line: lines[0], headers: [...headers].map(([name, value]) => [name, name === \"sec-websocket-key\" ? \"<key>\" : name === \"host\" ? \"<host>\" : value]).sort((a, b) => a[0] < b[0] ? -1 : 1) });\n    mode = url.pathname.slice(1);\n    const param = name => url.searchParams.get(name);\n    if (mode === \"hang\") return;\n    if (mode === \"status\") { socket.end(`HTTP/1.1 ${param(\"code\")} Status\\r\\nContent-Length: 2\\r\\nConnection: close\\r\\n\\r\\nno`); return; }\n    if (mode === \"redirect\") { socket.end(\"HTTP/1.1 302 Found\\r\\nLocation: /echo\\r\\nContent-Length: 0\\r\\nConnection: close\\r\\n\\r\\n\"); return; }\n    if (mode === \"garbage\") { socket.end(\"not http at all\\r\\n\\r\\n\"); return; }\n    const accept = mode === \"bad-accept\" ? \"AAAAAAAAAAAAAAAAAAAAAAAAAAA=\" : crypto.createHash(\"sha1\").update(key + GUID).digest(\"base64\");\n    const answer = [\"HTTP/1.1 101 Switching Protocols\"];\n    if (mode !== \"no-upgrade\") answer.push(`Upgrade: ${mode === \"upgrade-case\" ? \"WebSocket\" : \"websocket\"}`);\n    answer.push(`Connection: ${mode === \"no-connection\" ? \"keep-alive\" : \"Upgrade\"}`);\n    if (mode !== \"no-accept\") answer.push(`Sec-WebSocket-Accept: ${accept}`);\n    if (param(\"protocol\") !== null) answer.push(`Sec-WebSocket-Protocol: ${param(\"protocol\")}`);\n    if (param(\"extensions\") !== null) answer.push(`Sec-WebSocket-Extensions: ${param(\"extensions\")}`);\n    send(`${answer.join(\"\\r\\n\")}\\r\\n\\r\\n`);\n    upgraded = true;\n    if (mode === \"greet\") { send(frame(1, \"hello\")); send(frame(2, [1, 2, 3])); send(frame(1, \"\")); send(frame(1, \"zażółć 🙂\")); sendClose(1000, \"done\"); }\n    else if (mode === \"fragment\") { send(frame(1, \"frag\", false)); send(frame(9, \"p\")); send(frame(0, \"men\", false)); send(frame(0, \"ted\")); send(frame(2, [1, 2], false)); send(frame(0, [3])); sendClose(1000, \"\"); }\n    else if (mode === \"ping\") send(frame(9, \"pp\"));\n    else if (mode === \"pong\") { send(frame(10, \"unsolicited\")); send(frame(1, \"after pong\")); sendClose(1000, \"\"); }\n    else if (mode === \"close\") sendClose(param(\"code\") === null ? undefined : Number(param(\"code\")), param(\"reason\") ?? \"\");\n    else if (mode === \"drop\") socket.destroy();\n    else if (mode === \"end\") socket.end();\n    else if (mode === \"raw\") send(Buffer.from(param(\"hex\") ?? \"\", \"hex\"));\n    else if (mode === \"split\") { const bytes = Buffer.concat([frame(1, \"split across writes\"), frame(2, Buffer.alloc(300, 7)), closeFrame(1000, \"split\")]); let offset = 0; const step = () => { if (offset >= bytes.length) return; send(bytes.subarray(offset, offset + 5)); offset += 5; setImmediate(step); }; step(); closeSent = true; }\n    else if (mode === \"big\") { send(frame(2, Buffer.alloc(70000, 9))); sendClose(1000, \"\"); }\n  }\n  function frames() {\n    for (;;) {\n      if (buffer.length < 2) return;\n      const first = buffer[0], second = buffer[1], masked = (second & 0x80) !== 0;\n      let length = second & 0x7f, offset = 2;\n      if (length === 126) { if (buffer.length < 4) return; length = buffer.readUInt16BE(2); offset = 4; }\n      else if (length === 127) { if (buffer.length < 10) return; length = buffer.readUInt32BE(6); offset = 10; }\n      const total = offset + (masked ? 4 : 0) + length;\n      if (buffer.length < total) return;\n      const payload = Buffer.from(buffer.subarray(total - length, total));\n      if (masked) for (let index = 0; index < length; index++) payload[index] ^= buffer[offset + (index & 3)];\n      buffer = buffer.subarray(total);\n      const opcode = first & 0x0f;\n      log.push({ event: \"frame\", fin: (first & 0x80) !== 0, opcode, masked, ...(opcode === 1 || opcode === 8 && length >= 2 ? opcode === 1 ? { text: payload.toString() } : { code: payload.readUInt16BE(0), reason: payload.subarray(2).toString() } : bytesOf(payload)) });\n      if (opcode === 8) { if (!closeSent) { closeSent = true; send(frame(8, payload)); } socket.end(); return; }\n      if (mode === \"echo\" && (opcode === 1 || opcode === 2)) send(frame(opcode, payload));\n      if (mode === \"ping\" && opcode === 10) sendClose(1000, \"ponged\");\n    }\n  }\n  socket.on(\"data\", chunk => {\n    buffer = Buffer.concat([buffer, chunk]);\n    if (!upgraded && mode === \"\") { const end = buffer.indexOf(\"\\r\\n\\r\\n\"); if (end < 0) return; const head = buffer.subarray(0, end).toString(\"latin1\"); buffer = buffer.subarray(end + 4); handshake(head); }\n    if (upgraded) frames();\n  });\n  socket.on(\"error\", () => { /* The client reset the connection. */ });\n  socket.on(\"close\", () => { log.push({ event: \"closed\" }); done(); });\n}\n\nconst describeError = error => error === null || typeof error !== \"object\" ? { value: String(error) } : { class: error.constructor?.name, name: error.name, message: error.message, ...(typeof error.code === \"undefined\" ? {} : { code: error.code }) };\nconst fromHex = text => new Uint8Array(Buffer.from(text, \"hex\"));\n/** Runs one scenario's client side against `url`; the same steps are replayed against the fast path. */\nfunction client(scenario, url, WebSocketClass, finished) {\n  const log = [], blobs = [];\n  let ws, messages = 0, ended = false;\n  uncaught = error => { log.push({ uncaught: describeError(error) }); };\n  const end = () => { if (ended) return; ended = true; Promise.all(blobs.map(async ([entry, blob]) => { Object.assign(entry.data, bytesOf(new Uint8Array(await blob.arrayBuffer()))); })).then(() => { finished(log); }); };\n  const act = action => {\n    try {\n      const [verb, first, second] = action;\n      if (verb === \"send\") {\n        if (first === \"text\") ws.send(second);\n        else if (first === \"buffer\") ws.send(fromHex(second).buffer);\n        else if (first === \"view\") { const bytes = new Uint8Array(fromHex(second).length + 4); bytes.set(fromHex(second), 2); ws.send(bytes.subarray(2, bytes.length - 2)); }\n        else if (first === \"dataview\") ws.send(new DataView(fromHex(second).buffer));\n        else if (first === \"blob\") ws.send(new Blob([fromHex(second)]));\n        else if (first === \"fill\") ws.send(Uint8Array.from({ length: second }, (_, index) => index & 255));\n        else if (first === \"value\") ws.send(second);\n        else if (first === \"none\") ws.send();\n      } else if (verb === \"close\") { if (action.length === 1) ws.close(); else if (action.length === 2) ws.close(first); else ws.close(first, second); }\n      else if (verb === \"set\") ws[first] = second;\n      else if (verb === \"get\") log.push({ get: first, value: ws[first] });\n    } catch (error) { log.push({ threw: describeError(error), by: action[0] }); }\n  };\n  try { ws = \"args\" in scenario ? new WebSocketClass(url, ...scenario.args) : \"noUrl\" in scenario ? new WebSocketClass() : new WebSocketClass(url); }\n  catch (error) { log.push({ threw: describeError(error), by: \"constructor\" }); finished(log); return; }\n  log.push({ constructed: { url: ws.url === url ? \"<url>\" : ws.url.replace(/\\/\\/[^/]+/u, \"//<host>\"), readyState: ws.readyState, protocol: ws.protocol, extensions: ws.extensions, binaryType: ws.binaryType, bufferedAmount: ws.bufferedAmount } });\n  const on = scenario.on ?? {};\n  ws.addEventListener(\"open\", event => { log.push({ event: \"open\", class: event.constructor.name, readyState: ws.readyState, protocol: ws.protocol, extensions: ws.extensions }); for (const action of on.open ?? []) act(action); });\n  ws.onmessage = event => {\n    const data = typeof event.data === \"string\" ? { text: event.data } : event.data instanceof ArrayBuffer ? { arraybuffer: true, ...bytesOf(new Uint8Array(event.data)) } : event.data instanceof Blob ? { blob: true, size: event.data.size, type: event.data.type } : { other: String(event.data) };\n    const entry = { event: \"message\", class: event.constructor.name, readyState: ws.readyState, origin: event.origin.replace(/\\/\\/.+/u, \"//<host>\"), lastEventId: event.lastEventId, source: event.source, ports: event.ports.length, data };\n    if (event.data instanceof Blob) blobs.push([entry, event.data]);\n    log.push(entry);\n    for (const action of (on.message ?? [])[messages++] ?? []) act(action);\n  };\n  ws.onerror = event => { log.push({ event: \"error\", class: event.constructor.name, readyState: ws.readyState, message: event.message, error: describeError(event.error) }); for (const action of on.error ?? []) act(action); };\n  ws.addEventListener(\"close\", event => { log.push({ event: \"close\", class: event.constructor.name, readyState: ws.readyState, code: event.code, reason: event.reason, wasClean: event.wasClean }); for (const action of on.close ?? []) act(action); setTimeout(end, 60); });\n  for (const action of scenario.start ?? []) act(action);\n  log.push({ mark: \"started\", readyState: ws.readyState });\n  setTimeout(() => { if (!ended) { log.push({ mark: \"timeout\", readyState: ws.readyState }); end(); } }, 1500).unref?.();\n}\n\n/** What a program can read of the classes without connecting. */\nfunction shape() {\n  const flags = descriptor => `${descriptor.enumerable ? \"e\" : \"-\"}${descriptor.configurable ? \"c\" : \"-\"}${\"value\" in descriptor ? (descriptor.writable ? \"w\" : \"-\") : \"\"}`;\n  const describe = (object, key) => { const descriptor = Object.getOwnPropertyDescriptor(object, key); return \"value\" in descriptor ? [flags(descriptor), typeof descriptor.value === \"function\" ? `function ${descriptor.value.name}/${descriptor.value.length}` : typeof descriptor.value === \"object\" ? \"object\" : descriptor.value] : [flags(descriptor), `get ${descriptor.get?.name}`, descriptor.set === undefined ? \"no setter\" : `set ${descriptor.set.name}/${descriptor.set.length}`]; };\n  const table = object => Object.fromEntries(Reflect.ownKeys(object).map(key => [String(key), describe(object, key)]));\n  const attempt = run => { try { return { value: run() }; } catch (error) { return { threw: describeError(error) }; } };\n  const http = require(\"node:http\"), ws = new WebSocket(\"ws://127.0.0.1:1/\");\n  ws.onerror = () => {};\n  const handler = () => {}, handlers = {};\n  for (const [label, value] of [[\"number\", 5], [\"object\", {}], [\"null\", null], [\"undefined\", undefined], [\"string\", \"x\"]]) { ws.onopen = handler; ws.onopen = value; handlers[label] = ws.onopen === value ? \"kept\" : ws.onopen === null ? \"null\" : String(ws.onopen); }\n  ws.onopen = handler;\n  return {\n    name: WebSocket.name, length: WebSocket.length, statics: table(WebSocket), prototype: table(WebSocket.prototype), tag: Object.prototype.toString.call(ws), ownKeys: Reflect.ownKeys(ws).map(String),\n    extendsEventTarget: Object.getPrototypeOf(WebSocket.prototype) === EventTarget.prototype, instanceConstants: [ws.CONNECTING, ws.OPEN, ws.CLOSING, ws.CLOSED],\n    http: { same: http.WebSocket === WebSocket, closeEvent: http.CloseEvent === CloseEvent, messageEvent: http.MessageEvent === MessageEvent, descriptor: flags(Object.getOwnPropertyDescriptor(http, \"WebSocket\")) },\n    globals: { WebSocket: flags(Object.getOwnPropertyDescriptor(globalThis, \"WebSocket\")), CloseEvent: flags(Object.getOwnPropertyDescriptor(globalThis, \"CloseEvent\")), MessageEvent: flags(Object.getOwnPropertyDescriptor(globalThis, \"MessageEvent\")) },\n    withoutNew: attempt(() => WebSocket(\"ws://127.0.0.1:1/\")),\n    brand: { readyState: attempt(() => Object.getOwnPropertyDescriptor(WebSocket.prototype, \"readyState\").get.call({})), send: attempt(() => WebSocket.prototype.send.call({}, \"x\")), close: attempt(() => WebSocket.prototype.close.call({})), onopen: attempt(() => Object.getOwnPropertyDescriptor(WebSocket.prototype, \"onopen\").set.call({}, null)) },\n    handlers, handlerKept: ws.onopen === handler,\n    dispatcher: { undefined: attempt(() => { const made = new WebSocket(\"ws://127.0.0.1:1/\", { dispatcher: undefined }); made.onerror = () => {}; return made.readyState; }), null: attempt(() => { const made = new WebSocket(\"ws://127.0.0.1:1/\", { dispatcher: null }); made.onerror = () => {}; return made.readyState; }) },\n    closeEvent: { name: CloseEvent.name, length: CloseEvent.length, defaults: (event => [event.type, event.wasClean, event.code, event.reason])(new CloseEvent(\"close\")) },\n    messageEvent: { name: MessageEvent.name, length: MessageEvent.length, defaults: (event => [event.type, event.data, event.origin, event.lastEventId, event.source, event.ports.length])(new MessageEvent(\"message\")) },\n  };\n}\nlet uncaught = () => {};\nprocess.on(\"uncaughtException\", error => { uncaught(error); });\nasync function main() {\n  const scenarios = JSON.parse(fs.readFileSync(process.argv[2], \"utf8\")), cases = {};\n  for (const scenario of scenarios) {\n    const serverLog = [];\n    let connections = 0, settle = () => {};\n    const server = net.createServer(socket => { connections++; serve(socket, serverLog, () => { connections--; settle(); }); });\n    await new Promise(resolve => server.listen(0, \"127.0.0.1\", resolve));\n    const url = scenario.url ?? `ws://${scenario.userinfo === undefined ? \"\" : `${scenario.userinfo}@`}127.0.0.1:${server.address().port}/${scenario.path ?? \"\"}`;\n    const clientLog = await new Promise(resolve => { client(scenario, url, WebSocket, resolve); });\n    if (connections > 0 && scenario.path !== \"hang\") await new Promise(resolve => { settle = () => { if (connections === 0) resolve(); }; setTimeout(resolve, 300); });\n    server.close();\n    cases[scenario.name] = { client: clientLog, server: serverLog };\n  }\n  fs.writeSync(1, JSON.stringify({ node: { version: process.version, image: \"node:24.18.1-alpine\", undici: process.versions.undici }, cases, shape: shape() }));\n  process.exit(0);\n}\nif (require.main === module) main().catch(error => { process.stderr.write(`${error.stack}\\n`); process.exit(1); });\n"
+}

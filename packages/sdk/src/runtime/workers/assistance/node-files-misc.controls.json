@@ -1,0 +1,902 @@
+{
+ "node": "v24.18.1",
+ "recorder": "// Recorder for the node-files-*.controls.json files. Every scenario is the body of an async function of\n// (fs, h) that the test runs again, unchanged, against the emulated fs. Run with Node 24.18.1 on a tmpfs\n// (its readdir order is the byte order the file service's readdir has):\n//   docker run --rm --tmpfs /work -v \"$PWD\":/w:ro node:24.18.1-alpine node /w/record.cjs /w/sc/<set> > node-files-<set>.controls.json\nconst fs = require(\"fs\"), path = require(\"path\"), util = require(\"util\");\nconst dir = process.argv[2], out = {};\nfunction describe(e) {\n  if (!(e instanceof Error)) return { thrown: String(e) };\n  const d = { name: e.name, ctor: e.constructor.name, message: e.message };\n  for (const k of [\"code\", \"errno\", \"syscall\", \"path\", \"dest\"]) if (e[k] !== undefined) d[k] = e[k];\n  return d;\n}\nfunction helpers(warnings) {\n  return {\n    Buffer, custom: util.promisify.custom, warnings, err: describe,\n    attempt(fn) { try { return { ok: fn() }; } catch (e) { return { error: describe(e) }; } },\n    async attemptAsync(fn) { try { return { ok: await fn() }; } catch (e) { return { error: describe(e) }; } },\n    turn: () => new Promise(resolve => setImmediate(resolve)),\n    // Long enough for several polls of a 20 ms stat watcher; the replay fires its timer instead.\n    wait: () => new Promise(resolve => setTimeout(resolve, 150)),\n    dirent: d => d === null ? null : [Buffer.isBuffer(d.name) ? { hex: d.name.toString(\"hex\") } : d.name, Buffer.isBuffer(d.parentPath) ? { hex: d.parentPath.toString(\"hex\") } : d.parentPath,\n      d.isDirectory() ? \"dir\" : d.isSymbolicLink() ? \"link\" : d.isFile() ? \"file\" : \"other\"],\n    fn: f => typeof f === \"function\" ? [f.name, f.length] : typeof f,\n  };\n}\n(async () => {\n  for (const file of fs.readdirSync(dir).sort()) {\n    for (const name of fs.readdirSync(\"/work\")) fs.rmSync(\"/work/\" + name, { recursive: true, force: true });\n    process.chdir(\"/work\");\n    const warnings = [], onWarning = w => warnings.push([w.name, w.message]);\n    process.on(\"warning\", onWarning);\n    const source = fs.readFileSync(path.join(dir, file), \"utf8\");\n    const result = await new Function(\"fs\", \"h\", \"return (async () => {\" + source + \"\\n})()\")(fs, helpers(warnings));\n    process.off(\"warning\", onWarning);\n    out[file.replace(/\\.js$/, \"\")] = { source, result: JSON.parse(JSON.stringify(result)) };\n  }\n  console.log(JSON.stringify({ node: process.version, recorder: fs.readFileSync(__filename, \"utf8\"), scenarios: out }, null, 1));\n})();\n",
+ "scenarios": {
+  "aliases": {
+   "source": "const d = name => { const x = Object.getOwnPropertyDescriptor(fs, name); return x === undefined ? null : [typeof x.get, typeof x.set, x.enumerable, x.configurable, \"value\" in x]; };\nconst out = { read: fs.FileReadStream === fs.ReadStream, write: fs.FileWriteStream === fs.WriteStream, descriptors: [d(\"FileReadStream\"), d(\"FileWriteStream\"), d(\"ReadStream\"), d(\"WriteStream\")], names: [h.fn(fs.FileReadStream), h.fn(fs.FileWriteStream)] };\nout.lchmod = [typeof fs.lchmod, typeof fs.lchmodSync, h.fn(fs.promises.lchmod), await h.attemptAsync(() => fs.promises.lchmod(\"f\", 0o644)), await h.attemptAsync(() => fs.promises.lchmod())];\nreturn out;\n",
+   "result": {
+    "read": true,
+    "write": true,
+    "descriptors": [
+     [
+      "function",
+      "function",
+      true,
+      true,
+      false
+     ],
+     [
+      "function",
+      "function",
+      true,
+      true,
+      false
+     ],
+     [
+      "function",
+      "function",
+      true,
+      true,
+      false
+     ],
+     [
+      "function",
+      "function",
+      true,
+      true,
+      false
+     ]
+    ],
+    "names": [
+     [
+      "ReadStream",
+      2
+     ],
+     [
+      "WriteStream",
+      2
+     ]
+    ],
+    "lchmod": [
+     "undefined",
+     "undefined",
+     [
+      "lchmod",
+      2
+     ],
+     {
+      "error": {
+       "name": "Error",
+       "ctor": "Error",
+       "message": "The lchmod() method is not implemented",
+       "code": "ERR_METHOD_NOT_IMPLEMENTED"
+      }
+     },
+     {
+      "error": {
+       "name": "Error",
+       "ctor": "Error",
+       "message": "The lchmod() method is not implemented",
+       "code": "ERR_METHOD_NOT_IMPLEMENTED"
+      }
+     }
+    ]
+   }
+  },
+  "blob": {
+   "source": "fs.writeFileSync(\"f.txt\", \"hello blob\"); fs.mkdirSync(\"d\"); fs.writeFileSync(\"empty\", \"\");\nconst out = { shape: h.fn(fs.openAsBlob) };\nconst p = fs.openAsBlob(\"f.txt\"); out.isPromise = p instanceof Promise;\nconst blob = await p; out.plain = [blob instanceof Blob, blob.size, blob.type, await blob.text()];\nconst typed = await fs.openAsBlob(\"/work/f.txt\", { type: \"Text/Plain\" }); out.typed = [typed.size, typed.type, h.Buffer.from(await typed.arrayBuffer()).toString(), await typed.slice(1, 4).text()];\nout.url = (await fs.openAsBlob(new URL(\"file:///work/f.txt\"))).size; out.buffer = (await fs.openAsBlob(h.Buffer.from(\"f.txt\"))).size; out.empty = (await fs.openAsBlob(\"empty\")).size;\nout.emptyType = (await fs.openAsBlob(\"f.txt\", { type: \"\" })).type; out.undefinedOptions = (await fs.openAsBlob(\"f.txt\", undefined)).size;\nout.errors = { missing: await h.attemptAsync(() => fs.openAsBlob(\"nope\")), missingSync: h.attempt(() => { fs.openAsBlob(\"nope\").catch(() => {}); return \"returned\"; }), directory: await h.attemptAsync(async () => { const b = await fs.openAsBlob(\"d\"); return [b.size, await h.attemptAsync(() => b.text())]; }),\n  pathType: h.attempt(() => fs.openAsBlob(5)), optionsNull: h.attempt(() => fs.openAsBlob(\"f.txt\", null)), optionsText: h.attempt(() => fs.openAsBlob(\"f.txt\", \"x\")), typeNumber: h.attempt(() => fs.openAsBlob(\"f.txt\", { type: 5 })), nul: h.attempt(() => fs.openAsBlob(\"a\\0\")) };\nreturn out;\n",
+   "result": {
+    "shape": [
+     "openAsBlob",
+     1
+    ],
+    "isPromise": true,
+    "plain": [
+     true,
+     10,
+     "",
+     "hello blob"
+    ],
+    "typed": [
+     10,
+     "Text/Plain",
+     "hello blob",
+     "ell"
+    ],
+    "url": 10,
+    "buffer": 10,
+    "empty": 0,
+    "emptyType": "",
+    "undefinedOptions": 10,
+    "errors": {
+     "missing": {
+      "error": {
+       "name": "TypeError",
+       "ctor": "TypeError",
+       "message": "Unable to open file as blob",
+       "code": "ERR_INVALID_ARG_VALUE"
+      }
+     },
+     "missingSync": {
+      "error": {
+       "name": "TypeError",
+       "ctor": "TypeError",
+       "message": "Unable to open file as blob",
+       "code": "ERR_INVALID_ARG_VALUE"
+      }
+     },
+     "directory": {
+      "ok": [
+       40,
+       {
+        "error": {
+         "name": "NotReadableError",
+         "ctor": "DOMException",
+         "message": "The blob could not be read",
+         "code": 0
+        }
+       }
+      ]
+     },
+     "pathType": {
+      "error": {
+       "name": "TypeError",
+       "ctor": "TypeError",
+       "message": "The \"path\" argument must be of type string or an instance of Buffer or URL. Received type number (5)",
+       "code": "ERR_INVALID_ARG_TYPE"
+      }
+     },
+     "optionsNull": {
+      "error": {
+       "name": "TypeError",
+       "ctor": "TypeError",
+       "message": "The \"options\" argument must be of type object. Received null",
+       "code": "ERR_INVALID_ARG_TYPE"
+      }
+     },
+     "optionsText": {
+      "error": {
+       "name": "TypeError",
+       "ctor": "TypeError",
+       "message": "The \"options\" argument must be of type object. Received type string ('x')",
+       "code": "ERR_INVALID_ARG_TYPE"
+      }
+     },
+     "typeNumber": {
+      "error": {
+       "name": "TypeError",
+       "ctor": "TypeError",
+       "message": "The \"options.type\" property must be of type string. Received type number (5)",
+       "code": "ERR_INVALID_ARG_TYPE"
+      }
+     },
+     "nul": {
+      "error": {
+       "name": "TypeError",
+       "ctor": "TypeError",
+       "message": "The argument 'path' must be a string, Uint8Array, or URL without null bytes. Received 'a\\x00'",
+       "code": "ERR_INVALID_ARG_VALUE"
+      }
+     }
+    }
+   }
+  },
+  "exists": {
+   "source": "fs.writeFileSync(\"f\", \"x\");\nconst ask = (...args) => new Promise(resolve => { const order = []; let r; try { r = fs.exists(...args, v => { order.push(\"callback\"); resolve({ order, v, r }); }); } catch (e) { resolve({ thrown: h.err(e) }); } order.push(\"returned\"); });\nconst custom = fs.exists[h.custom];\nreturn { shape: h.fn(fs.exists), present: await ask(\"f\"), missing: await ask(\"nope\"), empty: await ask(\"\"), invalid: await ask(5), nul: await ask(\"a\\0b\"), url: await ask(new URL(\"file:///work/f\")), buffer: await ask(h.Buffer.from(\"f\")),\n  noCallback: h.attempt(() => fs.exists(\"f\")), badCallback: h.attempt(() => fs.exists(\"f\", 5)),\n  custom: h.fn(custom), customDescriptor: (d => [d.writable, d.enumerable, d.configurable])(Object.getOwnPropertyDescriptor(fs.exists, h.custom)), customPresent: await custom(\"f\"), customMissing: await custom(\"nope\"), customInvalid: await custom(5) };\n",
+   "result": {
+    "shape": [
+     "exists",
+     2
+    ],
+    "present": {
+     "order": [
+      "returned",
+      "callback"
+     ],
+     "v": true
+    },
+    "missing": {
+     "order": [
+      "returned",
+      "callback"
+     ],
+     "v": false
+    },
+    "empty": {
+     "order": [
+      "returned",
+      "callback"
+     ],
+     "v": false
+    },
+    "invalid": {
+     "order": [
+      "callback",
+      "returned"
+     ],
+     "v": false
+    },
+    "nul": {
+     "order": [
+      "callback",
+      "returned"
+     ],
+     "v": false
+    },
+    "url": {
+     "order": [
+      "returned",
+      "callback"
+     ],
+     "v": true
+    },
+    "buffer": {
+     "order": [
+      "returned",
+      "callback"
+     ],
+     "v": true
+    },
+    "noCallback": {
+     "error": {
+      "name": "TypeError",
+      "ctor": "TypeError",
+      "message": "The \"cb\" argument must be of type function. Received undefined",
+      "code": "ERR_INVALID_ARG_TYPE"
+     }
+    },
+    "badCallback": {
+     "error": {
+      "name": "TypeError",
+      "ctor": "TypeError",
+      "message": "The \"cb\" argument must be of type function. Received type number (5)",
+      "code": "ERR_INVALID_ARG_TYPE"
+     }
+    },
+    "custom": [
+     "exists",
+     1
+    ],
+    "customDescriptor": [
+     false,
+     false,
+     false
+    ],
+    "customPresent": true,
+    "customMissing": false,
+    "customInvalid": false
+   }
+  },
+  "temporary": {
+   "source": "const out = { shapes: [h.fn(fs.mkdtempDisposableSync), h.fn(fs.promises.mkdtempDisposable)] };\nconst made = fs.mkdtempDisposableSync(\"tmp-\");\nout.sync = { keys: Reflect.ownKeys(made).map(String), proto: Object.getPrototypeOf(made) === Object.prototype, path: /^tmp-[A-Za-z0-9]{6}$/.test(made.path), remove: h.fn(made.remove), dispose: h.fn(made[Symbol.dispose]), exists: fs.statSync(made.path).isDirectory(), mode: fs.statSync(made.path).mode & 0o777 };\nfs.writeFileSync(made.path + \"/inner\", \"x\"); fs.mkdirSync(made.path + \"/sub\");\nout.sync.removed = [made.remove(), fs.existsSync(made.path), made.remove(), made[Symbol.dispose]()];\nconst again = fs.mkdtempDisposableSync(\"/work/abs-\", { encoding: \"utf8\" }); out.absolute = /^\\/work\\/abs-[A-Za-z0-9]{6}$/.test(again.path); again[Symbol.dispose](); out.disposed = fs.existsSync(again.path);\nout.buffer = [h.attempt(() => fs.mkdtempDisposableSync(\"b-\", \"buffer\")), fs.readdirSync(\".\").filter(n => n.startsWith(\"b-\")).length, await h.attemptAsync(() => fs.promises.mkdtempDisposable(\"c-\", \"buffer\")), fs.readdirSync(\".\").filter(n => n.startsWith(\"c-\")).length];\nout.errors = { prefixType: h.attempt(() => fs.mkdtempDisposableSync(5)), encoding: h.attempt(() => fs.mkdtempDisposableSync(\"x-\", \"nope\")), missingParent: h.attempt(() => fs.mkdtempDisposableSync(\"nope/x-\")),\n  promisedPrefix: await h.attemptAsync(() => fs.promises.mkdtempDisposable(5)), promisedParent: await h.attemptAsync(() => fs.promises.mkdtempDisposable(\"nope/x-\")) };\nconst promised = await fs.promises.mkdtempDisposable(\"p-\");\nout.promised = { keys: Reflect.ownKeys(promised).map(String), proto: Object.getPrototypeOf(promised) === null, path: /^p-[A-Za-z0-9]{6}$/.test(promised.path), remove: h.fn(promised.remove), dispose: h.fn(promised[Symbol.asyncDispose]), exists: fs.existsSync(promised.path) };\nfs.writeFileSync(promised.path + \"/inner\", \"x\");\nconst removing = promised.remove(); out.promised.removed = [removing instanceof Promise, await removing, fs.existsSync(promised.path), await promised.remove(), await promised[Symbol.asyncDispose]()];\nreturn out;\n",
+   "result": {
+    "shapes": [
+     [
+      "mkdtempDisposableSync",
+      2
+     ],
+     [
+      "mkdtempDisposable",
+      2
+     ]
+    ],
+    "sync": {
+     "keys": [
+      "path",
+      "remove",
+      "Symbol(Symbol.dispose)"
+     ],
+     "proto": true,
+     "path": true,
+     "remove": [
+      "remove",
+      0
+     ],
+     "dispose": [
+      "[Symbol.dispose]",
+      0
+     ],
+     "exists": true,
+     "mode": 448,
+     "removed": [
+      null,
+      false,
+      null,
+      null
+     ]
+    },
+    "absolute": true,
+    "disposed": false,
+    "buffer": [
+     {
+      "error": {
+       "name": "TypeError",
+       "ctor": "TypeError",
+       "message": "The \"paths[1]\" argument must be of type string. Received an instance of Buffer",
+       "code": "ERR_INVALID_ARG_TYPE"
+      }
+     },
+     1,
+     {
+      "error": {
+       "name": "TypeError",
+       "ctor": "TypeError",
+       "message": "The \"paths[1]\" argument must be of type string. Received an instance of Buffer",
+       "code": "ERR_INVALID_ARG_TYPE"
+      }
+     },
+     1
+    ],
+    "errors": {
+     "prefixType": {
+      "error": {
+       "name": "TypeError",
+       "ctor": "TypeError",
+       "message": "The \"prefix\" argument must be of type string or an instance of Buffer or URL. Received type number (5)",
+       "code": "ERR_INVALID_ARG_TYPE"
+      }
+     },
+     "encoding": {
+      "error": {
+       "name": "TypeError",
+       "ctor": "TypeError",
+       "message": "The argument 'encoding' is invalid encoding. Received 'nope'",
+       "code": "ERR_INVALID_ARG_VALUE"
+      }
+     },
+     "missingParent": {
+      "error": {
+       "name": "Error",
+       "ctor": "Error",
+       "message": "ENOENT: no such file or directory, mkdtemp 'nope/x-XXXXXX'",
+       "code": "ENOENT",
+       "errno": -2,
+       "syscall": "mkdtemp",
+       "path": "nope/x-XXXXXX"
+      }
+     },
+     "promisedPrefix": {
+      "error": {
+       "name": "TypeError",
+       "ctor": "TypeError",
+       "message": "The \"prefix\" argument must be of type string or an instance of Buffer or URL. Received type number (5)",
+       "code": "ERR_INVALID_ARG_TYPE"
+      }
+     },
+     "promisedParent": {
+      "error": {
+       "name": "Error",
+       "ctor": "Error",
+       "message": "ENOENT: no such file or directory, mkdtemp 'nope/x-XXXXXX'",
+       "code": "ENOENT",
+       "errno": -2,
+       "syscall": "mkdtemp",
+       "path": "nope/x-XXXXXX"
+      }
+     }
+    },
+    "promised": {
+     "keys": [
+      "path",
+      "remove",
+      "Symbol(Symbol.asyncDispose)"
+     ],
+     "proto": true,
+     "path": true,
+     "remove": [
+      "remove",
+      0
+     ],
+     "dispose": [
+      "[Symbol.asyncDispose]",
+      0
+     ],
+     "exists": true,
+     "removed": [
+      true,
+      null,
+      false,
+      null,
+      null
+     ]
+    }
+   }
+  },
+  "timestamp": {
+   "source": "const t = fs._toUnixTimestamp, now = Date.now() / 1000;\nconst near = v => typeof v === \"number\" && Math.abs(v - now) < 60 ? \"now\" : v;\nconst cases = { integer: 5, float: 1.5, zero: 0, negative: -1, negativeZero: -0, infinity: Infinity, negativeInfinity: -Infinity, nan: NaN, numericText: \"12.5\", hexText: \"0x10\", emptyText: \"\", spaceText: \" 7 \", expText: \"1e3\", badText: \"abc\", negativeText: \"-3\",\n  infinityText: \"Infinity\", date: new Date(1500), invalidDate: new Date(NaN), epoch: new Date(0), nullValue: null, undefinedValue: undefined, object: {}, array: [5], boolean: true, bigint: \"bigint\", dateLike: { getTime: () => 5 } };\nconst out = { shape: h.fn(t), named: h.attempt(() => t(\"x\", \"mtime\")) };\nfor (const [name, value] of Object.entries(cases)) out[name] = h.attempt(() => { const v = near(t(value === \"bigint\" ? 5n : value)); return typeof v === \"number\" && !Number.isFinite(v) ? String(v) : Object.is(v, -0) ? \"-0\" : v; });\nreturn out;\n",
+   "result": {
+    "shape": [
+     "toUnixTimestamp",
+     1
+    ],
+    "named": {
+     "error": {
+      "name": "TypeError",
+      "ctor": "TypeError",
+      "message": "The \"mtime\" argument must be an instance of Date or an Time in seconds. Received type string ('x')",
+      "code": "ERR_INVALID_ARG_TYPE"
+     }
+    },
+    "integer": {
+     "ok": 5
+    },
+    "float": {
+     "ok": 1.5
+    },
+    "zero": {
+     "ok": 0
+    },
+    "negative": {
+     "ok": "now"
+    },
+    "negativeZero": {
+     "ok": "-0"
+    },
+    "infinity": {
+     "error": {
+      "name": "TypeError",
+      "ctor": "TypeError",
+      "message": "The \"time\" argument must be an instance of Date or an Time in seconds. Received type number (Infinity)",
+      "code": "ERR_INVALID_ARG_TYPE"
+     }
+    },
+    "negativeInfinity": {
+     "error": {
+      "name": "TypeError",
+      "ctor": "TypeError",
+      "message": "The \"time\" argument must be an instance of Date or an Time in seconds. Received type number (-Infinity)",
+      "code": "ERR_INVALID_ARG_TYPE"
+     }
+    },
+    "nan": {
+     "error": {
+      "name": "TypeError",
+      "ctor": "TypeError",
+      "message": "The \"time\" argument must be an instance of Date or an Time in seconds. Received type number (NaN)",
+      "code": "ERR_INVALID_ARG_TYPE"
+     }
+    },
+    "numericText": {
+     "ok": 12.5
+    },
+    "hexText": {
+     "ok": 16
+    },
+    "emptyText": {
+     "ok": 0
+    },
+    "spaceText": {
+     "ok": 7
+    },
+    "expText": {
+     "ok": 1000
+    },
+    "badText": {
+     "error": {
+      "name": "TypeError",
+      "ctor": "TypeError",
+      "message": "The \"time\" argument must be an instance of Date or an Time in seconds. Received type string ('abc')",
+      "code": "ERR_INVALID_ARG_TYPE"
+     }
+    },
+    "negativeText": {
+     "ok": -3
+    },
+    "infinityText": {
+     "ok": "Infinity"
+    },
+    "date": {
+     "ok": 1.5
+    },
+    "invalidDate": {
+     "ok": "NaN"
+    },
+    "epoch": {
+     "ok": 0
+    },
+    "nullValue": {
+     "error": {
+      "name": "TypeError",
+      "ctor": "TypeError",
+      "message": "The \"time\" argument must be an instance of Date or an Time in seconds. Received null",
+      "code": "ERR_INVALID_ARG_TYPE"
+     }
+    },
+    "undefinedValue": {
+     "error": {
+      "name": "TypeError",
+      "ctor": "TypeError",
+      "message": "The \"time\" argument must be an instance of Date or an Time in seconds. Received undefined",
+      "code": "ERR_INVALID_ARG_TYPE"
+     }
+    },
+    "object": {
+     "error": {
+      "name": "TypeError",
+      "ctor": "TypeError",
+      "message": "The \"time\" argument must be an instance of Date or an Time in seconds. Received an instance of Object",
+      "code": "ERR_INVALID_ARG_TYPE"
+     }
+    },
+    "array": {
+     "error": {
+      "name": "TypeError",
+      "ctor": "TypeError",
+      "message": "The \"time\" argument must be an instance of Date or an Time in seconds. Received an instance of Array",
+      "code": "ERR_INVALID_ARG_TYPE"
+     }
+    },
+    "boolean": {
+     "error": {
+      "name": "TypeError",
+      "ctor": "TypeError",
+      "message": "The \"time\" argument must be an instance of Date or an Time in seconds. Received type boolean (true)",
+      "code": "ERR_INVALID_ARG_TYPE"
+     }
+    },
+    "bigint": {
+     "error": {
+      "name": "TypeError",
+      "ctor": "TypeError",
+      "message": "The \"time\" argument must be an instance of Date or an Time in seconds. Received type bigint (5n)",
+      "code": "ERR_INVALID_ARG_TYPE"
+     }
+    },
+    "dateLike": {
+     "error": {
+      "name": "TypeError",
+      "ctor": "TypeError",
+      "message": "The \"time\" argument must be an instance of Date or an Time in seconds. Received an instance of Object",
+      "code": "ERR_INVALID_ARG_TYPE"
+     }
+    }
+   }
+  },
+  "vectored": {
+   "source": "const B = h.Buffer, out = { shapes: [h.fn(fs.readv), h.fn(fs.readvSync), h.fn(fs.writev), h.fn(fs.writevSync)] };\nlet fd = fs.openSync(\"f\", \"w+\");\nout.write1 = fs.writevSync(fd, [B.from(\"abc\"), B.from(\"defgh\")]);\nout.write2 = fs.writevSync(fd, [B.from(\"IJ\")]);\nout.writeAt = fs.writevSync(fd, [B.from(\"X\"), B.from(\"YZ\")], 1);\nout.write3 = fs.writevSync(fd, [B.from(\"k\")], null);\nout.writeEmpty = fs.writevSync(fd, []);\nout.writeViews = fs.writevSync(fd, [new Uint16Array([0x4d4c]), new DataView(new Uint8Array([78, 79, 80]).buffer, 1, 1)], undefined);\nout.content = fs.readFileSync(\"f\", \"utf8\");\nconst a = B.alloc(4), b = B.alloc(3), c = B.alloc(20);\nout.read1 = [fs.readvSync(fd, [a, b], 0), a.toString(), b.toString()];\nout.readCurrent = [fs.readvSync(fd, [a]), a.toString()];\nout.readPositionString = [fs.readvSync(fd, [a], \"2\"), a.toString()];\nfs.closeSync(fd); fd = fs.openSync(\"f\", \"r\");\nout.readSequence = [fs.readvSync(fd, [a, b]), a.toString() + b.toString(), fs.readvSync(fd, [a], 1), a.toString(), fs.readvSync(fd, [a, b], null), a.toString() + b.toString(), fs.readvSync(fd, [c]), fs.readvSync(fd, [c])];\nout.readEmpty = h.attempt(() => fs.readvSync(fd, [])); out.readEmptyCallback = await new Promise(resolve => fs.readv(fd, [], (e, n) => resolve([e && h.err(e), n])));\nconst u16 = new Uint16Array(2); out.readViews = [fs.readvSync(fd, [u16, new DataView(c.buffer, c.byteOffset + 1, 2)], 0), Array.from(u16), c.subarray(0, 4).toString(\"hex\")];\nconst cb = (fn, ...args) => new Promise(resolve => { const order = []; try { const r = fn(...args, (e, n, list) => { order.push(\"callback\"); resolve({ order, e: e && h.err(e), n, same: list === args[1], r }); }); } catch (e) { resolve({ thrown: h.err(e) }); } order.push(\"returned\"); });\nout.readvCallback = [await cb(fs.readv, fd, [a, b], 0), a.toString() + b.toString()];\nout.readvNoPosition = await cb(fs.readv, fd, [a]);\nout.readvNull = await cb(fs.readv, fd, [a], null);\nout.errors = { buffersText: h.attempt(() => fs.readvSync(fd, \"x\")), buffersMixed: h.attempt(() => fs.readvSync(fd, [a, \"x\"])), buffersArrayBuffer: h.attempt(() => fs.readvSync(fd, [new ArrayBuffer(2)])), writeBuffers: h.attempt(() => fs.writevSync(fd, 5)),\n  fdText: await cb(fs.readv, \"x\", [a]), fdNegative: await cb(fs.readv, -1, [a]), fdFloat: await cb(fs.writev, 1.5, [a]), noCallback: h.attempt(() => fs.readv(fd, [a])), badCallback: h.attempt(() => fs.writev(fd, [a], 0, 5)),\n  callbackBuffers: await cb(fs.writev, fd, \"x\"), writeReadOnly: h.attempt(() => fs.writevSync(fd, [a])), writeReadOnlyCallback: await cb(fs.writev, fd, [a]) };\nfs.closeSync(fd);\nout.closed = { readSync: h.attempt(() => fs.readvSync(fd, [a])), writeSync: h.attempt(() => fs.writevSync(fd, [a])), read: await cb(fs.readv, fd, [a]), write: await cb(fs.writev, fd, [a]) };\nfd = fs.openSync(\"g\", \"w+\");\nout.writevCallback = await cb(fs.writev, fd, [B.from(\"ab\"), B.from(\"cd\")]);\nout.writevPosition = await cb(fs.writev, fd, [B.from(\"Z\")], 0);\nout.writevEmpty = await cb(fs.writev, fd, []);\nout.writevNext = await cb(fs.writev, fd, [B.from(\"e\")], null);\nfs.closeSync(fd); out.g = fs.readFileSync(\"g\", \"utf8\");\nconst handle = await fs.promises.open(\"g\", \"r+\");\nconst hr = await handle.readv([a, b], 0); out.handleReadv = [Object.keys(hr), hr.bytesRead, hr.buffers[0] === a, a.toString() + b.toString()];\nconst hw = await handle.writev([B.from(\"12\")], 1); out.handleWritev = [Object.keys(hw), hw.bytesWritten];\nconst list = [B.from(\"3\")]; const hw2 = await handle.writev(list); out.handleWritevCurrent = [hw2.bytesWritten, hw2.buffers === list];\nout.handleShapes = [h.fn(handle.readv), h.fn(handle.writev), h.fn(handle[Symbol.asyncDispose])];\nout.handleBad = await h.attemptAsync(() => handle.readv(\"x\"));\nout.handleDispose = await handle[Symbol.asyncDispose](); out.handleFd = handle.fd; out.handleDisposeAgain = await h.attemptAsync(() => handle[Symbol.asyncDispose]());\nout.g2 = fs.readFileSync(\"g\", \"utf8\");\nreturn out;\n",
+   "result": {
+    "shapes": [
+     [
+      "readv",
+      4
+     ],
+     [
+      "readvSync",
+      3
+     ],
+     [
+      "writev",
+      4
+     ],
+     [
+      "writevSync",
+      3
+     ]
+    ],
+    "write1": 8,
+    "write2": 2,
+    "writeAt": 3,
+    "write3": 1,
+    "writeEmpty": 0,
+    "writeViews": 3,
+    "content": "aXYZefghIJkLMO",
+    "read1": [
+     7,
+     "aXYZ",
+     "efg"
+    ],
+    "readCurrent": [
+     0,
+     "aXYZ"
+    ],
+    "readPositionString": [
+     0,
+     "aXYZ"
+    ],
+    "readSequence": [
+     7,
+     "aXYZefg",
+     4,
+     "XYZe",
+     7,
+     "hIJkLMO",
+     0,
+     0
+    ],
+    "readEmpty": {
+     "error": {
+      "name": "Error",
+      "ctor": "Error",
+      "message": "EINVAL: invalid argument, read",
+      "code": "EINVAL",
+      "errno": -22,
+      "syscall": "read"
+     }
+    },
+    "readEmptyCallback": [
+     {
+      "name": "Error",
+      "ctor": "Error",
+      "message": "EINVAL: invalid argument, read",
+      "code": "EINVAL",
+      "errno": -22,
+      "syscall": "read"
+     },
+     0
+    ],
+    "readViews": [
+     6,
+     [
+      22625,
+      23129
+     ],
+     "00656600"
+    ],
+    "readvCallback": [
+     {
+      "order": [
+       "returned",
+       "callback"
+      ],
+      "e": null,
+      "n": 7,
+      "same": true
+     },
+     "aXYZefg"
+    ],
+    "readvNoPosition": {
+     "order": [
+      "returned",
+      "callback"
+     ],
+     "e": null,
+     "n": 0,
+     "same": true
+    },
+    "readvNull": {
+     "order": [
+      "returned",
+      "callback"
+     ],
+     "e": null,
+     "n": 0,
+     "same": true
+    },
+    "errors": {
+     "buffersText": {
+      "error": {
+       "name": "TypeError",
+       "ctor": "TypeError",
+       "message": "The \"buffers\" argument must be an ArrayBufferView[]. Received type string ('x')",
+       "code": "ERR_INVALID_ARG_TYPE"
+      }
+     },
+     "buffersMixed": {
+      "error": {
+       "name": "TypeError",
+       "ctor": "TypeError",
+       "message": "The \"buffers\" argument must be an ArrayBufferView[]. Received an instance of Array",
+       "code": "ERR_INVALID_ARG_TYPE"
+      }
+     },
+     "buffersArrayBuffer": {
+      "error": {
+       "name": "TypeError",
+       "ctor": "TypeError",
+       "message": "The \"buffers\" argument must be an ArrayBufferView[]. Received an instance of Array",
+       "code": "ERR_INVALID_ARG_TYPE"
+      }
+     },
+     "writeBuffers": {
+      "error": {
+       "name": "TypeError",
+       "ctor": "TypeError",
+       "message": "The \"buffers\" argument must be an ArrayBufferView[]. Received type number (5)",
+       "code": "ERR_INVALID_ARG_TYPE"
+      }
+     },
+     "fdText": {
+      "thrown": {
+       "name": "TypeError",
+       "ctor": "TypeError",
+       "message": "The \"fd\" argument must be of type number. Received type string ('x')",
+       "code": "ERR_INVALID_ARG_TYPE"
+      }
+     },
+     "fdNegative": {
+      "thrown": {
+       "name": "RangeError",
+       "ctor": "RangeError",
+       "message": "The value of \"fd\" is out of range. It must be >= 0 && <= 2147483647. Received -1",
+       "code": "ERR_OUT_OF_RANGE"
+      }
+     },
+     "fdFloat": {
+      "thrown": {
+       "name": "RangeError",
+       "ctor": "RangeError",
+       "message": "The value of \"fd\" is out of range. It must be an integer. Received 1.5",
+       "code": "ERR_OUT_OF_RANGE"
+      }
+     },
+     "noCallback": {
+      "error": {
+       "name": "TypeError",
+       "ctor": "TypeError",
+       "message": "The \"cb\" argument must be of type function. Received undefined",
+       "code": "ERR_INVALID_ARG_TYPE"
+      }
+     },
+     "badCallback": {
+      "error": {
+       "name": "TypeError",
+       "ctor": "TypeError",
+       "message": "The \"cb\" argument must be of type function. Received type number (5)",
+       "code": "ERR_INVALID_ARG_TYPE"
+      }
+     },
+     "callbackBuffers": {
+      "thrown": {
+       "name": "TypeError",
+       "ctor": "TypeError",
+       "message": "The \"buffers\" argument must be an ArrayBufferView[]. Received type string ('x')",
+       "code": "ERR_INVALID_ARG_TYPE"
+      }
+     },
+     "writeReadOnly": {
+      "error": {
+       "name": "Error",
+       "ctor": "Error",
+       "message": "EBADF: bad file descriptor, write",
+       "code": "EBADF",
+       "errno": -9,
+       "syscall": "write"
+      }
+     },
+     "writeReadOnlyCallback": {
+      "order": [
+       "returned",
+       "callback"
+      ],
+      "e": {
+       "name": "Error",
+       "ctor": "Error",
+       "message": "EBADF: bad file descriptor, write",
+       "code": "EBADF",
+       "errno": -9,
+       "syscall": "write"
+      },
+      "n": 0,
+      "same": true
+     }
+    },
+    "closed": {
+     "readSync": {
+      "error": {
+       "name": "Error",
+       "ctor": "Error",
+       "message": "EBADF: bad file descriptor, read",
+       "code": "EBADF",
+       "errno": -9,
+       "syscall": "read"
+      }
+     },
+     "writeSync": {
+      "error": {
+       "name": "Error",
+       "ctor": "Error",
+       "message": "EBADF: bad file descriptor, write",
+       "code": "EBADF",
+       "errno": -9,
+       "syscall": "write"
+      }
+     },
+     "read": {
+      "order": [
+       "returned",
+       "callback"
+      ],
+      "e": {
+       "name": "Error",
+       "ctor": "Error",
+       "message": "EBADF: bad file descriptor, read",
+       "code": "EBADF",
+       "errno": -9,
+       "syscall": "read"
+      },
+      "n": 0,
+      "same": true
+     },
+     "write": {
+      "order": [
+       "returned",
+       "callback"
+      ],
+      "e": {
+       "name": "Error",
+       "ctor": "Error",
+       "message": "EBADF: bad file descriptor, write",
+       "code": "EBADF",
+       "errno": -9,
+       "syscall": "write"
+      },
+      "n": 0,
+      "same": true
+     }
+    },
+    "writevCallback": {
+     "order": [
+      "returned",
+      "callback"
+     ],
+     "e": null,
+     "n": 4,
+     "same": true
+    },
+    "writevPosition": {
+     "order": [
+      "returned",
+      "callback"
+     ],
+     "e": null,
+     "n": 1,
+     "same": true
+    },
+    "writevEmpty": {
+     "order": [
+      "returned",
+      "callback"
+     ],
+     "e": null,
+     "n": 0,
+     "same": true
+    },
+    "writevNext": {
+     "order": [
+      "returned",
+      "callback"
+     ],
+     "e": null,
+     "n": 1,
+     "same": true
+    },
+    "g": "Zbcde",
+    "handleReadv": [
+     [
+      "bytesRead",
+      "buffers"
+     ],
+     5,
+     true,
+     "Zbcdefg"
+    ],
+    "handleWritev": [
+     [
+      "bytesWritten",
+      "buffers"
+     ],
+     2
+    ],
+    "handleWritevCurrent": [
+     1,
+     true
+    ],
+    "handleShapes": [
+     [
+      "readv",
+      2
+     ],
+     [
+      "writev",
+      2
+     ],
+     [
+      "[Symbol.asyncDispose]",
+      0
+     ]
+    ],
+    "handleBad": {
+     "error": {
+      "name": "TypeError",
+      "ctor": "TypeError",
+      "message": "The \"buffers\" argument must be an ArrayBufferView[]. Received type string ('x')",
+      "code": "ERR_INVALID_ARG_TYPE"
+     }
+    },
+    "handleFd": -1,
+    "handleDisposeAgain": {},
+    "g2": "312de"
+   }
+  }
+ }
+}

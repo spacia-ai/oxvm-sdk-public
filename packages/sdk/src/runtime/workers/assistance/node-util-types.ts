@@ -1,3 +1,4 @@
+import { isKeyObject } from "./node-key-object-brand.ts";
 import { nativeIsPromise } from "../../promise-brand.js";
 import { nativeIsProxy } from "../../proxy-brand.js";
 
@@ -46,6 +47,8 @@ export const nodeUtilTypes = Object.freeze({
   isUint32Array: isTyped("Uint32Array"), isInt8Array: isTyped("Int8Array"), isInt16Array: isTyped("Int16Array"),
   isInt32Array: isTyped("Int32Array"), isFloat32Array: isTyped("Float32Array"), isFloat64Array: isTyped("Float64Array"),
   isBigInt64Array: isTyped("BigInt64Array"), isBigUint64Array: isTyped("BigUint64Array"),
+  // A realm without Float16Array has no such value, so the brand never matches there.
+  isFloat16Array: Object.defineProperty((value: unknown): boolean => typedArrayTag(value) === "Float16Array", "name", { value: "isFloat16Array" }),
   isDataView: (value: unknown): boolean => value instanceof DataView,
   isDate: isTag("Date"), isRegExp: isTag("RegExp"), isPromise: (value: unknown): boolean => value instanceof Promise,
   isMap: isTag("Map"), isSet: isTag("Set"), isWeakMap: isTag("WeakMap"), isWeakSet: isTag("WeakSet"),
@@ -60,7 +63,7 @@ export const nodeUtilTypes = Object.freeze({
   isBoxedPrimitive: (value: unknown): boolean => typeof value === "object" && value !== null
     && ["Number", "String", "Boolean", "BigInt", "Symbol"].includes(tag(value)),
   isCryptoKey: (value: unknown): boolean => typeof CryptoKey !== "undefined" && value instanceof CryptoKey,
-  isKeyObject: (): boolean => false,
+  isKeyObject,
   // The process realm records its proxies (ADR 0026, 2.11); a host external stays invisible.
   isProxy: (value: unknown): boolean => nativeIsProxy(value), isExternal: (): boolean => false,
 });
