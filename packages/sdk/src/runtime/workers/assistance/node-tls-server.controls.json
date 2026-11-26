@@ -1,0 +1,1248 @@
+{
+ "description": "tls.Server, tls.createServer, https.Server and https.createServer of node:24.18.1-alpine. The identity is a throwaway self-signed pair made with openssl for these tests only (CN=localhost and CN=client); it protects nothing. Run: docker run --rm -v <dir with record.cjs, key.pem, cert.pem, ckey.pem, ccert.pem>:/w node:24.18.1-alpine node /w/record.cjs",
+ "recorder": "'use strict';\nconst tls = require('tls'), https = require('https'), net = require('net'), http = require('http'), fs = require('fs'), { once } = require('events');\nconst key = fs.readFileSync(__dirname + '/key.pem', 'utf8'), cert = fs.readFileSync(__dirname + '/cert.pem', 'utf8');\nconst clientKey = fs.readFileSync(__dirname + '/ckey.pem', 'utf8'), clientCert = fs.readFileSync(__dirname + '/ccert.pem', 'utf8');\nconst err = e => ({ name: e.name, ctor: e.constructor.name, code: e.code, message: e.message, ...(e.errno !== undefined ? { errno: e.errno } : {}), ...(e.syscall ? { syscall: e.syscall } : {}), ...(e.address ? { address: e.address } : {}), ...(e.port !== undefined ? { port: 'PORT' } : {}), ...(e.library ? { library: e.library } : {}), ...(e.reason ? { reason: e.reason } : {}) });\nconst attempt = f => { try { return { value: f() }; } catch (e) { return { error: err(e) }; } };\nconst fn = f => [f.name, f.length];\nconst protoNames = c => Object.getOwnPropertyNames(c.prototype).sort();\nasync function listen(server, ...args) { server.listen(...args); await once(server, 'listening'); return server.address().port; }\nfunction describe(socket) {\n  const peer = socket.getPeerCertificate();\n  return { encrypted: socket.encrypted, authorized: socket.authorized, authorizationError: socket.authorizationError === undefined ? { $: 'undefined' } : socket.authorizationError, alpnProtocol: socket.alpnProtocol, servername: socket.servername,\n    protocol: socket.getProtocol(), cipher: socket.getCipher(), peerKeys: peer === null || peer === undefined ? String(peer) : Object.keys(peer).sort(), peerSubject: peer && peer.subject ? { ...peer.subject } : null,\n    remoteAddress: socket.remoteAddress, remoteFamily: socket.remoteFamily, localAddress: socket.localAddress, localPortIsServer: socket.localPort === socket.server.address().port, ctor: socket.constructor.name, isTLSSocket: socket instanceof tls.TLSSocket,\n    allowHalfOpen: socket.allowHalfOpen, pending: socket.pending, connecting: socket.connecting, hasServer: socket.server !== undefined };\n}\nasync function scenario(name, serverOptions, clientOptions, extra) {\n  const events = [], raws = new Set(), server = tls.createServer(serverOptions); process.stderr.write(name + '\\n'); server.on('connection', raw => { raws.add(raw); });\n  for (const kind of ['listening', 'connection', 'secureConnection', 'tlsClientError', 'close', 'error', 'newSession', 'keylog', 'drop']) server.on(kind, (...args) => {\n    const row = { kind };\n    if (kind === 'connection') Object.assign(row, { ctor: args[0].constructor.name, isTLS: args[0] instanceof tls.TLSSocket });\n    if (kind === 'secureConnection') { Object.assign(row, { socket: describe(args[0]), argc: args.length }); args[0].on('error', () => {}); args[0].end('hello'); }\n    if (kind === 'tlsClientError') Object.assign(row, { error: err(args[0]), socketCtor: args[1].constructor.name, isTLS: args[1] instanceof tls.TLSSocket, destroyed: args[1].destroyed, argc: args.length });\n    if (kind === 'error') Object.assign(row, { error: err(args[0]) });\n    if (kind === 'newSession') args[2]();\n    if (kind !== 'keylog' && kind !== 'newSession') events.push(row);\n  });\n  const port = await listen(server, 0, '127.0.0.1');\n  const client = {};\n  await new Promise(resolve => {\n    if (extra === 'garbage' || extra === 'http') {\n      const raw = net.connect(port, '127.0.0.1', () => raw.write(extra === 'http' ? 'GET / HTTP/1.1\\r\\nHost: x\\r\\n\\r\\n' : Buffer.alloc(64, 0x41)));\n      raw.on('error', () => {}); raw.on('close', () => setTimeout(resolve, 50)); raw.resume(); setTimeout(() => raw.destroy(), 500);\n    } else {\n      const socket = tls.connect({ port, host: '127.0.0.1', ...clientOptions });\n      let data = '';\n      socket.on('secureConnect', () => { client.authorized = socket.authorized; client.alpnProtocol = socket.alpnProtocol; });\n      socket.on('data', bytes => { data += bytes; }); socket.on('error', e => { client.error = err(e); });\n      socket.on('close', () => { client.data = data; setTimeout(resolve, 50); }); setTimeout(() => socket.destroy(), 1500);\n    }\n  });\n  const connections = await new Promise(resolve => server.getConnections((e, n) => resolve([e, n])));\n  for (const raw of raws) raw.destroy();\n  server.close(); await once(server, 'close');\n  return { name, events, client, connections };\n}\n(async () => {\n  const out = { node: { version: process.version, openssl: process.versions.openssl } };\n  out.identity = { key, cert, clientKey, clientCert };\n  out.keys = { tls: Object.keys(tls), https: Object.keys(https), _tls_wrap: Object.keys(require('_tls_wrap')), _tls_common: Object.keys(require('_tls_common')) };\n  out.functions = { 'tls.Server': fn(tls.Server), 'tls.createServer': fn(tls.createServer), 'https.Server': fn(https.Server), 'https.createServer': fn(https.createServer),\n    '_tls_common.translatePeerCertificate': fn(require('_tls_common').translatePeerCertificate) };\n  for (const name of ['listen', 'close', 'address', 'getConnections', 'ref', 'unref', 'setSecureContext', 'addContext', 'getTicketKeys', 'setTicketKeys', '_setServerData', '_getServerData']) out.functions['tls.Server#' + name] = typeof tls.Server.prototype[name] === 'function' ? fn(tls.Server.prototype[name]) : null;\n  for (const name of ['setTimeout', 'closeAllConnections', 'closeIdleConnections', 'close']) out.functions['https.Server#' + name] = fn(https.Server.prototype[name]);\n  out.prototypes = { 'tls.Server': protoNames(tls.Server), 'https.Server': protoNames(https.Server) };\n  out.same = { wrapServer: require('_tls_wrap').Server === tls.Server, wrapSocket: require('_tls_wrap').TLSSocket === tls.TLSSocket, wrapCreate: require('_tls_wrap').createServer === tls.createServer, wrapConnect: require('_tls_wrap').connect === tls.connect,\n    commonCreate: require('_tls_common').createSecureContext === tls.createSecureContext, commonContext: require('_tls_common').SecureContext === tls.SecureContext };\n  const s = tls.createServer();\n  out.instance = { ownKeys: Object.keys(s).sort(), isNet: s instanceof net.Server, isTls: s instanceof tls.Server, callable: tls.Server() instanceof tls.Server, listening: s.listening, address: s.address(), allowHalfOpen: s.allowHalfOpen, pauseOnConnect: s.pauseOnConnect,\n    requestCert: s.requestCert, rejectUnauthorized: s.rejectUnauthorized, ALPNProtocols: s.ALPNProtocols === undefined ? { $: 'undefined' } : s.ALPNProtocols, maxConnections: s.maxConnections === undefined ? { $: 'undefined' } : s.maxConnections,\n    ticketKeysLength: s.getTicketKeys().length, ticketKeysBuffer: Buffer.isBuffer(s.getTicketKeys()), listenerCounts: { secureConnection: s.listenerCount('secureConnection'), connection: s.listenerCount('connection') },\n    withListener: tls.createServer(() => {}).listenerCount('secureConnection'), withOptionsListener: tls.createServer({}, () => {}).listenerCount('secureConnection') };\n  const hs = https.createServer();\n  out.httpsInstance = { ownKeys: Object.keys(hs).sort(), isNet: hs instanceof net.Server, isTls: hs instanceof tls.Server, isHttp: hs instanceof http.Server, isHttps: hs instanceof https.Server, callable: https.Server() instanceof https.Server, allowHalfOpen: hs.allowHalfOpen, timeout: hs.timeout, keepAliveTimeout: hs.keepAliveTimeout, keepAliveTimeoutBuffer: hs.keepAliveTimeoutBuffer,\n    headersTimeout: hs.headersTimeout, requestTimeout: hs.requestTimeout, maxHeadersCount: hs.maxHeadersCount, maxRequestsPerSocket: hs.maxRequestsPerSocket, ALPNProtocols: hs.ALPNProtocols && [...hs.ALPNProtocols], httpAllowHalfOpen: hs.httpAllowHalfOpen,\n    listenerCounts: { secureConnection: hs.listenerCount('secureConnection'), connection: hs.listenerCount('connection'), tlsClientError: hs.listenerCount('tlsClientError'), request: hs.listenerCount('request') },\n    secureListenerIsHttp: hs.listeners('secureConnection')[0] === http._connectionListener, withListener: https.createServer(() => {}).listenerCount('request'), withOptionsListener: https.createServer({}, () => {}).listenerCount('request') };\n  out.validation = {\n    createString: attempt(() => { tls.createServer('x'); return 'ok'; }), createNumber: attempt(() => { tls.createServer(5); return 'ok'; }), createNull: attempt(() => { tls.createServer(null); return 'ok'; }),\n    badKey: attempt(() => { tls.createServer({ key: 'garbage', cert }); return 'ok'; }), badHandshakeTimeout: attempt(() => { tls.createServer({ handshakeTimeout: 'x' }); return 'ok'; }), badSessionTimeout: attempt(() => { tls.createServer({ sessionTimeout: 'x' }); return 'ok'; }),\n    badTicketKeysOption: attempt(() => { tls.createServer({ ticketKeys: Buffer.alloc(3) }); return 'ok'; }), badTicketKeysType: attempt(() => { tls.createServer({ ticketKeys: 'x' }); return 'ok'; }),\n    badALPN: attempt(() => { tls.createServer({ ALPNProtocols: ['a'], ALPNCallback() {} }); return 'ok'; }), badSNI: attempt(() => { tls.createServer({ SNICallback: 5 }); return 'ok'; }), badPsk: attempt(() => { tls.createServer({ pskCallback: 5 }); return 'ok'; }),\n    setTicketKeysShort: attempt(() => { tls.createServer().setTicketKeys(Buffer.alloc(3)); return 'ok'; }), setTicketKeysString: attempt(() => { tls.createServer().setTicketKeys('x'); return 'ok'; }),\n    setTicketKeysOk: attempt(() => { const x = tls.createServer(); const k = Buffer.alloc(48, 7); const r = x.setTicketKeys(k); return [r === undefined, x.getTicketKeys().equals(k), x.getTicketKeys() === k]; }),\n    setSecureContextString: attempt(() => { tls.createServer().setSecureContext('x'); return 'ok'; }), setSecureContextNone: attempt(() => { tls.createServer().setSecureContext(); return 'ok'; }), setSecureContextOk: attempt(() => tls.createServer().setSecureContext({ key, cert }) === undefined),\n    addContextNoHost: attempt(() => { tls.createServer().addContext(); return 'ok'; }), addContextOk: attempt(() => tls.createServer().addContext('a.example', { key, cert }) === undefined), addContextNoContext: attempt(() => tls.createServer().addContext('a.example') === undefined),\n    listenBadPort: attempt(() => { tls.createServer().listen(70000); return 'ok'; }), listenNegative: attempt(() => { tls.createServer().listen(-1); return 'ok'; }), listenStringPort: attempt(() => { tls.createServer().listen('x7'); return 'ok'; }), listenEmptyObject: attempt(() => { tls.createServer().listen({}); return 'ok'; }),\n    listenBool: attempt(() => { tls.createServer().listen(true); return 'ok'; }), getConnectionsNoCallback: attempt(() => { tls.createServer().getConnections(); return 'ok'; }), closeBadCallback: attempt(() => { const x = tls.createServer(); return x.close(5) === x; }),\n    refReturns: attempt(() => { const x = tls.createServer(); return [x.ref() === x, x.unref() === x]; }),\n  };\n  { const x = tls.createServer({ key, cert }); await listen(x, 0, '127.0.0.1'); out.validation.listenTwice = attempt(() => { x.listen(0); return 'ok'; }); out.validation.listeningAddress = { ...x.address(), port: 'PORT' }; out.validation.listeningFlag = x.listening;\n    const y = tls.createServer({ key, cert }); y.listen(x.address().port, '127.0.0.1'); const [e] = await once(y, 'error'); out.validation.addressInUse = { error: err(e), listening: y.listening, messageHasPort: e.message === `listen EADDRINUSE: address already in use 127.0.0.1:${x.address().port}` };\n    const order = []; x.close(e => order.push(['callback', e === undefined ? 'undefined' : String(e)])); order.push(['listening-after-close', x.listening]); x.on('close', () => order.push(['close'])); await once(x, 'close'); out.validation.closeOrder = order; }\n  { const x = tls.createServer(); const order = []; x.on('close', () => order.push(['close'])); x.close(e => order.push(['callback', err(e)])); order.push(['sync']); await new Promise(r => setTimeout(r, 20)); out.validation.closeNotRunning = order; }\n  { const x = tls.createServer({ key, cert }); x.listen(0); await once(x, 'listening'); out.validation.defaultHost = { ...x.address(), port: 'PORT' }; x.close(); await once(x, 'close'); }\n  { const x = tls.createServer({ key, cert }); const p = await listen(x, { port: 0, host: 'localhost' }); out.validation.localhost = { ...x.address(), port: 'PORT' }; x.close(); await once(x, 'close'); }\n  process.stderr.write('scenarios\\n');\n  out.scenarios = [\n    await scenario('plain', { key, cert }, { ca: cert, servername: 'localhost' }),\n    await scenario('alpn', { key, cert, ALPNProtocols: ['h2', 'http/1.1'] }, { ca: cert, servername: 'localhost', ALPNProtocols: ['http/1.1'] }),\n    await scenario('no-sni', { key, cert }, { rejectUnauthorized: false }),\n    await scenario('request-cert-trusted', { key, cert, requestCert: true, ca: clientCert }, { ca: cert, servername: 'localhost', key: clientKey, cert: clientCert }),\n    await scenario('request-cert-untrusted-allowed', { key, cert, requestCert: true, rejectUnauthorized: false }, { ca: cert, servername: 'localhost', key: clientKey, cert: clientCert }),\n    await scenario('request-cert-missing-allowed', { key, cert, requestCert: true, rejectUnauthorized: false }, { ca: cert, servername: 'localhost' }),\n    await scenario('request-cert-untrusted-rejected', { key, cert, requestCert: true }, { ca: cert, servername: 'localhost', key: clientKey, cert: clientCert }),\n    await scenario('garbage', { key, cert }, {}, 'garbage'),\n    await scenario('http', { key, cert }, {}, 'http'),\n    await scenario('tls12', { key, cert, maxVersion: 'TLSv1.2' }, { ca: cert, servername: 'localhost' }),\n  ];\n  process.stderr.write('https\\n');\n  { // HTTPS\n    const events = [], server = https.createServer({ key, cert }, (req, res) => {\n      events.push({ kind: 'request', encrypted: req.socket.encrypted, authorized: req.socket.authorized, url: req.url, socketCtor: req.socket.constructor.name, alpn: req.socket.alpnProtocol, sameServer: req.socket.server === server });\n      res.setHeader('content-type', 'text/plain'); res.end('secure ' + req.url);\n    });\n    const port = await listen(server, 0, '127.0.0.1');\n    const agent = new https.Agent({ keepAlive: true, ca: cert });\n    const get = path => new Promise((resolve, reject) => https.get({ port, host: '127.0.0.1', servername: 'localhost', path, agent }, res => { let body = ''; const localPort = res.socket.localPort; res.on('data', c => { body += c; }); res.on('end', () => resolve({ status: res.statusCode, body, connection: res.headers.connection, localPort })); }).on('error', reject));\n    const a = await get('/a'); process.stderr.write('a\\n'); const b = await get('/b'); process.stderr.write('b\\n');\n    out.https = { events, responses: [a, b].map(r => ({ status: r.status, body: r.body, connection: r.connection })), reused: a.localPort === b.localPort };\n    agent.destroy(); process.stderr.write('closing\\n'); server.close(); server.closeAllConnections(); await once(server, 'close');\n  }\n  process.stdout.write(JSON.stringify(out, null, 1), () => process.exit(0));\n})().catch(e => { console.error(e); process.exit(1); });\n",
+ "node": {
+  "version": "v24.18.1",
+  "openssl": "3.5.7"
+ },
+ "identity": {
+  "key": "-----BEGIN PRIVATE KEY-----\nMIGHAgEAMBMGByqGSM49AgEGCCqGSM49AwEHBG0wawIBAQQg6rXabGGcODSfKtEg\nLHkDvmCebZWUhZX0N/sbCtA6piihRANCAATHIbSCZqIYcThexOHlHd8JEhQJZp4q\nZQ/Bh4elwwu9FGz1862j9skDYl4qVwUeLcMvmrFjVJbZ4MGSQvaXjhNs\n-----END PRIVATE KEY-----\n",
+  "cert": "-----BEGIN CERTIFICATE-----\nMIIBmjCCAT+gAwIBAgIUKynDAw53Vo8j8LwmxpArhG3Jq8QwCgYIKoZIzj0EAwIw\nFDESMBAGA1UEAwwJbG9jYWxob3N0MB4XDTI2MTEyNTIyNDMyOFoXDTM2MTEyMjIy\nNDMyOFowFDESMBAGA1UEAwwJbG9jYWxob3N0MFkwEwYHKoZIzj0CAQYIKoZIzj0D\nAQcDQgAExyG0gmaiGHE4XsTh5R3fCRIUCWaeKmUPwYeHpcMLvRRs9fOto/bJA2Je\nKlcFHi3DL5qxY1SW2eDBkkL2l44TbKNvMG0wHQYDVR0OBBYEFKEbv3TcOowedkg4\nHHdkXdr8H/+NMB8GA1UdIwQYMBaAFKEbv3TcOowedkg4HHdkXdr8H/+NMA8GA1Ud\nEwEB/wQFMAMBAf8wGgYDVR0RBBMwEYIJbG9jYWxob3N0hwR/AAABMAoGCCqGSM49\nBAMCA0kAMEYCIQDzL6TGXL7FtvFjKbC8E7Sf5cV1S+o+TMiB98uNt+eIlAIhAMvw\nsAGRSU78HvPTASExcTqVldGpBCqrlkS07b1MHPC8\n-----END CERTIFICATE-----\n",
+  "clientKey": "-----BEGIN PRIVATE KEY-----\nMIGHAgEAMBMGByqGSM49AgEGCCqGSM49AwEHBG0wawIBAQQgD20e7ytF1esl6AD5\npvufjz23ax/fsZqahLCkFp9Z3R6hRANCAATBSckncKimKmP+gKJooOfSu6SdFVf6\nccZEee5o7UyKkO98WS83jwrXzpPXQz0SRafcq4vAAgqB973HdxRrmsJ/\n-----END PRIVATE KEY-----\n",
+  "clientCert": "-----BEGIN CERTIFICATE-----\nMIIBdzCCAR2gAwIBAgIUZqnQwIiD+558OKQldrPPbeIa4UgwCgYIKoZIzj0EAwIw\nETEPMA0GA1UEAwwGY2xpZW50MB4XDTI2MTEyNTIyNDMyOFoXDTM2MTEyMjIyNDMy\nOFowETEPMA0GA1UEAwwGY2xpZW50MFkwEwYHKoZIzj0CAQYIKoZIzj0DAQcDQgAE\nwUnJJ3Copipj/oCiaKDn0ruknRVX+nHGRHnuaO1MipDvfFkvN48K186T10M9EkWn\n3KuLwAIKgfe9x3cUa5rCf6NTMFEwHQYDVR0OBBYEFHW9an6scS9Pm4tXrpFrsInt\nBseZMB8GA1UdIwQYMBaAFHW9an6scS9Pm4tXrpFrsIntBseZMA8GA1UdEwEB/wQF\nMAMBAf8wCgYIKoZIzj0EAwIDSAAwRQIhAMsj7iumu4itKWJG/E5gmQZmQ1OmwWzQ\nbhoU5n49jy4UAiBTbBI48gS+pHHI9fEGH3d6gKRMaMla9pN6MCMkRkmXbw==\n-----END CERTIFICATE-----\n"
+ },
+ "keys": {
+  "tls": [
+   "CLIENT_RENEG_LIMIT",
+   "CLIENT_RENEG_WINDOW",
+   "DEFAULT_CIPHERS",
+   "DEFAULT_ECDH_CURVE",
+   "DEFAULT_MIN_VERSION",
+   "DEFAULT_MAX_VERSION",
+   "getCiphers",
+   "rootCertificates",
+   "getCACertificates",
+   "setDefaultCACertificates",
+   "convertALPNProtocols",
+   "checkServerIdentity",
+   "createSecureContext",
+   "SecureContext",
+   "TLSSocket",
+   "Server",
+   "createServer",
+   "connect"
+  ],
+  "https": [
+   "Agent",
+   "globalAgent",
+   "Server",
+   "createServer",
+   "get",
+   "request"
+  ],
+  "_tls_wrap": [
+   "TLSSocket",
+   "Server",
+   "createServer",
+   "connect"
+  ],
+  "_tls_common": [
+   "SecureContext",
+   "createSecureContext",
+   "translatePeerCertificate"
+  ]
+ },
+ "functions": {
+  "tls.Server": [
+   "Server",
+   2
+  ],
+  "tls.createServer": [
+   "createServer",
+   2
+  ],
+  "https.Server": [
+   "Server",
+   2
+  ],
+  "https.createServer": [
+   "createServer",
+   2
+  ],
+  "_tls_common.translatePeerCertificate": [
+   "translatePeerCertificate",
+   1
+  ],
+  "tls.Server#listen": [
+   "",
+   0
+  ],
+  "tls.Server#close": [
+   "",
+   1
+  ],
+  "tls.Server#address": [
+   "",
+   0
+  ],
+  "tls.Server#getConnections": [
+   "",
+   1
+  ],
+  "tls.Server#ref": [
+   "",
+   0
+  ],
+  "tls.Server#unref": [
+   "",
+   0
+  ],
+  "tls.Server#setSecureContext": [
+   "",
+   1
+  ],
+  "tls.Server#addContext": [
+   "",
+   2
+  ],
+  "tls.Server#getTicketKeys": [
+   "getTicketKeys",
+   0
+  ],
+  "tls.Server#setTicketKeys": [
+   "setTicketKeys",
+   1
+  ],
+  "tls.Server#_setServerData": [
+   "",
+   1
+  ],
+  "tls.Server#_getServerData": [
+   "",
+   0
+  ],
+  "https.Server#setTimeout": [
+   "setTimeout",
+   2
+  ],
+  "https.Server#closeAllConnections": [
+   "closeAllConnections",
+   0
+  ],
+  "https.Server#closeIdleConnections": [
+   "closeIdleConnections",
+   0
+  ],
+  "https.Server#close": [
+   "close",
+   0
+  ]
+ },
+ "prototypes": {
+  "tls.Server": [
+   "_getServerData",
+   "_setServerData",
+   "addContext",
+   "constructor",
+   "getTicketKeys",
+   "setSecureContext",
+   "setTicketKeys"
+  ],
+  "https.Server": [
+   "close",
+   "closeAllConnections",
+   "closeIdleConnections",
+   "constructor",
+   "setTimeout"
+  ]
+ },
+ "same": {
+  "wrapServer": true,
+  "wrapSocket": true,
+  "wrapCreate": true,
+  "wrapConnect": true,
+  "commonCreate": true,
+  "commonContext": true
+ },
+ "instance": {
+  "ownKeys": [
+   "ALPNCallback",
+   "_connections",
+   "_contexts",
+   "_events",
+   "_eventsCount",
+   "_handle",
+   "_listeningId",
+   "_maxListeners",
+   "_sharedCreds",
+   "_unref",
+   "_usingWorkers",
+   "_workers",
+   "allowHalfOpen",
+   "ca",
+   "cert",
+   "ciphers",
+   "clientCertEngine",
+   "crl",
+   "dhparam",
+   "ecdhCurve",
+   "highWaterMark",
+   "honorCipherOrder",
+   "keepAlive",
+   "keepAliveInitialDelay",
+   "key",
+   "maxVersion",
+   "minVersion",
+   "noDelay",
+   "passphrase",
+   "pauseOnConnect",
+   "pfx",
+   "privateKeyEngine",
+   "privateKeyIdentifier",
+   "rejectUnauthorized",
+   "requestCert",
+   "secureOptions",
+   "secureProtocol",
+   "sessionIdContext",
+   "sigalgs"
+  ],
+  "isNet": true,
+  "isTls": true,
+  "callable": true,
+  "listening": false,
+  "address": null,
+  "allowHalfOpen": false,
+  "pauseOnConnect": false,
+  "requestCert": false,
+  "rejectUnauthorized": true,
+  "ALPNProtocols": {
+   "$": "undefined"
+  },
+  "maxConnections": {
+   "$": "undefined"
+  },
+  "ticketKeysLength": 48,
+  "ticketKeysBuffer": true,
+  "listenerCounts": {
+   "secureConnection": 0,
+   "connection": 1
+  },
+  "withListener": 1,
+  "withOptionsListener": 1
+ },
+ "httpsInstance": {
+  "ownKeys": [
+   "ALPNCallback",
+   "ALPNProtocols",
+   "_connections",
+   "_contexts",
+   "_events",
+   "_eventsCount",
+   "_handle",
+   "_listeningId",
+   "_maxListeners",
+   "_sharedCreds",
+   "_unref",
+   "_usingWorkers",
+   "_workers",
+   "allowHalfOpen",
+   "ca",
+   "cert",
+   "ciphers",
+   "clientCertEngine",
+   "connectionsCheckingInterval",
+   "crl",
+   "dhparam",
+   "ecdhCurve",
+   "headersTimeout",
+   "highWaterMark",
+   "honorCipherOrder",
+   "httpAllowHalfOpen",
+   "insecureHTTPParser",
+   "joinDuplicateHeaders",
+   "keepAlive",
+   "keepAliveInitialDelay",
+   "keepAliveTimeout",
+   "keepAliveTimeoutBuffer",
+   "key",
+   "maxHeaderSize",
+   "maxHeadersCount",
+   "maxVersion",
+   "minVersion",
+   "noDelay",
+   "passphrase",
+   "pauseOnConnect",
+   "pfx",
+   "privateKeyEngine",
+   "privateKeyIdentifier",
+   "rejectNonStandardBodyWrites",
+   "rejectUnauthorized",
+   "requestCert",
+   "requestTimeout",
+   "requireHostHeader",
+   "secureOptions",
+   "secureProtocol",
+   "sessionIdContext",
+   "shouldUpgradeCallback",
+   "sigalgs",
+   "timeout"
+  ],
+  "isNet": true,
+  "isTls": true,
+  "isHttp": false,
+  "isHttps": true,
+  "callable": true,
+  "allowHalfOpen": false,
+  "timeout": 0,
+  "keepAliveTimeout": 5000,
+  "keepAliveTimeoutBuffer": 1000,
+  "headersTimeout": 60000,
+  "requestTimeout": 300000,
+  "maxHeadersCount": null,
+  "ALPNProtocols": [
+   8,
+   104,
+   116,
+   116,
+   112,
+   47,
+   49,
+   46,
+   49
+  ],
+  "httpAllowHalfOpen": false,
+  "listenerCounts": {
+   "secureConnection": 1,
+   "connection": 1,
+   "tlsClientError": 1,
+   "request": 0
+  },
+  "secureListenerIsHttp": true,
+  "withListener": 1,
+  "withOptionsListener": 1
+ },
+ "validation": {
+  "createString": {
+   "error": {
+    "name": "TypeError",
+    "ctor": "TypeError",
+    "code": "ERR_INVALID_ARG_TYPE",
+    "message": "The \"options\" argument must be of type object. Received type string ('x')"
+   }
+  },
+  "createNumber": {
+   "error": {
+    "name": "TypeError",
+    "ctor": "TypeError",
+    "code": "ERR_INVALID_ARG_TYPE",
+    "message": "The \"options\" argument must be of type object. Received type number (5)"
+   }
+  },
+  "createNull": {
+   "value": "ok"
+  },
+  "badKey": {
+   "error": {
+    "name": "Error",
+    "ctor": "Error",
+    "code": "ERR_OSSL_UNSUPPORTED",
+    "message": "error:1E08010C:DECODER routines::unsupported",
+    "library": "DECODER routines",
+    "reason": "unsupported"
+   }
+  },
+  "badHandshakeTimeout": {
+   "error": {
+    "name": "TypeError",
+    "ctor": "TypeError",
+    "code": "ERR_INVALID_ARG_TYPE",
+    "message": "The \"options.handshakeTimeout\" property must be of type number. Received type string ('x')"
+   }
+  },
+  "badSessionTimeout": {
+   "error": {
+    "name": "TypeError",
+    "ctor": "TypeError",
+    "code": "ERR_INVALID_ARG_TYPE",
+    "message": "The \"options.sessionTimeout\" property must be of type number. Received type string ('x')"
+   }
+  },
+  "badTicketKeysOption": {
+   "error": {
+    "name": "TypeError",
+    "ctor": "TypeError",
+    "code": "ERR_INVALID_ARG_VALUE",
+    "message": "The property 'options.ticketKeys' must be exactly 48 bytes. Received 3"
+   }
+  },
+  "badTicketKeysType": {
+   "error": {
+    "name": "TypeError",
+    "ctor": "TypeError",
+    "code": "ERR_INVALID_ARG_TYPE",
+    "message": "The \"options.ticketKeys\" property must be an instance of Buffer, TypedArray, or DataView. Received type string ('x')"
+   }
+  },
+  "badALPN": {
+   "error": {
+    "name": "TypeError",
+    "ctor": "TypeError",
+    "code": "ERR_TLS_ALPN_CALLBACK_WITH_PROTOCOLS",
+    "message": "The ALPNCallback and ALPNProtocols TLS options are mutually exclusive"
+   }
+  },
+  "badSNI": {
+   "error": {
+    "name": "TypeError",
+    "ctor": "TypeError",
+    "code": "ERR_INVALID_ARG_TYPE",
+    "message": "The \"options.SNICallback\" property must be of type function. Received type number (5)"
+   }
+  },
+  "badPsk": {
+   "error": {
+    "name": "TypeError",
+    "ctor": "TypeError",
+    "code": "ERR_INVALID_ARG_TYPE",
+    "message": "The \"options.pskCallback\" property must be of type function. Received type number (5)"
+   }
+  },
+  "setTicketKeysShort": {
+   "error": {
+    "name": "Error",
+    "ctor": "Error",
+    "code": "ERR_INTERNAL_ASSERTION",
+    "message": "Session ticket keys must be a 48-byte buffer\nThis is caused by either a bug in Node.js or incorrect usage of Node.js internals.\nPlease open an issue with this stack trace at https://github.com/nodejs/node/issues\n"
+   }
+  },
+  "setTicketKeysString": {
+   "error": {
+    "name": "TypeError",
+    "ctor": "TypeError",
+    "code": "ERR_INVALID_ARG_TYPE",
+    "message": "The \"buffer\" argument must be an instance of Buffer, TypedArray, or DataView. Received type string ('x')"
+   }
+  },
+  "setTicketKeysOk": {
+   "value": [
+    true,
+    true,
+    false
+   ]
+  },
+  "setSecureContextString": {
+   "error": {
+    "name": "TypeError",
+    "ctor": "TypeError",
+    "code": "ERR_INVALID_ARG_TYPE",
+    "message": "The \"options\" argument must be of type object. Received type string ('x')"
+   }
+  },
+  "setSecureContextNone": {
+   "error": {
+    "name": "TypeError",
+    "ctor": "TypeError",
+    "code": "ERR_INVALID_ARG_TYPE",
+    "message": "The \"options\" argument must be of type object. Received undefined"
+   }
+  },
+  "setSecureContextOk": {
+   "value": true
+  },
+  "addContextNoHost": {
+   "error": {
+    "name": "Error",
+    "ctor": "Error",
+    "code": "ERR_TLS_REQUIRED_SERVER_NAME",
+    "message": "\"servername\" is required parameter for Server.addContext"
+   }
+  },
+  "addContextOk": {
+   "value": true
+  },
+  "addContextNoContext": {
+   "value": true
+  },
+  "listenBadPort": {
+   "error": {
+    "name": "RangeError",
+    "ctor": "RangeError",
+    "code": "ERR_SOCKET_BAD_PORT",
+    "message": "options.port should be >= 0 and < 65536. Received type number (70000)."
+   }
+  },
+  "listenNegative": {
+   "error": {
+    "name": "RangeError",
+    "ctor": "RangeError",
+    "code": "ERR_SOCKET_BAD_PORT",
+    "message": "options.port should be >= 0 and < 65536. Received type number (-1)."
+   }
+  },
+  "listenStringPort": {
+   "value": "ok"
+  },
+  "listenEmptyObject": {
+   "error": {
+    "name": "TypeError",
+    "ctor": "TypeError",
+    "code": "ERR_INVALID_ARG_VALUE",
+    "message": "The argument 'options' must have the property \"port\" or \"path\". Received {}"
+   }
+  },
+  "listenBool": {
+   "error": {
+    "name": "TypeError",
+    "ctor": "TypeError",
+    "code": "ERR_INVALID_ARG_VALUE",
+    "message": "The argument 'options' is invalid. Received { port: true }"
+   }
+  },
+  "getConnectionsNoCallback": {
+   "error": {
+    "name": "TypeError",
+    "ctor": "TypeError",
+    "code": "ERR_INVALID_ARG_TYPE",
+    "message": "The \"callback\" argument must be of type function. Received undefined"
+   }
+  },
+  "closeBadCallback": {
+   "value": true
+  },
+  "refReturns": {
+   "value": [
+    true,
+    true
+   ]
+  },
+  "listenTwice": {
+   "error": {
+    "name": "Error",
+    "ctor": "Error",
+    "code": "ERR_SERVER_ALREADY_LISTEN",
+    "message": "Listen method has been called more than once without closing."
+   }
+  },
+  "listeningAddress": {
+   "address": "127.0.0.1",
+   "family": "IPv4",
+   "port": "PORT"
+  },
+  "listeningFlag": true,
+  "addressInUse": {
+   "error": {
+    "name": "Error",
+    "ctor": "Error",
+    "code": "EADDRINUSE",
+    "message": "listen EADDRINUSE: address already in use 127.0.0.1:44013",
+    "errno": -98,
+    "syscall": "listen",
+    "address": "127.0.0.1",
+    "port": "PORT"
+   },
+   "listening": false,
+   "messageHasPort": true
+  },
+  "closeOrder": [
+   [
+    "listening-after-close",
+    false
+   ],
+   [
+    "callback",
+    "undefined"
+   ],
+   [
+    "close"
+   ]
+  ],
+  "closeNotRunning": [
+   [
+    "sync"
+   ],
+   [
+    "close"
+   ],
+   [
+    "callback",
+    {
+     "name": "Error",
+     "ctor": "Error",
+     "code": "ERR_SERVER_NOT_RUNNING",
+     "message": "Server is not running."
+    }
+   ]
+  ],
+  "defaultHost": {
+   "address": "::",
+   "family": "IPv6",
+   "port": "PORT"
+  },
+  "localhost": {
+   "address": "::1",
+   "family": "IPv6",
+   "port": "PORT"
+  }
+ },
+ "scenarios": [
+  {
+   "name": "plain",
+   "events": [
+    {
+     "kind": "listening"
+    },
+    {
+     "kind": "connection",
+     "ctor": "Socket",
+     "isTLS": false
+    },
+    {
+     "kind": "secureConnection",
+     "socket": {
+      "encrypted": true,
+      "authorized": false,
+      "authorizationError": null,
+      "alpnProtocol": false,
+      "servername": "localhost",
+      "protocol": "TLSv1.3",
+      "cipher": {
+       "name": "TLS_AES_256_GCM_SHA384",
+       "standardName": "TLS_AES_256_GCM_SHA384",
+       "version": "TLSv1.3"
+      },
+      "peerKeys": [],
+      "peerSubject": null,
+      "remoteAddress": "127.0.0.1",
+      "remoteFamily": "IPv4",
+      "localAddress": "127.0.0.1",
+      "localPortIsServer": true,
+      "ctor": "TLSSocket",
+      "isTLSSocket": true,
+      "allowHalfOpen": false,
+      "pending": false,
+      "connecting": false,
+      "hasServer": true
+     },
+     "argc": 1
+    },
+    {
+     "kind": "close"
+    }
+   ],
+   "client": {
+    "authorized": true,
+    "alpnProtocol": false,
+    "data": "hello"
+   },
+   "connections": [
+    null,
+    0
+   ]
+  },
+  {
+   "name": "alpn",
+   "events": [
+    {
+     "kind": "listening"
+    },
+    {
+     "kind": "connection",
+     "ctor": "Socket",
+     "isTLS": false
+    },
+    {
+     "kind": "secureConnection",
+     "socket": {
+      "encrypted": true,
+      "authorized": false,
+      "authorizationError": null,
+      "alpnProtocol": "http/1.1",
+      "servername": "localhost",
+      "protocol": "TLSv1.3",
+      "cipher": {
+       "name": "TLS_AES_256_GCM_SHA384",
+       "standardName": "TLS_AES_256_GCM_SHA384",
+       "version": "TLSv1.3"
+      },
+      "peerKeys": [],
+      "peerSubject": null,
+      "remoteAddress": "127.0.0.1",
+      "remoteFamily": "IPv4",
+      "localAddress": "127.0.0.1",
+      "localPortIsServer": true,
+      "ctor": "TLSSocket",
+      "isTLSSocket": true,
+      "allowHalfOpen": false,
+      "pending": false,
+      "connecting": false,
+      "hasServer": true
+     },
+     "argc": 1
+    },
+    {
+     "kind": "close"
+    }
+   ],
+   "client": {
+    "authorized": true,
+    "alpnProtocol": "http/1.1",
+    "data": "hello"
+   },
+   "connections": [
+    null,
+    0
+   ]
+  },
+  {
+   "name": "no-sni",
+   "events": [
+    {
+     "kind": "listening"
+    },
+    {
+     "kind": "connection",
+     "ctor": "Socket",
+     "isTLS": false
+    },
+    {
+     "kind": "secureConnection",
+     "socket": {
+      "encrypted": true,
+      "authorized": false,
+      "authorizationError": null,
+      "alpnProtocol": false,
+      "servername": false,
+      "protocol": "TLSv1.3",
+      "cipher": {
+       "name": "TLS_AES_256_GCM_SHA384",
+       "standardName": "TLS_AES_256_GCM_SHA384",
+       "version": "TLSv1.3"
+      },
+      "peerKeys": [],
+      "peerSubject": null,
+      "remoteAddress": "127.0.0.1",
+      "remoteFamily": "IPv4",
+      "localAddress": "127.0.0.1",
+      "localPortIsServer": true,
+      "ctor": "TLSSocket",
+      "isTLSSocket": true,
+      "allowHalfOpen": false,
+      "pending": false,
+      "connecting": false,
+      "hasServer": true
+     },
+     "argc": 1
+    },
+    {
+     "kind": "close"
+    }
+   ],
+   "client": {
+    "authorized": false,
+    "alpnProtocol": false,
+    "data": "hello"
+   },
+   "connections": [
+    null,
+    0
+   ]
+  },
+  {
+   "name": "request-cert-trusted",
+   "events": [
+    {
+     "kind": "listening"
+    },
+    {
+     "kind": "connection",
+     "ctor": "Socket",
+     "isTLS": false
+    },
+    {
+     "kind": "secureConnection",
+     "socket": {
+      "encrypted": true,
+      "authorized": true,
+      "authorizationError": null,
+      "alpnProtocol": false,
+      "servername": "localhost",
+      "protocol": "TLSv1.3",
+      "cipher": {
+       "name": "TLS_AES_256_GCM_SHA384",
+       "standardName": "TLS_AES_256_GCM_SHA384",
+       "version": "TLSv1.3"
+      },
+      "peerKeys": [
+       "asn1Curve",
+       "bits",
+       "ca",
+       "exponent",
+       "ext_key_usage",
+       "fingerprint",
+       "fingerprint256",
+       "fingerprint512",
+       "infoAccess",
+       "issuer",
+       "modulus",
+       "nistCurve",
+       "pubkey",
+       "raw",
+       "serialNumber",
+       "subject",
+       "subjectaltname",
+       "valid_from",
+       "valid_to"
+      ],
+      "peerSubject": {
+       "CN": "client"
+      },
+      "remoteAddress": "127.0.0.1",
+      "remoteFamily": "IPv4",
+      "localAddress": "127.0.0.1",
+      "localPortIsServer": true,
+      "ctor": "TLSSocket",
+      "isTLSSocket": true,
+      "allowHalfOpen": false,
+      "pending": false,
+      "connecting": false,
+      "hasServer": true
+     },
+     "argc": 1
+    },
+    {
+     "kind": "close"
+    }
+   ],
+   "client": {
+    "authorized": true,
+    "alpnProtocol": false,
+    "data": "hello"
+   },
+   "connections": [
+    null,
+    0
+   ]
+  },
+  {
+   "name": "request-cert-untrusted-allowed",
+   "events": [
+    {
+     "kind": "listening"
+    },
+    {
+     "kind": "connection",
+     "ctor": "Socket",
+     "isTLS": false
+    },
+    {
+     "kind": "secureConnection",
+     "socket": {
+      "encrypted": true,
+      "authorized": false,
+      "authorizationError": "DEPTH_ZERO_SELF_SIGNED_CERT",
+      "alpnProtocol": false,
+      "servername": "localhost",
+      "protocol": "TLSv1.3",
+      "cipher": {
+       "name": "TLS_AES_256_GCM_SHA384",
+       "standardName": "TLS_AES_256_GCM_SHA384",
+       "version": "TLSv1.3"
+      },
+      "peerKeys": [
+       "asn1Curve",
+       "bits",
+       "ca",
+       "exponent",
+       "ext_key_usage",
+       "fingerprint",
+       "fingerprint256",
+       "fingerprint512",
+       "infoAccess",
+       "issuer",
+       "modulus",
+       "nistCurve",
+       "pubkey",
+       "raw",
+       "serialNumber",
+       "subject",
+       "subjectaltname",
+       "valid_from",
+       "valid_to"
+      ],
+      "peerSubject": {
+       "CN": "client"
+      },
+      "remoteAddress": "127.0.0.1",
+      "remoteFamily": "IPv4",
+      "localAddress": "127.0.0.1",
+      "localPortIsServer": true,
+      "ctor": "TLSSocket",
+      "isTLSSocket": true,
+      "allowHalfOpen": false,
+      "pending": false,
+      "connecting": false,
+      "hasServer": true
+     },
+     "argc": 1
+    },
+    {
+     "kind": "close"
+    }
+   ],
+   "client": {
+    "authorized": true,
+    "alpnProtocol": false,
+    "data": "hello"
+   },
+   "connections": [
+    null,
+    0
+   ]
+  },
+  {
+   "name": "request-cert-missing-allowed",
+   "events": [
+    {
+     "kind": "listening"
+    },
+    {
+     "kind": "connection",
+     "ctor": "Socket",
+     "isTLS": false
+    },
+    {
+     "kind": "secureConnection",
+     "socket": {
+      "encrypted": true,
+      "authorized": false,
+      "authorizationError": "UNABLE_TO_GET_ISSUER_CERT",
+      "alpnProtocol": false,
+      "servername": "localhost",
+      "protocol": "TLSv1.3",
+      "cipher": {
+       "name": "TLS_AES_256_GCM_SHA384",
+       "standardName": "TLS_AES_256_GCM_SHA384",
+       "version": "TLSv1.3"
+      },
+      "peerKeys": [],
+      "peerSubject": null,
+      "remoteAddress": "127.0.0.1",
+      "remoteFamily": "IPv4",
+      "localAddress": "127.0.0.1",
+      "localPortIsServer": true,
+      "ctor": "TLSSocket",
+      "isTLSSocket": true,
+      "allowHalfOpen": false,
+      "pending": false,
+      "connecting": false,
+      "hasServer": true
+     },
+     "argc": 1
+    },
+    {
+     "kind": "close"
+    }
+   ],
+   "client": {
+    "authorized": true,
+    "alpnProtocol": false,
+    "data": "hello"
+   },
+   "connections": [
+    null,
+    0
+   ]
+  },
+  {
+   "name": "request-cert-untrusted-rejected",
+   "events": [
+    {
+     "kind": "listening"
+    },
+    {
+     "kind": "connection",
+     "ctor": "Socket",
+     "isTLS": false
+    },
+    {
+     "kind": "tlsClientError",
+     "error": {
+      "name": "Error",
+      "ctor": "Error",
+      "code": "ECONNRESET",
+      "message": "socket hang up"
+     },
+     "socketCtor": "TLSSocket",
+     "isTLS": true,
+     "destroyed": true,
+     "argc": 2
+    },
+    {
+     "kind": "close"
+    }
+   ],
+   "client": {
+    "authorized": true,
+    "alpnProtocol": false,
+    "data": ""
+   },
+   "connections": [
+    null,
+    0
+   ]
+  },
+  {
+   "name": "garbage",
+   "events": [
+    {
+     "kind": "listening"
+    },
+    {
+     "kind": "connection",
+     "ctor": "Socket",
+     "isTLS": false
+    },
+    {
+     "kind": "tlsClientError",
+     "error": {
+      "name": "Error",
+      "ctor": "Error",
+      "code": "ERR_SSL_WRONG_VERSION_NUMBER",
+      "message": "D02DCB47667E0000:error:0A00010B:SSL routines:tls_validate_record_header:wrong version number:../deps/openssl/openssl/ssl/record/methods/tlsany_meth.c:77:\n",
+      "library": "SSL routines",
+      "reason": "wrong version number"
+     },
+     "socketCtor": "TLSSocket",
+     "isTLS": true,
+     "destroyed": true,
+     "argc": 2
+    },
+    {
+     "kind": "close"
+    }
+   ],
+   "client": {},
+   "connections": [
+    null,
+    0
+   ]
+  },
+  {
+   "name": "http",
+   "events": [
+    {
+     "kind": "listening"
+    },
+    {
+     "kind": "connection",
+     "ctor": "Socket",
+     "isTLS": false
+    },
+    {
+     "kind": "tlsClientError",
+     "error": {
+      "name": "Error",
+      "ctor": "Error",
+      "code": "ERR_SSL_HTTP_REQUEST",
+      "message": "D02DCB47667E0000:error:0A00009C:SSL routines:tls_validate_record_header:http request:../deps/openssl/openssl/ssl/record/methods/tlsany_meth.c:68:\n",
+      "library": "SSL routines",
+      "reason": "http request"
+     },
+     "socketCtor": "TLSSocket",
+     "isTLS": true,
+     "destroyed": true,
+     "argc": 2
+    },
+    {
+     "kind": "close"
+    }
+   ],
+   "client": {},
+   "connections": [
+    null,
+    0
+   ]
+  },
+  {
+   "name": "tls12",
+   "events": [
+    {
+     "kind": "listening"
+    },
+    {
+     "kind": "connection",
+     "ctor": "Socket",
+     "isTLS": false
+    },
+    {
+     "kind": "secureConnection",
+     "socket": {
+      "encrypted": true,
+      "authorized": false,
+      "authorizationError": null,
+      "alpnProtocol": false,
+      "servername": "localhost",
+      "protocol": "TLSv1.2",
+      "cipher": {
+       "name": "ECDHE-ECDSA-AES128-GCM-SHA256",
+       "standardName": "TLS_ECDHE_ECDSA_WITH_AES_128_GCM_SHA256",
+       "version": "TLSv1.2"
+      },
+      "peerKeys": [],
+      "peerSubject": null,
+      "remoteAddress": "127.0.0.1",
+      "remoteFamily": "IPv4",
+      "localAddress": "127.0.0.1",
+      "localPortIsServer": true,
+      "ctor": "TLSSocket",
+      "isTLSSocket": true,
+      "allowHalfOpen": false,
+      "pending": false,
+      "connecting": false,
+      "hasServer": true
+     },
+     "argc": 1
+    },
+    {
+     "kind": "close"
+    }
+   ],
+   "client": {
+    "authorized": true,
+    "alpnProtocol": false,
+    "data": "hello"
+   },
+   "connections": [
+    null,
+    0
+   ]
+  }
+ ],
+ "https": {
+  "events": [
+   {
+    "kind": "request",
+    "encrypted": true,
+    "authorized": false,
+    "url": "/a",
+    "socketCtor": "TLSSocket",
+    "alpn": false,
+    "sameServer": true
+   },
+   {
+    "kind": "request",
+    "encrypted": true,
+    "authorized": false,
+    "url": "/b",
+    "socketCtor": "TLSSocket",
+    "alpn": false,
+    "sameServer": true
+   }
+  ],
+  "responses": [
+   {
+    "status": 200,
+    "body": "secure /a",
+    "connection": "keep-alive"
+   },
+   {
+    "status": 200,
+    "body": "secure /b",
+    "connection": "keep-alive"
+   }
+  ],
+  "reused": true
+ },
+ "translatePeerCertificate": {
+  "recorder": "const { translatePeerCertificate: t } = require('_tls_common');\nconst show = v => v === null ? null : v === undefined ? { $: 'undefined' } : JSON.parse(JSON.stringify(v, (k, x) => x && typeof x === 'object' && !Array.isArray(x) && Object.getPrototypeOf(x) === null ? { __null: true, ...x } : x));\nconst cases = { none: [], nullish: [null], zero: [0], empty: [{}], plain: [{ subject: 'CN=a', n: 1 }],\n  info: [{ infoAccess: 'OCSP - URI:http://o.example/\\nCA Issuers - URI:http://c.example/a\\nOCSP - URI:http://o2.example/\\n' }],\n  quoted: [{ infoAccess: 'OCSP - URI:\"http://o.example/\\\\u0041\"\\n' }], infoEmpty: [{ infoAccess: '' }], infoNoNewline: [{ infoAccess: 'a:b' }],\n  issuer: [{ subject: 's', issuerCertificate: { subject: 'i', infoAccess: 'k:v\\n' } }] };\nconst out = { rows: {} };\nfor (const [name, args] of Object.entries(cases)) { const input = args[0]; let r; try { const made = t(...args); r = { value: show(made), same: made === input }; } catch (e) { r = { error: { name: e.name, message: e.message } }; } out.rows[name] = r; }\n{ const self = { subject: 's' }; self.issuerCertificate = self; const r = t(self); out.rows.selfSigned = { same: r === self, issuerIsSelf: r.issuerCertificate === r }; }\nconsole.log(JSON.stringify(out, null, 1));\n",
+  "rows": {
+   "none": {
+    "value": null,
+    "same": false
+   },
+   "nullish": {
+    "value": null,
+    "same": true
+   },
+   "zero": {
+    "value": null,
+    "same": false
+   },
+   "empty": {
+    "value": {},
+    "same": true
+   },
+   "plain": {
+    "value": {
+     "subject": "CN=a",
+     "n": 1
+    },
+    "same": true
+   },
+   "info": {
+    "value": {
+     "infoAccess": {
+      "__null": true,
+      "OCSP - URI": [
+       "http://o.example/",
+       "http://o2.example/"
+      ],
+      "CA Issuers - URI": [
+       "http://c.example/a"
+      ]
+     }
+    },
+    "same": true
+   },
+   "quoted": {
+    "value": {
+     "infoAccess": {
+      "__null": true,
+      "OCSP - URI": [
+       "http://o.example/A"
+      ]
+     }
+    },
+    "same": true
+   },
+   "infoEmpty": {
+    "value": {
+     "infoAccess": {
+      "__null": true
+     }
+    },
+    "same": true
+   },
+   "infoNoNewline": {
+    "value": {
+     "infoAccess": {
+      "__null": true,
+      "a": [
+       "b"
+      ]
+     }
+    },
+    "same": true
+   },
+   "issuer": {
+    "value": {
+     "subject": "s",
+     "issuerCertificate": {
+      "subject": "i",
+      "infoAccess": {
+       "__null": true,
+       "k": [
+        "v"
+       ]
+      }
+     }
+    },
+    "same": true
+   },
+   "selfSigned": {
+    "same": true,
+    "issuerIsSelf": true
+   }
+  }
+ }
+}

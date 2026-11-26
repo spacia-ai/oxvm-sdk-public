@@ -1,0 +1,3863 @@
+{
+ "node": "v24.18.1",
+ "recorder": "// Recorder for node-files-utf8-stream.controls.json. Every scenario is the body of an async function of (fs, h)\n// that the test runs again, unchanged, against the emulated fs. Run with Node 24.18.1 on a tmpfs:\n//   docker run --rm --tmpfs /work -v \"$PWD\":/w:ro node:24.18.1-alpine node /w/record.cjs /w/sc > node-files-utf8-stream.controls.json\n// `lifetime` holds whole programs: each ran as its own process, and what it printed and how it ended is recorded.\nconst fs = require(\"fs\"), path = require(\"path\"), child = require(\"child_process\");\nconst dir = process.argv[2], scenarios = {};\nfunction describe(e) {\n  if (!(e instanceof Error)) return { thrown: String(e) };\n  const d = { name: e.name, ctor: e.constructor.name, message: e.message };\n  for (const k of [\"code\", \"errno\", \"syscall\", \"path\", \"dest\"]) if (e[k] !== undefined) d[k] = e[k];\n  return d;\n}\nconst EVENTS = [\"ready\", \"drain\", \"drop\", \"write\", \"finish\", \"close\", \"error\"];\nlet uncaught = [];\nprocess.on(\"uncaughtException\", error => { uncaught.push(describe(error)); });\nfunction helpers(base) {\n  const show = value => Buffer.isBuffer(value) ? { hex: value.toString(\"hex\") } : value instanceof Error ? describe(value) : value;\n  return {\n    Buffer, dir: base, uncaught, err: describe, show,\n    attempt(fn) { try { return { ok: fn() }; } catch (e) { return { error: describe(e) }; } },\n    // Every event of the stream, in order, with its arguments.\n    log(stream, events = EVENTS) { const seen = []; for (const name of events) stream.on(name, (...args) => { seen.push([name, ...args.map(show)]); }); return seen; },\n    event: (stream, name) => new Promise(resolve => { stream.once(name, (...args) => { resolve(args.map(show)); }); }),\n    // Long enough for the thread pool to finish what is in flight; the replay runs its queued work instead.\n    turns: () => new Promise(resolve => setTimeout(resolve, 40)),\n    // Lets `milliseconds` of timers pass; the replay advances its own clock.\n    sleep: milliseconds => new Promise(resolve => setTimeout(resolve, milliseconds + 40)),\n    text: file => fs.readFileSync(file, \"utf8\"),\n    mode: file => fs.statSync(file).mode & 0o777,\n    state: s => ({ mode: s.mode === undefined ? \"undefined\" : s.mode, file: s.file, fd: s.fd === -1 ? -1 : typeof s.fd === \"number\" ? \"open\" : typeof s.fd, minLength: s.minLength, maxLength: s.maxLength, writing: s.writing,\n      sync: s.sync, fsync: s.fsync, append: s.append, periodicFlush: s.periodicFlush, contentMode: s.contentMode, mkdir: s.mkdir }),\n  };\n}\nconst LIFETIME = {\n  // An asynchronous write in flight keeps the process alive until the file holds everything.\n  \"pending-write\": `const fs = require(\"fs\"); const s = new fs.Utf8Stream({ dest: \"/work/lifetime/a.log\" }); for (let i = 0; i < 64; i += 1) s.write(\"x\".repeat(16383) + \"\\\\n\"); process.on(\"exit\", () => console.log(JSON.stringify({ size: fs.statSync(\"/work/lifetime/a.log\").size, writing: s.writing })));`,\n  // What is below minLength at exit is never written, and the periodic timer does not hold the process.\n  \"buffered-at-exit\": `const fs = require(\"fs\"); const started = Date.now(); const s = new fs.Utf8Stream({ dest: \"/work/lifetime/b.log\", minLength: 100, periodicFlush: 60000 }); s.write(\"never written\\\\n\"); process.on(\"exit\", () => console.log(JSON.stringify({ size: fs.statSync(\"/work/lifetime/b.log\").size, early: Date.now() - started < 5000 })));`,\n  // The retry timer of a refused write is referenced: the process waits for it.\n  \"retry-timer\": `const fs = require(\"fs\"); let fail = true; const s = new fs.Utf8Stream({ dest: \"/work/lifetime/c.log\", fs: { write(fd, data, encoding, callback) { if (fail) { fail = false; callback(Object.assign(new Error(\"again\"), { code: \"EAGAIN\" })); return; } fs.write(fd, data, null, encoding, callback); } } }); s.write(\"after the retry\\\\n\"); process.on(\"exit\", () => console.log(JSON.stringify({ text: fs.readFileSync(\"/work/lifetime/c.log\", \"utf8\") })));`,\n  // A pending flush callback alone holds nothing: the write it waits for does.\n  \"pending-flush\": `const fs = require(\"fs\"); const s = new fs.Utf8Stream({ dest: \"/work/lifetime/d.log\", minLength: 100 }); s.write(\"flushed\\\\n\"); let called = false; s.flush(() => { called = true; }); process.on(\"exit\", () => console.log(JSON.stringify({ called, text: fs.readFileSync(\"/work/lifetime/d.log\", \"utf8\") })));`,\n  // The periodic flush passes null as the callback, which the flush refuses: an uncaught exception each period.\n  \"periodic-flush-crash\": `const fs = require(\"fs\"); const s = new fs.Utf8Stream({ dest: \"/work/lifetime/e.log\", minLength: 100, periodicFlush: 50 }); s.write(\"x\\\\n\"); setTimeout(() => console.log(\"survived\"), 200);`,\n};\n(async () => {\n  for (const file of fs.readdirSync(dir).sort()) {\n    const name = file.replace(/\\.js$/, \"\"), source = fs.readFileSync(path.join(dir, file), \"utf8\").trimEnd(), base = \"/work/\" + name;\n    fs.mkdirSync(base); uncaught = []; if (process.env.PROGRESS) console.error(name);\n    const body = new Function(\"fs\", \"h\", \"return (async () => {\" + source + \"\\n})()\");\n    // A scenario that waits for an event that never comes is a failure, not a quiet exit.\n    const alarm = setTimeout(() => { console.error(\"scenario \" + name + \" did not finish\"); process.exit(1); }, 10000);\n    try { scenarios[name] = { source, result: JSON.parse(JSON.stringify(await body(fs, helpers(base)))) }; } catch (error) { throw new Error(\"scenario \" + name + \" failed\", { cause: error }); }\n    clearTimeout(alarm);\n    await new Promise(resolve => setTimeout(resolve, 20));\n  }\n  const lifetime = {};\n  fs.mkdirSync(\"/work/lifetime\");\n  for (const [name, source] of Object.entries(LIFETIME)) {\n    const run = child.spawnSync(process.execPath, [\"-e\", source], { encoding: \"utf8\", timeout: 20000 });\n    lifetime[name] = { source, status: run.status, signal: run.signal, stdout: run.stdout.trim(), stderr: run.stderr.split(\"\\n\").filter(line => /^\\w*Error|code:/.test(line.trim())).map(line => line.trim()) };\n  }\n  fs.writeFileSync(1, JSON.stringify({ node: process.version, recorder: fs.readFileSync(__filename, \"utf8\"), scenarios, lifetime }, null, 1) + \"\\n\");\n  process.exit(0);\n})().catch(error => { console.error(error); process.exit(1); });\n",
+ "scenarios": {
+  "append": {
+   "source": "const U = fs.Utf8Stream, f = h.dir + \"/a.log\", g = h.dir + \"/b.log\", k = h.dir + \"/c.log\";\nfor (const path of [f, g, k]) fs.writeFileSync(path, \"old\\n\");\nconst results = {};\nfor (const [path, options] of [[f, {}], [g, { append: false }], [k, { append: false, sync: true }]]) {\n  const s = new U({ dest: path, ...options });\n  const state = h.state(s);\n  s.write(\"new\\n\"); s.end();\n  await h.event(s, \"close\");\n  results[path.slice(-5)] = [state.append, h.text(path)];\n}\nreturn results;",
+   "result": {
+    "a.log": [
+     true,
+     "old\nnew\n"
+    ],
+    "b.log": [
+     false,
+     "new\n"
+    ],
+    "c.log": [
+     false,
+     "new\n"
+    ]
+   }
+  },
+  "async-basic": {
+   "source": "const U = fs.Utf8Stream, f = h.dir + \"/a.log\";\nconst s = new U({ dest: f }), seen = h.log(s);\nconst before = h.state(s);\nconst returns = [s.write(\"hello \"), s.write(\"world\\n\")], writingBeforeReady = s.writing;\nawait h.event(s, \"drain\");\nconst afterDrain = { state: h.state(s), text: h.text(f) };\nreturns.push(s.write(\"again\\n\"));\nawait h.event(s, \"drain\");\nreturns.push(s.end());\nawait h.event(s, \"close\");\nreturn { before, returns, writingBeforeReady, afterDrain, seen, text: h.text(f), after: h.state(s) };",
+   "result": {
+    "before": {
+     "mode": "undefined",
+     "file": null,
+     "fd": -1,
+     "minLength": 0,
+     "maxLength": 0,
+     "writing": true,
+     "sync": false,
+     "fsync": false,
+     "append": true,
+     "periodicFlush": 0,
+     "contentMode": "utf8",
+     "mkdir": false
+    },
+    "returns": [
+     true,
+     true,
+     true,
+     null
+    ],
+    "writingBeforeReady": true,
+    "afterDrain": {
+     "state": {
+      "mode": "undefined",
+      "file": "/work/async-basic/a.log",
+      "fd": "open",
+      "minLength": 0,
+      "maxLength": 0,
+      "writing": false,
+      "sync": false,
+      "fsync": false,
+      "append": true,
+      "periodicFlush": 0,
+      "contentMode": "utf8",
+      "mkdir": false
+     },
+     "text": "hello world\n"
+    },
+    "seen": [
+     [
+      "ready"
+     ],
+     [
+      "write",
+      12
+     ],
+     [
+      "drain"
+     ],
+     [
+      "write",
+      6
+     ],
+     [
+      "drain"
+     ],
+     [
+      "finish"
+     ],
+     [
+      "close"
+     ]
+    ],
+    "text": "hello world\nagain\n",
+    "after": {
+     "mode": "undefined",
+     "file": "/work/async-basic/a.log",
+     "fd": "open",
+     "minLength": 0,
+     "maxLength": 0,
+     "writing": false,
+     "sync": false,
+     "fsync": false,
+     "append": true,
+     "periodicFlush": 0,
+     "contentMode": "utf8",
+     "mkdir": false
+    }
+   }
+  },
+  "buffer-async": {
+   "source": "const U = fs.Utf8Stream, f = h.dir + \"/a.log\";\nconst s = new U({ dest: f, contentMode: \"buffer\" }), seen = h.log(s);\nconst state = h.state(s);\nconst returns = [s.write(h.Buffer.from(\"one\\n\")), s.write(h.Buffer.from(\"two\\n\")), s.write(h.Buffer.from(\"three\\n\"))];\nawait h.turns();\nconst middle = { text: h.text(f), uncaught: h.uncaught.slice(), seen: seen.slice(), state: h.state(s) };\nconst later = h.attempt(() => s.write(h.Buffer.from(\"four\\n\")));\nawait h.turns();\nconst end = h.attempt(() => s.end());\nawait h.turns();\nreturn { state, returns, middle, later, end, uncaught: h.uncaught.slice(), seen, text: h.text(f), after: h.state(s) };",
+   "result": {
+    "state": {
+     "mode": "undefined",
+     "file": null,
+     "fd": -1,
+     "minLength": 0,
+     "maxLength": 0,
+     "writing": true,
+     "sync": false,
+     "fsync": false,
+     "append": true,
+     "periodicFlush": 0,
+     "contentMode": "buffer",
+     "mkdir": false
+    },
+    "returns": [
+     true,
+     true,
+     true
+    ],
+    "middle": {
+     "text": "two\nthree\n\u0000\u0000\u0000\u0000",
+     "uncaught": [],
+     "seen": [
+      [
+       "ready"
+      ],
+      [
+       "write",
+       14
+      ],
+      [
+       "drain"
+      ]
+     ],
+     "state": {
+      "mode": "undefined",
+      "file": "/work/buffer-async/a.log",
+      "fd": "open",
+      "minLength": 0,
+      "maxLength": 0,
+      "writing": false,
+      "sync": false,
+      "fsync": false,
+      "append": true,
+      "periodicFlush": 0,
+      "contentMode": "buffer",
+      "mkdir": false
+     }
+    },
+    "later": {
+     "ok": true
+    },
+    "end": {},
+    "uncaught": [
+     {
+      "name": "TypeError",
+      "ctor": "TypeError",
+      "message": "Cannot read properties of undefined (reading 'length')"
+     }
+    ],
+    "seen": [
+     [
+      "ready"
+     ],
+     [
+      "write",
+      14
+     ],
+     [
+      "drain"
+     ],
+     [
+      "write",
+      0
+     ]
+    ],
+    "text": "two\nthree\n\u0000\u0000\u0000\u0000",
+    "after": {
+     "mode": "undefined",
+     "file": "/work/buffer-async/a.log",
+     "fd": "open",
+     "minLength": 0,
+     "maxLength": 0,
+     "writing": true,
+     "sync": false,
+     "fsync": false,
+     "append": true,
+     "periodicFlush": 0,
+     "contentMode": "buffer",
+     "mkdir": false
+    }
+   }
+  },
+  "buffer-minlength": {
+   "source": "const U = fs.Utf8Stream, f = h.dir + \"/a.log\";\nconst s = new U({ dest: f, contentMode: \"buffer\", sync: true, minLength: 10, maxLength: 30 }), seen = h.log(s);\nconst returns = [s.write(h.Buffer.from(\"ab\")), s.write(h.Buffer.from(\"cd\")), s.write(h.Buffer.from(\"ef\"))];\nconst flushSync = h.attempt(() => s.flushSync()), text = h.text(f);\nreturns.push(s.write(h.Buffer.from(\"gh\")), s.write(h.Buffer.from(\"ij\")));\nconst flushed = []; const flush = h.attempt(() => s.flush((...args) => flushed.push(args.map(h.show))));\nconst text2 = h.text(f);\nawait h.turns();\nconst drop = s.write(h.Buffer.alloc(40, 65));\nconst destroy = h.attempt(() => s.destroy());\nawait h.turns();\nreturn { returns, flushSync, text, flush, flushed, text2, drop, destroy, seen, uncaught: h.uncaught, textAfter: h.text(f) };",
+   "result": {
+    "returns": [
+     true,
+     true,
+     true,
+     true,
+     true
+    ],
+    "flushSync": {},
+    "text": "cdef\u0000\u0000",
+    "flush": {},
+    "flushed": [
+     [
+      null
+     ]
+    ],
+    "text2": "cdef\u0000\u0000ij",
+    "drop": true,
+    "destroy": {},
+    "seen": [
+     [
+      "write",
+      2
+     ],
+     [
+      "ready"
+     ],
+     [
+      "drain"
+     ],
+     [
+      "drop",
+      {
+       "hex": "41414141414141414141414141414141414141414141414141414141414141414141414141414141"
+      }
+     ],
+     [
+      "close"
+     ]
+    ],
+    "uncaught": [],
+    "textAfter": "cdef\u0000\u0000ij"
+   }
+  },
+  "buffer-sync": {
+   "source": "const U = fs.Utf8Stream, f = h.dir + \"/a.log\";\nconst s = new U({ dest: f, contentMode: \"buffer\", sync: true }), seen = h.log(s);\nconst returns = [s.write(h.Buffer.from(\"one\\n\")), s.write(h.Buffer.from(\"two\\n\")), s.write(h.Buffer.from(\"three\\n\"))];\nconst text = h.text(f), state = h.state(s);\nawait h.turns();\nconst end = h.attempt(() => s.end());\nawait h.turns();\nreturn { returns, text, state, end, seen, uncaught: h.uncaught, after: h.state(s), textAfter: h.text(f) };",
+   "result": {
+    "returns": [
+     true,
+     true,
+     true
+    ],
+    "text": "",
+    "state": {
+     "mode": "undefined",
+     "file": "/work/buffer-sync/a.log",
+     "fd": "open",
+     "minLength": 0,
+     "maxLength": 0,
+     "writing": false,
+     "sync": true,
+     "fsync": false,
+     "append": true,
+     "periodicFlush": 0,
+     "contentMode": "buffer",
+     "mkdir": false
+    },
+    "end": {
+     "error": {
+      "name": "TypeError",
+      "ctor": "TypeError",
+      "message": "Cannot read properties of undefined (reading 'length')"
+     }
+    },
+    "seen": [
+     [
+      "write",
+      0
+     ],
+     [
+      "error",
+      {
+       "name": "TypeError",
+       "ctor": "TypeError",
+       "message": "Cannot read properties of undefined (reading 'length')"
+      }
+     ],
+     [
+      "write",
+      0
+     ],
+     [
+      "error",
+      {
+       "name": "TypeError",
+       "ctor": "TypeError",
+       "message": "Cannot read properties of undefined (reading 'length')"
+      }
+     ],
+     [
+      "write",
+      0
+     ],
+     [
+      "error",
+      {
+       "name": "TypeError",
+       "ctor": "TypeError",
+       "message": "Cannot read properties of undefined (reading 'length')"
+      }
+     ],
+     [
+      "ready"
+     ]
+    ],
+    "uncaught": [],
+    "after": {
+     "mode": "undefined",
+     "file": "/work/buffer-sync/a.log",
+     "fd": "open",
+     "minLength": 0,
+     "maxLength": 0,
+     "writing": true,
+     "sync": true,
+     "fsync": false,
+     "append": true,
+     "periodicFlush": 0,
+     "contentMode": "buffer",
+     "mkdir": false
+    },
+    "textAfter": ""
+   }
+  },
+  "destroy-after": {
+   "source": "const U = fs.Utf8Stream, f = h.dir + \"/a.log\";\nconst s = new U({ dest: f, minLength: 10 }), seen = h.log(s);\nawait h.event(s, \"ready\");\ns.write(\"kept?\\n\");\nconst fd = s.fd;\ns.destroy(); s.destroy();\nawait h.event(s, \"close\");\nconst flushed = []; s.flush((...args) => flushed.push(args.map(h.show)));\nconst result = { seen, text: h.text(f), write: h.attempt(() => s.write(\"x\")), end: h.attempt(() => s.end()), flushed, flushSync: h.attempt(() => s.flushSync()), reopen: h.attempt(() => s.reopen()),\n  destroy: h.attempt(() => s.destroy()), dispose: h.attempt(() => s[Symbol.dispose]()), closed: h.attempt(() => fs.fstatSync(fd).size).error?.code, state: h.state(s) };\nconst d = new U({ dest: h.dir + \"/b.log\", sync: true }), seenDispose = h.log(d);\nd.write(\"x\\n\"); d[Symbol.dispose]();\nawait h.event(d, \"close\");\nreturn { ...result, seenDispose };",
+   "result": {
+    "seen": [
+     [
+      "ready"
+     ],
+     [
+      "close"
+     ]
+    ],
+    "text": "",
+    "write": {
+     "error": {
+      "name": "Error",
+      "ctor": "Error",
+      "message": "Invalid state: Utf8Stream is destroyed",
+      "code": "ERR_INVALID_STATE"
+     }
+    },
+    "end": {
+     "error": {
+      "name": "Error",
+      "ctor": "Error",
+      "message": "Invalid state: Utf8Stream is destroyed",
+      "code": "ERR_INVALID_STATE"
+     }
+    },
+    "flushed": [
+     [
+      {
+       "name": "Error",
+       "ctor": "Error",
+       "message": "Invalid state: Utf8Stream is destroyed",
+       "code": "ERR_INVALID_STATE"
+      }
+     ]
+    ],
+    "flushSync": {
+     "error": {
+      "name": "Error",
+      "ctor": "Error",
+      "message": "Invalid state: Utf8Stream is destroyed",
+      "code": "ERR_INVALID_STATE"
+     }
+    },
+    "reopen": {
+     "error": {
+      "name": "Error",
+      "ctor": "Error",
+      "message": "Invalid state: Utf8Stream is destroyed",
+      "code": "ERR_INVALID_STATE"
+     }
+    },
+    "destroy": {},
+    "dispose": {},
+    "closed": "EBADF",
+    "state": {
+     "mode": "undefined",
+     "file": "/work/destroy-after/a.log",
+     "fd": "open",
+     "minLength": 10,
+     "maxLength": 0,
+     "writing": false,
+     "sync": false,
+     "fsync": false,
+     "append": true,
+     "periodicFlush": 0,
+     "contentMode": "utf8",
+     "mkdir": false
+    },
+    "seenDispose": [
+     [
+      "write",
+      2
+     ],
+     [
+      "ready"
+     ],
+     [
+      "drain"
+     ],
+     [
+      "close"
+     ]
+    ]
+   }
+  },
+  "destroy-early": {
+   "source": "const U = fs.Utf8Stream, f = h.dir + \"/a.log\";\nconst s = new U({ dest: f }), seen = h.log(s);\ns.write(\"lost?\\n\");\ns.destroy();\nconst state = h.state(s), write = h.attempt(() => s.write(\"x\"));\nawait h.event(s, \"close\");\nawait h.turns();\nreturn { state, write, seen, text: h.text(f), after: h.state(s) };",
+   "result": {
+    "state": {
+     "mode": "undefined",
+     "file": null,
+     "fd": -1,
+     "minLength": 0,
+     "maxLength": 0,
+     "writing": true,
+     "sync": false,
+     "fsync": false,
+     "append": true,
+     "periodicFlush": 0,
+     "contentMode": "utf8",
+     "mkdir": false
+    },
+    "write": {
+     "ok": true
+    },
+    "seen": [
+     [
+      "ready"
+     ],
+     [
+      "close"
+     ]
+    ],
+    "text": "",
+    "after": {
+     "mode": "undefined",
+     "file": "/work/destroy-early/a.log",
+     "fd": "open",
+     "minLength": 0,
+     "maxLength": 0,
+     "writing": false,
+     "sync": false,
+     "fsync": false,
+     "append": true,
+     "periodicFlush": 0,
+     "contentMode": "utf8",
+     "mkdir": false
+    }
+   }
+  },
+  "drain-sync": {
+   "source": "const U = fs.Utf8Stream, f = h.dir + \"/a.log\";\nconst s = new U({ dest: f, sync: true }), order = [];\ns.write(\"a\\n\"); s.write(\"b\\n\");\nawait h.turns();\ns.on(\"drain\", () => order.push(\"drain 1\"));\nawait h.turns();\norder.push(\"listener added, nothing yet\");\ns.write(\"c\\n\"); s.write(\"d\\n\"); order.push(\"wrote\");\nawait h.turns();\ns.on(\"drain\", () => order.push(\"drain 2\"));\ns.write(\"e\\n\");\nawait h.turns();\nconst a = new U({ dest: h.dir + \"/b.log\" }), asyncOrder = [];\na.on(\"drain\", () => asyncOrder.push(\"drain\"));\na.on(\"ready\", () => asyncOrder.push(\"ready\"));\nawait h.turns();\na.write(\"x\\n\"); asyncOrder.push(\"wrote\");\nawait h.turns();\ns.destroy(); a.destroy();\nreturn { order, asyncOrder };",
+   "result": {
+    "order": [
+     "listener added, nothing yet",
+     "wrote",
+     "drain 1",
+     "drain 1",
+     "drain 2"
+    ],
+    "asyncOrder": [
+     "ready",
+     "wrote",
+     "drain"
+    ]
+   }
+  },
+  "eagain-async": {
+   "source": "const U = fs.Utf8Stream, f = h.dir + \"/a.log\", calls = [], retries = [];\nlet failures = 2;\nconst s = new U({ dest: f, retryEAGAIN: (error, writing, remaining) => { retries.push([error.code, writing, remaining]); return true; }, fs: { write(fd, data, encoding, callback) {\n  calls.push([typeof fd, data, encoding, typeof callback]);\n  if (failures-- > 0) { setImmediate(() => callback(Object.assign(new Error(failures === 1 ? \"again\" : \"busy\"), { code: failures === 1 ? \"EAGAIN\" : \"EBUSY\" }))); return; }\n  fs.write(fd, data, null, encoding, callback);\n} } }), seen = h.log(s);\nawait h.event(s, \"ready\");\nconst returns = [s.write(\"retry me\\n\"), s.write(\"and me\\n\")];\nawait h.turns();\nconst first = { seen: seen.slice(), calls: calls.length, retries: retries.slice(), writing: s.writing, text: h.text(f) };\nawait h.sleep(100);\nconst second = { calls: calls.length, retries: retries.slice(), text: h.text(f) };\nawait h.sleep(100);\ns.end();\nawait h.event(s, \"close\");\nreturn { returns, first, second, calls, retries, seen, text: h.text(f) };",
+   "result": {
+    "returns": [
+     true,
+     true
+    ],
+    "first": {
+     "seen": [
+      [
+       "ready"
+      ]
+     ],
+     "calls": 1,
+     "retries": [
+      [
+       "EAGAIN",
+       9,
+       7
+      ]
+     ],
+     "writing": true,
+     "text": ""
+    },
+    "second": {
+     "calls": 2,
+     "retries": [
+      [
+       "EAGAIN",
+       9,
+       7
+      ],
+      [
+       "EBUSY",
+       9,
+       7
+      ]
+     ],
+     "text": ""
+    },
+    "calls": [
+     [
+      "number",
+      "retry me\n",
+      "utf8",
+      "function"
+     ],
+     [
+      "number",
+      "retry me\n",
+      "utf8",
+      "function"
+     ],
+     [
+      "number",
+      "retry me\n",
+      "utf8",
+      "function"
+     ],
+     [
+      "number",
+      "and me\n",
+      "utf8",
+      "function"
+     ]
+    ],
+    "retries": [
+     [
+      "EAGAIN",
+      9,
+      7
+     ],
+     [
+      "EBUSY",
+      9,
+      7
+     ]
+    ],
+    "seen": [
+     [
+      "ready"
+     ],
+     [
+      "write",
+      9
+     ],
+     [
+      "write",
+      7
+     ],
+     [
+      "drain"
+     ],
+     [
+      "finish"
+     ],
+     [
+      "close"
+     ]
+    ],
+    "text": "retry me\nand me\n"
+   }
+  },
+  "eagain-refused": {
+   "source": "const U = fs.Utf8Stream, f = h.dir + \"/a.log\", retries = [];\nlet failures = 1;\nconst s = new U({ dest: f, retryEAGAIN: (error, writing, remaining) => { retries.push([error.code, writing, remaining]); return false; }, fs: { write(fd, data, encoding, callback) {\n  if (failures-- > 0) { setImmediate(() => callback(Object.assign(new Error(\"again\"), { code: \"EAGAIN\" }))); return; }\n  fs.write(fd, data, null, encoding, callback);\n} } }), seen = h.log(s);\nawait h.event(s, \"ready\");\ns.write(\"one\\n\"); s.write(\"two\\n\");\nconst error = await h.event(s, \"error\");\nconst state = h.state(s);\nconst next = s.write(\"three\\n\");\nawait h.event(s, \"drain\");\ns.end();\nawait h.event(s, \"close\");\nreturn { error, retries, state, next, seen, text: h.text(f) };",
+   "result": {
+    "error": [
+     {
+      "name": "Error",
+      "ctor": "Error",
+      "message": "again",
+      "code": "EAGAIN"
+     }
+    ],
+    "retries": [
+     [
+      "EAGAIN",
+      4,
+      4
+     ]
+    ],
+    "state": {
+     "mode": "undefined",
+     "file": "/work/eagain-refused/a.log",
+     "fd": "open",
+     "minLength": 0,
+     "maxLength": 0,
+     "writing": false,
+     "sync": false,
+     "fsync": false,
+     "append": true,
+     "periodicFlush": 0,
+     "contentMode": "utf8",
+     "mkdir": false
+    },
+    "next": true,
+    "seen": [
+     [
+      "ready"
+     ],
+     [
+      "error",
+      {
+       "name": "Error",
+       "ctor": "Error",
+       "message": "again",
+       "code": "EAGAIN"
+      }
+     ],
+     [
+      "write",
+      4
+     ],
+     [
+      "write",
+      10
+     ],
+     [
+      "drain"
+     ],
+     [
+      "finish"
+     ],
+     [
+      "close"
+     ]
+    ],
+    "text": "one\ntwo\nthree\n"
+   }
+  },
+  "eagain-sync": {
+   "source": "const U = fs.Utf8Stream, f = h.dir + \"/a.log\", retries = [], calls = [];\nlet failures = 2, refuse = false;\nconst s = new U({ dest: f, sync: true, retryEAGAIN: (error, writing, remaining) => { retries.push([error.code, writing, remaining]); return !refuse; }, fs: { writeSync(fd, data, encoding) {\n  calls.push([data, encoding]);\n  if (failures-- > 0) throw Object.assign(new Error(\"again\"), { code: \"EAGAIN\" });\n  return fs.writeSync(fd, data, null, encoding);\n} } }), seen = h.log(s);\nconst started = Date.now();\nconst returns = [s.write(\"retry me\\n\")], waited = Date.now() - started >= 190, text = h.text(f);\nfailures = 1; refuse = true;\nreturns.push(h.attempt(() => s.write(\"refused\\n\")));\nconst afterRefusal = { seen: seen.slice(), state: h.state(s), text: h.text(f) };\nreturns.push(s.write(\"next\\n\"));\nfailures = 1; refuse = false; s.write(\"flushed\\n\"); \nfailures = 1; const flushSync = h.attempt(() => s.flushSync());\nfailures = 1; refuse = true; s.write(\"z\\n\");\nconst flushRefused = h.attempt(() => s.flushSync());\nfailures = 1; const other = Object.assign(new Error(\"io\"), { code: \"EIO\" });\nawait h.turns();\ns.end();\nawait h.event(s, \"close\");\nreturn { returns, waited, text, afterRefusal, flushSync, flushRefused, retries, calls, seen, final: h.text(f) };",
+   "result": {
+    "returns": [
+     true,
+     {
+      "ok": true
+     },
+     true
+    ],
+    "waited": true,
+    "text": "retry me\n",
+    "afterRefusal": {
+     "seen": [
+      [
+       "write",
+       0
+      ],
+      [
+       "write",
+       0
+      ],
+      [
+       "error",
+       {
+        "name": "Error",
+        "ctor": "Error",
+        "message": "again",
+        "code": "EAGAIN"
+       }
+      ]
+     ],
+     "state": {
+      "mode": "undefined",
+      "file": "/work/eagain-sync/a.log",
+      "fd": "open",
+      "minLength": 0,
+      "maxLength": 0,
+      "writing": false,
+      "sync": true,
+      "fsync": false,
+      "append": true,
+      "periodicFlush": 0,
+      "contentMode": "utf8",
+      "mkdir": false
+     },
+     "text": "retry me\n"
+    },
+    "flushSync": {},
+    "flushRefused": {},
+    "retries": [
+     [
+      "EAGAIN",
+      9,
+      0
+     ],
+     [
+      "EAGAIN",
+      9,
+      0
+     ],
+     [
+      "EAGAIN",
+      8,
+      0
+     ],
+     [
+      "EAGAIN",
+      8,
+      0
+     ],
+     [
+      "EAGAIN",
+      2,
+      0
+     ]
+    ],
+    "calls": [
+     [
+      "retry me\n",
+      "utf8"
+     ],
+     [
+      "retry me\n",
+      "utf8"
+     ],
+     [
+      "retry me\n",
+      "utf8"
+     ],
+     [
+      "refused\n",
+      "utf8"
+     ],
+     [
+      "refused\n",
+      "utf8"
+     ],
+     [
+      "next\n",
+      "utf8"
+     ],
+     [
+      "flushed\n",
+      "utf8"
+     ],
+     [
+      "flushed\n",
+      "utf8"
+     ],
+     [
+      "z\n",
+      "utf8"
+     ],
+     [
+      "z\n",
+      "utf8"
+     ]
+    ],
+    "seen": [
+     [
+      "write",
+      0
+     ],
+     [
+      "write",
+      0
+     ],
+     [
+      "error",
+      {
+       "name": "Error",
+       "ctor": "Error",
+       "message": "again",
+       "code": "EAGAIN"
+      }
+     ],
+     [
+      "write",
+      8
+     ],
+     [
+      "write",
+      5
+     ],
+     [
+      "write",
+      0
+     ],
+     [
+      "error",
+      {
+       "name": "Error",
+       "ctor": "Error",
+       "message": "again",
+       "code": "EAGAIN"
+      }
+     ],
+     [
+      "ready"
+     ],
+     [
+      "drain"
+     ],
+     [
+      "finish"
+     ],
+     [
+      "close"
+     ]
+    ],
+    "final": "retry me\nrefused\nnext\nflushed\nz\n"
+   }
+  },
+  "end-buffered": {
+   "source": "const U = fs.Utf8Stream, f = h.dir + \"/a.log\", g = h.dir + \"/b.log\";\nconst s = new U({ dest: f, minLength: 1000 }), seen = h.log(s);\ns.write(\"buffered one\\n\"); s.write(\"buffered two\\n\");\ns.end();\nawait h.event(s, \"close\");\nconst sync = new U({ dest: g, sync: true, minLength: 1000 }), seenSync = h.log(sync);\nsync.write(\"buffered\\n\"); const before = h.text(g);\nsync.end(); const after = h.text(g), atEnd = seenSync.slice();\nawait h.event(sync, \"close\");\nreturn { seen, text: h.text(f), before, after, atEnd, seenSync };",
+   "result": {
+    "seen": [
+     [
+      "ready"
+     ],
+     [
+      "write",
+      26
+     ],
+     [
+      "finish"
+     ],
+     [
+      "close"
+     ]
+    ],
+    "text": "buffered one\nbuffered two\n",
+    "before": "",
+    "after": "buffered\n",
+    "atEnd": [
+     [
+      "write",
+      9
+     ]
+    ],
+    "seenSync": [
+     [
+      "write",
+      9
+     ],
+     [
+      "ready"
+     ],
+     [
+      "finish"
+     ],
+     [
+      "close"
+     ]
+    ]
+   }
+  },
+  "end-early": {
+   "source": "const U = fs.Utf8Stream, f = h.dir + \"/a.log\";\nconst s = new U({ dest: f }), seen = h.log(s);\ns.write(\"one\\n\"); s.write(\"two\\n\");\ns.end(); s.end();\nconst accepted = h.attempt(() => s.write(\"three\\n\"));\nawait h.event(s, \"close\");\nconst empty = new U({ dest: h.dir + \"/b.log\" }), seenEmpty = h.log(empty);\nempty.end();\nawait h.event(empty, \"close\");\nreturn { accepted, seen, text: h.text(f), seenEmpty, after: [h.attempt(() => s.write(\"x\")), h.attempt(() => s.end()), h.attempt(() => s.destroy())] };",
+   "result": {
+    "accepted": {
+     "ok": true
+    },
+    "seen": [
+     [
+      "ready"
+     ],
+     [
+      "write",
+      14
+     ],
+     [
+      "finish"
+     ],
+     [
+      "close"
+     ]
+    ],
+    "text": "one\ntwo\nthree\n",
+    "seenEmpty": [
+     [
+      "ready"
+     ],
+     [
+      "finish"
+     ],
+     [
+      "close"
+     ]
+    ],
+    "after": [
+     {
+      "error": {
+       "name": "Error",
+       "ctor": "Error",
+       "message": "Invalid state: Utf8Stream is destroyed",
+       "code": "ERR_INVALID_STATE"
+      }
+     },
+     {
+      "error": {
+       "name": "Error",
+       "ctor": "Error",
+       "message": "Invalid state: Utf8Stream is destroyed",
+       "code": "ERR_INVALID_STATE"
+      }
+     },
+     {}
+    ]
+   }
+  },
+  "end-while-writing": {
+   "source": "const U = fs.Utf8Stream, f = h.dir + \"/a.log\";\nconst s = new U({ dest: f, minLength: 4096 }), seen = h.log(s);\nawait h.event(s, \"ready\");\ns.write(\"a\".repeat(5000)); const writing = s.writing;\ns.write(\"tail\\n\");\ns.end();\nconst accepted = h.attempt(() => s.write(\"late\\n\"));\nawait h.event(s, \"close\");\nreturn { writing, accepted, seen, length: h.text(f).length, tail: h.text(f).slice(-10) };",
+   "result": {
+    "writing": true,
+    "accepted": {
+     "ok": true
+    },
+    "seen": [
+     [
+      "ready"
+     ],
+     [
+      "write",
+      5000
+     ],
+     [
+      "write",
+      10
+     ],
+     [
+      "finish"
+     ],
+     [
+      "close"
+     ]
+    ],
+    "length": 5010,
+    "tail": "tail\nlate\n"
+   }
+  },
+  "fd-number": {
+   "source": "const U = fs.Utf8Stream, f = h.dir + \"/a.log\", fd = fs.openSync(f, \"a\");\nconst s = new U({ fd }), seen = h.log(s);\nconst before = h.state(s), sameFd = s.fd === fd, immediately = seen.slice();\nconst returns = [s.write(\"one\\n\")];\nawait h.event(s, \"drain\");\nconst reopen = h.attempt(() => s.reopen()), reopenFile = h.attempt(() => s.reopen(h.dir + \"/b.log\"));\ns.end();\nawait h.event(s, \"close\");\nreturn { before, sameFd, immediately, returns, reopen, reopenFile, seen, text: h.text(f), closed: h.attempt(() => fs.fstatSync(fd).size) };",
+   "result": {
+    "before": {
+     "mode": "undefined",
+     "file": null,
+     "fd": "open",
+     "minLength": 0,
+     "maxLength": 0,
+     "writing": false,
+     "sync": false,
+     "fsync": false,
+     "append": true,
+     "periodicFlush": 0,
+     "contentMode": "utf8",
+     "mkdir": false
+    },
+    "sameFd": true,
+    "immediately": [],
+    "returns": [
+     true
+    ],
+    "reopen": {
+     "error": {
+      "name": "Error",
+      "ctor": "Error",
+      "message": "Operation failed: Unable to reopen a file descriptor, you must pass a file to SonicBoom",
+      "code": "ERR_OPERATION_FAILED"
+     }
+    },
+    "reopenFile": {
+     "error": {
+      "name": "Error",
+      "ctor": "Error",
+      "message": "Operation failed: Unable to reopen a file descriptor, you must pass a file to SonicBoom",
+      "code": "ERR_OPERATION_FAILED"
+     }
+    },
+    "seen": [
+     [
+      "ready"
+     ],
+     [
+      "write",
+      4
+     ],
+     [
+      "drain"
+     ],
+     [
+      "finish"
+     ],
+     [
+      "close"
+     ]
+    ],
+    "text": "one\n",
+    "closed": {
+     "error": {
+      "name": "Error",
+      "ctor": "Error",
+      "message": "EBADF: bad file descriptor, fstat",
+      "code": "EBADF",
+      "errno": -9,
+      "syscall": "fstat"
+     }
+    }
+   }
+  },
+  "fd-sync": {
+   "source": "const U = fs.Utf8Stream, f = h.dir + \"/a.log\", fd = fs.openSync(f, \"a\");\nconst s = new U({ fd, sync: true }), seen = h.log(s);\nconst returns = [s.write(\"one\\n\"), s.write(\"two\\n\")], text = h.text(f), immediately = seen.slice();\nawait h.turns();\ns.destroy();\nawait h.event(s, \"close\");\nreturn { returns, text, immediately, seen, after: h.state(s) };",
+   "result": {
+    "returns": [
+     true,
+     true
+    ],
+    "text": "one\ntwo\n",
+    "immediately": [
+     [
+      "write",
+      4
+     ],
+     [
+      "write",
+      4
+     ]
+    ],
+    "seen": [
+     [
+      "write",
+      4
+     ],
+     [
+      "write",
+      4
+     ],
+     [
+      "ready"
+     ],
+     [
+      "drain"
+     ],
+     [
+      "close"
+     ]
+    ],
+    "after": {
+     "mode": "undefined",
+     "file": null,
+     "fd": "open",
+     "minLength": 0,
+     "maxLength": 0,
+     "writing": false,
+     "sync": true,
+     "fsync": false,
+     "append": true,
+     "periodicFlush": 0,
+     "contentMode": "utf8",
+     "mkdir": false
+    }
+   }
+  },
+  "flush-without-minlength": {
+   "source": "const U = fs.Utf8Stream, f = h.dir + \"/a.log\";\nconst s = new U({ dest: f }), seen = h.log(s);\nconst order = [];\ns.write(\"a\\n\");\ns.flush((...args) => order.push([\"flush before ready\", ...args]));\norder.push(\"after flush call\");\nawait h.event(s, \"drain\");\ns.flush((...args) => order.push([\"flush idle\", ...args]));\nconst noCallback = h.attempt(() => s.flush());\ns.destroy();\nawait h.event(s, \"close\");\nconst destroyed = []; s.flush((...args) => destroyed.push(args.map(h.show)));\nreturn { order, noCallback, destroyed, noCallbackDestroyed: h.attempt(() => s.flush()), seen, text: h.text(f) };",
+   "result": {
+    "order": [
+     [
+      "flush before ready"
+     ],
+     "after flush call",
+     [
+      "flush idle"
+     ]
+    ],
+    "noCallback": {},
+    "destroyed": [
+     [
+      {
+       "name": "Error",
+       "ctor": "Error",
+       "message": "Invalid state: Utf8Stream is destroyed",
+       "code": "ERR_INVALID_STATE"
+      }
+     ]
+    ],
+    "noCallbackDestroyed": {},
+    "seen": [
+     [
+      "ready"
+     ],
+     [
+      "write",
+      2
+     ],
+     [
+      "drain"
+     ],
+     [
+      "close"
+     ]
+    ],
+    "text": "a\n"
+   }
+  },
+  "flushsync-inflight": {
+   "source": "const U = fs.Utf8Stream, f = h.dir + \"/a.log\";\nconst s = new U({ dest: f }), seen = h.log(s);\nawait h.event(s, \"ready\");\ns.write(\"first\\n\"); const writing = s.writing;\ns.write(\"second\\n\"); s.write(\"third\\n\");\nconst flushSync = h.attempt(() => s.flushSync());\nseen.push(\"flushSync returned\");\nawait h.event(s, \"drain\");\nawait h.turns();\ns.end();\nawait h.event(s, \"close\");\nreturn { writing, flushSync, seen, lines: h.text(f).split(\"\\n\").sort() };",
+   "result": {
+    "writing": true,
+    "flushSync": {},
+    "seen": [
+     [
+      "ready"
+     ],
+     "flushSync returned",
+     [
+      "write",
+      6
+     ],
+     [
+      "drain"
+     ],
+     [
+      "finish"
+     ],
+     [
+      "close"
+     ]
+    ],
+    "lines": [
+     "",
+     "first",
+     "second",
+     "third"
+    ]
+   }
+  },
+  "fs-calls": {
+   "source": "const U = fs.Utf8Stream, f = h.dir + \"/a.log\", calls = [];\nconst shape = value => typeof value === \"function\" ? \"function\" : h.Buffer.isBuffer(value) ? { hex: value.toString(\"hex\") } : typeof value === \"number\" && value > 2 ? \"fd\" : value === undefined ? \"undefined\" : value;\nconst spy = {};\nfor (const name of [\"open\", \"write\", \"fsync\", \"close\", \"mkdir\"]) spy[name] = function (...args) { calls.push([name, this === spy, ...args.map(shape)]); return name === \"write\" && typeof args[1] === \"string\" ? fs.write(args[0], args[1], null, args[2], args[3]) : fs[name](...args); };\nfor (const name of [\"openSync\", \"writeSync\", \"fsyncSync\", \"mkdirSync\"]) spy[name] = function (...args) { calls.push([name, ...args.map(shape)]); return name === \"writeSync\" && typeof args[1] === \"string\" ? fs.writeSync(args[0], args[1], null, args[2]) : fs[name](...args); };\nconst run = async options => { calls.length = 0; const s = new U({ fs: spy, ...options }); s.write(options.contentMode === \"buffer\" ? h.Buffer.from(\"x\\n\") : \"x\\n\"); await h.turns(); try { s.flushSync(); } catch {} await new Promise(resolve => { s.flush(resolve); if (!options.minLength) resolve(); }); await h.turns(); try { s.end(); } catch {} await h.turns(); return calls.slice(); };\nreturn { async: await run({ dest: f, mkdir: true, mode: 0o600 }), sync: await run({ dest: f, sync: true, mkdir: true, append: false }), buffered: await run({ dest: f, minLength: 10, fsync: true }), buffer: await run({ dest: h.dir + \"/b.log\", contentMode: \"buffer\", minLength: 10 }) };",
+   "result": {
+    "async": [
+     [
+      "mkdir",
+      false,
+      "/work/fs-calls",
+      {
+       "recursive": true
+      },
+      "function"
+     ],
+     [
+      "open",
+      false,
+      "/work/fs-calls/a.log",
+      "a",
+      "fd",
+      "function"
+     ],
+     [
+      "write",
+      false,
+      "fd",
+      "x\n",
+      "utf8",
+      "function"
+     ],
+     [
+      "fsyncSync",
+      "fd"
+     ],
+     [
+      "fsync",
+      false,
+      "fd",
+      "function"
+     ],
+     [
+      "close",
+      false,
+      "fd",
+      "function"
+     ]
+    ],
+    "sync": [
+     [
+      "mkdirSync",
+      "/work/fs-calls",
+      {
+       "recursive": true
+      }
+     ],
+     [
+      "openSync",
+      "/work/fs-calls/a.log",
+      "w",
+      "undefined"
+     ],
+     [
+      "writeSync",
+      "fd",
+      "x\n",
+      "utf8"
+     ],
+     [
+      "fsyncSync",
+      "fd"
+     ],
+     [
+      "fsync",
+      false,
+      "fd",
+      "function"
+     ],
+     [
+      "close",
+      false,
+      "fd",
+      "function"
+     ]
+    ],
+    "buffered": [
+     [
+      "open",
+      false,
+      "/work/fs-calls/a.log",
+      "a",
+      "undefined",
+      "function"
+     ],
+     [
+      "writeSync",
+      "fd",
+      "x\n",
+      "utf8"
+     ],
+     [
+      "fsyncSync",
+      "fd"
+     ],
+     [
+      "write",
+      false,
+      "fd",
+      "",
+      "utf8",
+      "function"
+     ],
+     [
+      "fsyncSync",
+      "fd"
+     ],
+     [
+      "fsync",
+      false,
+      "fd",
+      "function"
+     ],
+     [
+      "close",
+      false,
+      "fd",
+      "function"
+     ]
+    ],
+    "buffer": [
+     [
+      "open",
+      false,
+      "/work/fs-calls/b.log",
+      "a",
+      "undefined",
+      "function"
+     ],
+     [
+      "writeSync",
+      "fd",
+      {
+       "hex": ""
+      }
+     ],
+     [
+      "write",
+      false,
+      "fd",
+      {
+       "hex": ""
+      },
+      "function"
+     ],
+     [
+      "fsync",
+      false,
+      "fd",
+      "function"
+     ]
+    ]
+   }
+  },
+  "fsync-failure": {
+   "source": "const U = fs.Utf8Stream, f = h.dir + \"/a.log\";\nlet code = \"EIO\", thrown = false;\nconst s = new U({ dest: f, minLength: 10, fs: { fsync(fd, callback) { if (thrown) throw Object.assign(new Error(\"thrown\"), { code: \"EINVAL\" }); if (code === null) return fs.fsync(fd, callback); setImmediate(() => callback(Object.assign(new Error(\"sync failed\"), { code }))); },\n  fsyncSync() { throw Object.assign(new Error(\"sync failed\"), { code: \"EIO\" }); } } }), seen = h.log(s);\nawait h.event(s, \"ready\");\nconst flush = () => new Promise(resolve => s.flush((...args) => resolve(args.map(h.show))));\ns.write(\"a\\n\"); const failed = await flush();\ncode = \"EBADF\"; s.write(\"b\\n\"); const ignored = await flush();\nthrown = true; s.write(\"c\\n\"); const threw = await flush();\ns.write(\"d\\n\"); const flushSync = h.attempt(() => s.flushSync());\nconst text = h.text(f);\ns.end();\nawait h.turns();\nconst swallowed = { seen: seen.slice(), state: h.state(s) };\nthrown = false; code = null;\nreturn { failed, ignored, threw, flushSync, text, swallowed, uncaught: h.uncaught };",
+   "result": {
+    "failed": [
+     {
+      "name": "Error",
+      "ctor": "Error",
+      "message": "sync failed",
+      "code": "EIO"
+     }
+    ],
+    "ignored": [],
+    "threw": [
+     {
+      "name": "Error",
+      "ctor": "Error",
+      "message": "thrown",
+      "code": "EINVAL"
+     }
+    ],
+    "flushSync": {},
+    "text": "a\nb\nc\nd\n",
+    "swallowed": {
+     "seen": [
+      [
+       "ready"
+      ],
+      [
+       "write",
+       2
+      ],
+      [
+       "drain"
+      ],
+      [
+       "write",
+       2
+      ],
+      [
+       "drain"
+      ],
+      [
+       "write",
+       2
+      ],
+      [
+       "drain"
+      ]
+     ],
+     "state": {
+      "mode": "undefined",
+      "file": "/work/fsync-failure/a.log",
+      "fd": "open",
+      "minLength": 10,
+      "maxLength": 0,
+      "writing": false,
+      "sync": false,
+      "fsync": false,
+      "append": true,
+      "periodicFlush": 0,
+      "contentMode": "utf8",
+      "mkdir": false
+     }
+    },
+    "uncaught": []
+   }
+  },
+  "fsync-option": {
+   "source": "const U = fs.Utf8Stream, f = h.dir + \"/a.log\", calls = [];\nconst counting = { fsyncSync(fd) { calls.push(\"fsyncSync\"); return fs.fsyncSync(fd); }, fsync(fd, callback) { calls.push(\"fsync\"); return fs.fsync(fd, callback); } };\nconst s = new U({ dest: f, fsync: true, minLength: 10, fs: counting }), seen = h.log(s);\nawait h.event(s, \"ready\");\nconst state = h.state(s);\ns.write(\"0123456789abc\\n\");\nawait h.event(s, \"drain\");\nconst afterWrite = calls.slice();\nawait new Promise(resolve => s.flush(resolve));\nconst afterFlush = calls.slice();\ns.flushSync();\nconst afterFlushSync = calls.slice();\ns.end();\nawait h.event(s, \"close\");\nconst plain = new U({ dest: h.dir + \"/b.log\", minLength: 10, fs: counting }); calls.length = 0;\nawait h.event(plain, \"ready\");\nplain.write(\"x\\n\");\nawait new Promise(resolve => plain.flush(resolve));\nconst plainFlush = calls.slice();\nplain.flushSync(); plain.end();\nawait h.event(plain, \"close\");\nreturn { state, afterWrite, afterFlush, afterFlushSync, all: calls, plainFlush, seen };",
+   "result": {
+    "state": {
+     "mode": "undefined",
+     "file": "/work/fsync-option/a.log",
+     "fd": "open",
+     "minLength": 10,
+     "maxLength": 0,
+     "writing": false,
+     "sync": false,
+     "fsync": true,
+     "append": true,
+     "periodicFlush": 0,
+     "contentMode": "utf8",
+     "mkdir": false
+    },
+    "afterWrite": [
+     "fsyncSync"
+    ],
+    "afterFlush": [
+     "fsyncSync",
+     "fsyncSync"
+    ],
+    "afterFlushSync": [
+     "fsyncSync",
+     "fsyncSync",
+     "fsyncSync"
+    ],
+    "all": [
+     "fsync",
+     "fsyncSync",
+     "fsync"
+    ],
+    "plainFlush": [
+     "fsync"
+    ],
+    "seen": [
+     [
+      "ready"
+     ],
+     [
+      "write",
+      14
+     ],
+     [
+      "drain"
+     ],
+     [
+      "write",
+      0
+     ],
+     [
+      "drain"
+     ],
+     [
+      "finish"
+     ],
+     [
+      "close"
+     ]
+    ]
+   }
+  },
+  "fsync-sync-failure": {
+   "source": "const U = fs.Utf8Stream, f = h.dir + \"/a.log\";\nconst failing = { fsyncSync() { throw Object.assign(new Error(\"sync failed\"), { code: \"EIO\" }); } };\nconst s = new U({ dest: f, sync: true, fsync: true, fs: failing }), seen = h.log(s);\nconst write = h.attempt(() => s.write(\"a\\n\")), state = h.state(s), text = h.text(f);\nconst again = h.attempt(() => s.write(\"b\\n\"));\nconst a = new U({ dest: h.dir + \"/b.log\", fsync: true, fs: failing }), seenAsync = h.log(a);\na.write(\"a\\n\");\nawait h.turns();\nreturn { write, state, text, again, seen, seenAsync, uncaught: h.uncaught, asyncState: h.state(a), asyncText: h.text(h.dir + \"/b.log\"), final: h.text(f) };",
+   "result": {
+    "write": {
+     "ok": true
+    },
+    "state": {
+     "mode": "undefined",
+     "file": "/work/fsync-sync-failure/a.log",
+     "fd": "open",
+     "minLength": 0,
+     "maxLength": 0,
+     "writing": false,
+     "sync": true,
+     "fsync": true,
+     "append": true,
+     "periodicFlush": 0,
+     "contentMode": "utf8",
+     "mkdir": false
+    },
+    "text": "a\n",
+    "again": {
+     "ok": true
+    },
+    "seen": [
+     [
+      "write",
+      2
+     ],
+     [
+      "error",
+      {
+       "name": "Error",
+       "ctor": "Error",
+       "message": "sync failed",
+       "code": "EIO"
+      }
+     ],
+     [
+      "write",
+      2
+     ],
+     [
+      "error",
+      {
+       "name": "Error",
+       "ctor": "Error",
+       "message": "sync failed",
+       "code": "EIO"
+      }
+     ],
+     [
+      "ready"
+     ]
+    ],
+    "seenAsync": [
+     [
+      "ready"
+     ],
+     [
+      "write",
+      2
+     ]
+    ],
+    "uncaught": [
+     {
+      "name": "Error",
+      "ctor": "Error",
+      "message": "sync failed",
+      "code": "EIO"
+     }
+    ],
+    "asyncState": {
+     "mode": "undefined",
+     "file": "/work/fsync-sync-failure/b.log",
+     "fd": "open",
+     "minLength": 0,
+     "maxLength": 0,
+     "writing": true,
+     "sync": false,
+     "fsync": true,
+     "append": true,
+     "periodicFlush": 0,
+     "contentMode": "utf8",
+     "mkdir": false
+    },
+    "asyncText": "a\n",
+    "final": "a\nb\n"
+   }
+  },
+  "large-write": {
+   "source": "const U = fs.Utf8Stream, f = h.dir + \"/a.log\", g = h.dir + \"/b.log\";\nconst s = new U({ dest: f }), seen = h.log(s);\nconst returns = [s.write(\"a\".repeat(100000) + \"\\n\")];\nawait h.event(s, \"drain\");\nconst line = \"b\".repeat(1023) + \"\\n\";\nfor (let index = 0; index < 40; index += 1) returns.push(s.write(line));\nawait h.event(s, \"drain\");\ns.end();\nawait h.event(s, \"close\");\nconst sync = new U({ dest: g, sync: true }), seenSync = h.log(sync), syncReturns = [sync.write(\"c\".repeat(70000))];\nfor (let index = 0; index < 20; index += 1) syncReturns.push(sync.write(line));\nsync.end();\nawait h.event(sync, \"close\");\nreturn { returns, seen, length: h.text(f).length, syncReturns, seenSync, lengthSync: h.text(g).length };",
+   "result": {
+    "returns": [
+     false,
+     true,
+     true,
+     true,
+     true,
+     true,
+     true,
+     true,
+     true,
+     true,
+     true,
+     true,
+     true,
+     true,
+     true,
+     true,
+     true,
+     false,
+     false,
+     false,
+     false,
+     false,
+     false,
+     false,
+     false,
+     false,
+     false,
+     false,
+     false,
+     false,
+     false,
+     false,
+     false,
+     false,
+     false,
+     false,
+     false,
+     false,
+     false,
+     false,
+     false
+    ],
+    "seen": [
+     [
+      "ready"
+     ],
+     [
+      "write",
+      100001
+     ],
+     [
+      "drain"
+     ],
+     [
+      "write",
+      1024
+     ],
+     [
+      "write",
+      16384
+     ],
+     [
+      "write",
+      16384
+     ],
+     [
+      "write",
+      7168
+     ],
+     [
+      "drain"
+     ],
+     [
+      "finish"
+     ],
+     [
+      "close"
+     ]
+    ],
+    "length": 140961,
+    "syncReturns": [
+     true,
+     true,
+     true,
+     true,
+     true,
+     true,
+     true,
+     true,
+     true,
+     true,
+     true,
+     true,
+     true,
+     true,
+     true,
+     true,
+     true,
+     true,
+     true,
+     true,
+     true
+    ],
+    "seenSync": [
+     [
+      "write",
+      70000
+     ],
+     [
+      "write",
+      1024
+     ],
+     [
+      "write",
+      1024
+     ],
+     [
+      "write",
+      1024
+     ],
+     [
+      "write",
+      1024
+     ],
+     [
+      "write",
+      1024
+     ],
+     [
+      "write",
+      1024
+     ],
+     [
+      "write",
+      1024
+     ],
+     [
+      "write",
+      1024
+     ],
+     [
+      "write",
+      1024
+     ],
+     [
+      "write",
+      1024
+     ],
+     [
+      "write",
+      1024
+     ],
+     [
+      "write",
+      1024
+     ],
+     [
+      "write",
+      1024
+     ],
+     [
+      "write",
+      1024
+     ],
+     [
+      "write",
+      1024
+     ],
+     [
+      "write",
+      1024
+     ],
+     [
+      "write",
+      1024
+     ],
+     [
+      "write",
+      1024
+     ],
+     [
+      "write",
+      1024
+     ],
+     [
+      "write",
+      1024
+     ],
+     [
+      "ready"
+     ],
+     [
+      "drain"
+     ],
+     [
+      "finish"
+     ],
+     [
+      "close"
+     ]
+    ],
+    "lengthSync": 90480
+   }
+  },
+  "listeners": {
+   "source": "const U = fs.Utf8Stream, f = h.dir + \"/a.log\";\nconst s = new U({ dest: f, minLength: 10 });\nawait h.event(s, \"ready\");\nconst counts = () => [\"ready\", \"drain\", \"error\", \"close\", \"finish\", \"newListener\"].map(name => s.listenerCount(name));\nconst before = counts();\ns.write(\"a\\n\"); s.flush(() => undefined);\nconst pending = counts();\nawait h.turns();\nconst after = counts();\ns.end();\nconst ending = counts();\nawait h.event(s, \"close\");\nreturn { before, pending, after, ending, closed: counts() };",
+   "result": {
+    "before": [
+     0,
+     0,
+     0,
+     0,
+     0,
+     1
+    ],
+    "pending": [
+     0,
+     1,
+     1,
+     0,
+     0,
+     1
+    ],
+    "after": [
+     0,
+     0,
+     0,
+     0,
+     0,
+     1
+    ],
+    "ending": [
+     0,
+     0,
+     0,
+     0,
+     0,
+     1
+    ],
+    "closed": [
+     0,
+     0,
+     0,
+     0,
+     0,
+     1
+    ]
+   }
+  },
+  "maxlength-drop": {
+   "source": "const U = fs.Utf8Stream, f = h.dir + \"/a.log\";\nconst s = new U({ dest: f, minLength: 8, maxLength: 10 }), seen = h.log(s);\nawait h.event(s, \"ready\");\nconst returns = [s.write(\"12345\"), s.write(\"678901\"), s.write(\"67890\"), s.write(\"x\")];\nawait h.event(s, \"drain\");\nreturns.push(s.write(\"abc\"), s.write(\"0123456789012\"));\ns.end();\nawait h.event(s, \"close\");\nconst sync = new U({ dest: h.dir + \"/b.log\", sync: true, maxLength: 4 }), seenSync = h.log(sync);\nconst syncReturns = [sync.write(\"12345\"), sync.write(\"1234\"), sync.write(\"abcd\")];\nsync.end();\nawait h.event(sync, \"close\");\nreturn { returns, seen, text: h.text(f), state: h.state(s), syncReturns, seenSync, textSync: h.text(h.dir + \"/b.log\") };",
+   "result": {
+    "returns": [
+     true,
+     true,
+     true,
+     true,
+     true,
+     true
+    ],
+    "seen": [
+     [
+      "ready"
+     ],
+     [
+      "drop",
+      "678901"
+     ],
+     [
+      "drop",
+      "x"
+     ],
+     [
+      "write",
+      10
+     ],
+     [
+      "drain"
+     ],
+     [
+      "drop",
+      "0123456789012"
+     ],
+     [
+      "write",
+      3
+     ],
+     [
+      "finish"
+     ],
+     [
+      "close"
+     ]
+    ],
+    "text": "1234567890abc",
+    "state": {
+     "mode": "undefined",
+     "file": "/work/maxlength-drop/a.log",
+     "fd": "open",
+     "minLength": 8,
+     "maxLength": 10,
+     "writing": false,
+     "sync": false,
+     "fsync": false,
+     "append": true,
+     "periodicFlush": 0,
+     "contentMode": "utf8",
+     "mkdir": false
+    },
+    "syncReturns": [
+     true,
+     true,
+     true
+    ],
+    "seenSync": [
+     [
+      "drop",
+      "12345"
+     ],
+     [
+      "write",
+      4
+     ],
+     [
+      "write",
+      4
+     ],
+     [
+      "ready"
+     ],
+     [
+      "drain"
+     ],
+     [
+      "finish"
+     ],
+     [
+      "close"
+     ]
+    ],
+    "textSync": "1234abcd"
+   }
+  },
+  "maxwrite": {
+   "source": "const U = fs.Utf8Stream, f = h.dir + \"/a.log\";\nconst s = new U({ dest: f, maxWrite: 10 }), seen = h.log(s);\nconst returns = []; for (const chunk of [\"aaaa\", \"bbbb\", \"cccc\", \"dddd\", \"eeeeeeeeeeeeeee\", \"f\", \"gggggggggg\", \"h\"]) returns.push(s.write(chunk));\nawait h.event(s, \"drain\");\ns.end();\nawait h.event(s, \"close\");\nreturn { returns, seen, text: h.text(f) };",
+   "result": {
+    "returns": [
+     true,
+     true,
+     true,
+     true,
+     true,
+     true,
+     true,
+     true
+    ],
+    "seen": [
+     [
+      "ready"
+     ],
+     [
+      "write",
+      8
+     ],
+     [
+      "write",
+      8
+     ],
+     [
+      "write",
+      15
+     ],
+     [
+      "write",
+      1
+     ],
+     [
+      "write",
+      10
+     ],
+     [
+      "write",
+      1
+     ],
+     [
+      "drain"
+     ],
+     [
+      "finish"
+     ],
+     [
+      "close"
+     ]
+    ],
+    "text": "aaaabbbbccccddddeeeeeeeeeeeeeeefggggggggggh"
+   }
+  },
+  "minlength-flush": {
+   "source": "const U = fs.Utf8Stream, f = h.dir + \"/a.log\";\nconst s = new U({ dest: f, minLength: 100 }), seen = h.log(s);\nawait h.event(s, \"ready\");\nconst returns = [s.write(\"short\\n\"), s.write(\"also short\\n\")];\nawait h.turns();\nconst buffered = { text: h.text(f), writing: s.writing, seen: seen.slice() };\nconst flushed = await new Promise(resolve => { const r = s.flush((...args) => resolve(args.map(h.show))); seen.push([\"flush returned\", r]); });\nconst afterFlush = { text: h.text(f), seen: seen.slice() };\nconst emptyFlush = await new Promise(resolve => s.flush((...args) => resolve(args.map(h.show))));\nreturns.push(s.write(\"x\".repeat(100) + \"\\n\"));\nawait h.event(s, \"drain\");\nconst afterBig = h.text(f).length;\ns.write(\"tail\\n\");\ns.end();\nawait h.event(s, \"close\");\nreturn { returns, buffered, flushed, afterFlush, emptyFlush, afterBig, seen, text: h.text(f).length, tail: h.text(f).slice(-5) };",
+   "result": {
+    "returns": [
+     true,
+     true,
+     true
+    ],
+    "buffered": {
+     "text": "",
+     "writing": false,
+     "seen": [
+      [
+       "ready"
+      ]
+     ]
+    },
+    "flushed": [
+     null
+    ],
+    "afterFlush": {
+     "text": "short\nalso short\n",
+     "seen": [
+      [
+       "ready"
+      ],
+      [
+       "flush returned",
+       null
+      ],
+      [
+       "write",
+       17
+      ],
+      [
+       "drain"
+      ]
+     ]
+    },
+    "emptyFlush": [
+     null
+    ],
+    "afterBig": 118,
+    "seen": [
+     [
+      "ready"
+     ],
+     [
+      "flush returned",
+      null
+     ],
+     [
+      "write",
+      17
+     ],
+     [
+      "drain"
+     ],
+     [
+      "write",
+      0
+     ],
+     [
+      "drain"
+     ],
+     [
+      "write",
+      101
+     ],
+     [
+      "drain"
+     ],
+     [
+      "write",
+      5
+     ],
+     [
+      "finish"
+     ],
+     [
+      "close"
+     ]
+    ],
+    "text": 123,
+    "tail": "tail\n"
+   }
+  },
+  "minlength-flushsync": {
+   "source": "const U = fs.Utf8Stream, f = h.dir + \"/a.log\";\nconst s = new U({ dest: f, minLength: 100 }), seen = h.log(s);\nconst early = h.attempt(() => s.flushSync());\ns.write(\"first\\n\");\nawait h.event(s, \"ready\");\nawait h.turns();\nconst before = h.text(f);\nconst returned = h.attempt(() => s.flushSync());\nconst after = h.text(f), log = seen.slice();\ns.write(\"second\\n\"); s.write(\"third\\n\");\nconst again = h.attempt(() => s.flushSync());\nconst twice = h.attempt(() => s.flushSync());\nconst text = h.text(f);\ns.end();\nawait h.event(s, \"close\");\nreturn { early, before, returned, after, log, again, twice, text, seen, destroyed: h.attempt(() => s.flushSync()) };",
+   "result": {
+    "early": {
+     "error": {
+      "name": "Error",
+      "ctor": "Error",
+      "message": "Invalid state: Invalid file descriptor",
+      "code": "ERR_INVALID_STATE"
+     }
+    },
+    "before": "",
+    "returned": {},
+    "after": "first\n",
+    "log": [
+     [
+      "ready"
+     ]
+    ],
+    "again": {},
+    "twice": {},
+    "text": "first\nsecond\nthird\n",
+    "seen": [
+     [
+      "ready"
+     ],
+     [
+      "finish"
+     ],
+     [
+      "close"
+     ]
+    ],
+    "destroyed": {
+     "error": {
+      "name": "Error",
+      "ctor": "Error",
+      "message": "Invalid state: Utf8Stream is destroyed",
+      "code": "ERR_INVALID_STATE"
+     }
+    }
+   }
+  },
+  "mkdir-async": {
+   "source": "const U = fs.Utf8Stream, f = h.dir + \"/deep/er/a.log\";\nconst s = new U({ dest: f, mkdir: true }), seen = h.log(s);\ns.write(\"made\\n\");\nawait h.event(s, \"drain\");\ns.end();\nawait h.event(s, \"close\");\nreturn { seen, text: h.text(f), state: h.state(s), directory: fs.statSync(h.dir + \"/deep/er\").isDirectory() };",
+   "result": {
+    "seen": [
+     [
+      "ready"
+     ],
+     [
+      "write",
+      5
+     ],
+     [
+      "drain"
+     ],
+     [
+      "finish"
+     ],
+     [
+      "close"
+     ]
+    ],
+    "text": "made\n",
+    "state": {
+     "mode": "undefined",
+     "file": "/work/mkdir-async/deep/er/a.log",
+     "fd": "open",
+     "minLength": 0,
+     "maxLength": 0,
+     "writing": false,
+     "sync": false,
+     "fsync": false,
+     "append": true,
+     "periodicFlush": 0,
+     "contentMode": "utf8",
+     "mkdir": true
+    },
+    "directory": true
+   }
+  },
+  "mkdir-sync": {
+   "source": "const U = fs.Utf8Stream, f = h.dir + \"/deep/er/a.log\";\nconst s = new U({ dest: f, mkdir: true, sync: true }), seen = h.log(s);\ns.write(\"made\\n\");\nconst text = h.text(f);\ns.end();\nawait h.event(s, \"close\");\nreturn { seen, text, state: h.state(s) };",
+   "result": {
+    "seen": [
+     [
+      "write",
+      5
+     ],
+     [
+      "ready"
+     ],
+     [
+      "drain"
+     ],
+     [
+      "finish"
+     ],
+     [
+      "close"
+     ]
+    ],
+    "text": "made\n",
+    "state": {
+     "mode": "undefined",
+     "file": "/work/mkdir-sync/deep/er/a.log",
+     "fd": "open",
+     "minLength": 0,
+     "maxLength": 0,
+     "writing": false,
+     "sync": true,
+     "fsync": false,
+     "append": true,
+     "periodicFlush": 0,
+     "contentMode": "utf8",
+     "mkdir": true
+    }
+   }
+  },
+  "mode": {
+   "source": "const U = fs.Utf8Stream, results = {};\nfor (const [name, options] of [[\"default\", {}], [\"private\", { mode: 0o600 }], [\"sync\", { mode: 0o640, sync: true }], [\"text\", { mode: \"600\", sync: true }]]) {\n  const path = h.dir + \"/\" + name + \".log\";\n  const made = h.attempt(() => new U({ dest: path, ...options }));\n  if (made.error) { results[name] = made; continue; }\n  const s = made.ok, getter = s.mode;\n  s.write(\"x\\n\"); s.end();\n  await h.event(s, \"close\");\n  results[name] = [getter === undefined ? \"undefined\" : getter, h.mode(path)];\n}\nreturn results;",
+   "result": {
+    "default": [
+     "undefined",
+     420
+    ],
+    "private": [
+     384,
+     384
+    ],
+    "sync": [
+     416,
+     416
+    ],
+    "text": [
+     "600",
+     384
+    ]
+   }
+  },
+  "multibyte": {
+   "source": "const U = fs.Utf8Stream, text = \"zażółć gęślą jaźń 🙂 日本語 \\u{1F468}‍\\u{1F469}‍\\u{1F467} é\\n\", results = {};\nfor (const [name, options] of [[\"async\", {}], [\"sync\", { sync: true }], [\"small\", { maxWrite: 8, sync: true }], [\"buffered\", { minLength: 60 }]]) {\n  const path = h.dir + \"/\" + name + \".log\", s = new U({ dest: path, ...options }), seen = h.log(s);\n  const returns = [s.write(text), s.write(text.slice(0, 9)), s.write(\"\\ud83d\"), s.write(\"\\ude42\\n\")];\n  s.end();\n  await h.event(s, \"close\");\n  results[name] = { returns, seen, hex: fs.readFileSync(path).toString(\"hex\") };\n}\nreturn results;",
+   "result": {
+    "async": {
+     "returns": [
+      true,
+      true,
+      true,
+      true
+     ],
+     "seen": [
+      [
+       "ready"
+      ],
+      [
+       "write",
+       83
+      ],
+      [
+       "finish"
+      ],
+      [
+       "close"
+      ]
+     ],
+     "hex": "7a61c5bcc3b3c582c4872067c499c59b6cc485206a61c5bac58420f09f998220e697a5e69cace8aa9e20f09f91a8e2808df09f91a9e2808df09f91a720c3a90a7a61c5bcc3b3c582c4872067c499f09f99820a"
+    },
+    "sync": {
+     "returns": [
+      true,
+      true,
+      true,
+      true
+     ],
+     "seen": [
+      [
+       "write",
+       64
+      ],
+      [
+       "write",
+       14
+      ],
+      [
+       "write",
+       3
+      ],
+      [
+       "write",
+       4
+      ],
+      [
+       "ready"
+      ],
+      [
+       "drain"
+      ],
+      [
+       "finish"
+      ],
+      [
+       "close"
+      ]
+     ],
+     "hex": "7a61c5bcc3b3c582c4872067c499c59b6cc485206a61c5bac58420f09f998220e697a5e69cace8aa9e20f09f91a8e2808df09f91a9e2808df09f91a720c3a90a7a61c5bcc3b3c582c4872067c499efbfbdefbfbd0a"
+    },
+    "small": {
+     "returns": [
+      true,
+      true,
+      true,
+      true
+     ],
+     "seen": [
+      [
+       "write",
+       64
+      ],
+      [
+       "write",
+       14
+      ],
+      [
+       "write",
+       3
+      ],
+      [
+       "write",
+       4
+      ],
+      [
+       "ready"
+      ],
+      [
+       "drain"
+      ],
+      [
+       "finish"
+      ],
+      [
+       "close"
+      ]
+     ],
+     "hex": "7a61c5bcc3b3c582c4872067c499c59b6cc485206a61c5bac58420f09f998220e697a5e69cace8aa9e20f09f91a8e2808df09f91a9e2808df09f91a720c3a90a7a61c5bcc3b3c582c4872067c499efbfbdefbfbd0a"
+    },
+    "buffered": {
+     "returns": [
+      true,
+      true,
+      true,
+      true
+     ],
+     "seen": [
+      [
+       "ready"
+      ],
+      [
+       "write",
+       83
+      ],
+      [
+       "finish"
+      ],
+      [
+       "close"
+      ]
+     ],
+     "hex": "7a61c5bcc3b3c582c4872067c499c59b6cc485206a61c5bac58420f09f998220e697a5e69cace8aa9e20f09f91a8e2808df09f91a9e2808df09f91a720c3a90a7a61c5bcc3b3c582c4872067c499f09f99820a"
+    }
+   }
+  },
+  "open-error-async": {
+   "source": "const U = fs.Utf8Stream, f = h.dir + \"/missing/a.log\";\nconst s = new U({ dest: f }), seen = h.log(s);\nconst returns = [s.write(\"lost\\n\")];\nconst error = await h.event(s, \"error\");\nconst state = h.state(s);\nreturns.push(h.attempt(() => s.write(\"more\\n\")));\nconst flushSync = h.attempt(() => s.flushSync());\nconst end = h.attempt(() => s.end()), destroy = h.attempt(() => s.destroy());\nawait h.turns();\nreturn { error, state, returns, flushSync, end, destroy, seen, after: h.state(s), exists: fs.existsSync(f) };",
+   "result": {
+    "error": [
+     {
+      "name": "Error",
+      "ctor": "Error",
+      "message": "ENOENT: no such file or directory, open '/work/open-error-async/missing/a.log'",
+      "code": "ENOENT",
+      "errno": -2,
+      "syscall": "open",
+      "path": "/work/open-error-async/missing/a.log"
+     }
+    ],
+    "state": {
+     "mode": "undefined",
+     "file": null,
+     "fd": -1,
+     "minLength": 0,
+     "maxLength": 0,
+     "writing": false,
+     "sync": false,
+     "fsync": false,
+     "append": true,
+     "periodicFlush": 0,
+     "contentMode": "utf8",
+     "mkdir": false
+    },
+    "returns": [
+     true,
+     {
+      "error": {
+       "name": "RangeError",
+       "ctor": "RangeError",
+       "message": "The value of \"fd\" is out of range. It must be >= 0 && <= 2147483647. Received -1",
+       "code": "ERR_OUT_OF_RANGE"
+      }
+     }
+    ],
+    "flushSync": {
+     "error": {
+      "name": "Error",
+      "ctor": "Error",
+      "message": "Invalid state: Invalid file descriptor",
+      "code": "ERR_INVALID_STATE"
+     }
+    },
+    "end": {},
+    "destroy": {},
+    "seen": [
+     [
+      "error",
+      {
+       "name": "Error",
+       "ctor": "Error",
+       "message": "ENOENT: no such file or directory, open '/work/open-error-async/missing/a.log'",
+       "code": "ENOENT",
+       "errno": -2,
+       "syscall": "open",
+       "path": "/work/open-error-async/missing/a.log"
+      }
+     ]
+    ],
+    "after": {
+     "mode": "undefined",
+     "file": null,
+     "fd": -1,
+     "minLength": 0,
+     "maxLength": 0,
+     "writing": true,
+     "sync": false,
+     "fsync": false,
+     "append": true,
+     "periodicFlush": 0,
+     "contentMode": "utf8",
+     "mkdir": false
+    },
+    "exists": false
+   }
+  },
+  "open-error-sync": {
+   "source": "const U = fs.Utf8Stream, f = h.dir + \"/missing/a.log\";\nconst thrown = h.attempt(() => new U({ dest: f, sync: true }));\nconst mkdirThrown = h.attempt(() => { fs.writeFileSync(h.dir + \"/file\", \"x\"); return new U({ dest: h.dir + \"/file/a.log\", sync: true, mkdir: true }); });\nawait h.turns();\nreturn { thrown, mkdirThrown, uncaught: h.uncaught.slice() };",
+   "result": {
+    "thrown": {
+     "error": {
+      "name": "Error",
+      "ctor": "Error",
+      "message": "ENOENT: no such file or directory, open '/work/open-error-sync/missing/a.log'",
+      "code": "ENOENT",
+      "errno": -2,
+      "syscall": "open",
+      "path": "/work/open-error-sync/missing/a.log"
+     }
+    },
+    "mkdirThrown": {
+     "error": {
+      "name": "Error",
+      "ctor": "Error",
+      "message": "EEXIST: file already exists, mkdir '/work/open-error-sync/file'",
+      "code": "EEXIST",
+      "errno": -17,
+      "syscall": "mkdir",
+      "path": "/work/open-error-sync/file"
+     }
+    },
+    "uncaught": []
+   }
+  },
+  "open-error-unhandled": {
+   "source": "const U = fs.Utf8Stream;\nconst s = new U({ dest: h.dir + \"/missing/a.log\" });\nawait h.turns();\nreturn { uncaught: h.uncaught.slice(), state: h.state(s) };",
+   "result": {
+    "uncaught": [
+     {
+      "name": "Error",
+      "ctor": "Error",
+      "message": "ENOENT: no such file or directory, open '/work/open-error-unhandled/missing/a.log'",
+      "code": "ENOENT",
+      "errno": -2,
+      "syscall": "open",
+      "path": "/work/open-error-unhandled/missing/a.log"
+     }
+    ],
+    "state": {
+     "mode": "undefined",
+     "file": null,
+     "fd": -1,
+     "minLength": 0,
+     "maxLength": 0,
+     "writing": false,
+     "sync": false,
+     "fsync": false,
+     "append": true,
+     "periodicFlush": 0,
+     "contentMode": "utf8",
+     "mkdir": false
+    }
+   }
+  },
+  "open-failure": {
+   "source": "const U = fs.Utf8Stream, f = h.dir + \"/a.log\", calls = [];\nlet fail = true;\nconst s = new U({ dest: f, mkdir: true, mode: 0o640, append: false, fs: {\n  mkdir(path, options, callback) { calls.push([\"mkdir\", path, options, typeof callback]); fs.mkdir(path, options, callback); },\n  open(path, flags, mode, callback) { calls.push([\"open\", path, flags, mode, typeof callback]); if (fail) { setImmediate(() => callback(Object.assign(new Error(\"no\"), { code: \"EACCES\" }))); return; } fs.open(path, flags, mode, callback); },\n  close(fd, callback) { calls.push([\"close\", typeof fd, typeof callback]); fs.close(fd, callback); },\n} }), seen = h.log(s);\ns.write(\"kept\\n\");\nconst error = await h.event(s, \"error\");\nconst state = h.state(s);\nfail = false;\nconst reopen = h.attempt(() => s.reopen()), reopenFile = h.attempt(() => s.reopen(f));\nawait h.turns();\nconst mkdirFails = new U({ dest: h.dir + \"/b.log\", mkdir: true, fs: { mkdir(path, options, callback) { setImmediate(() => callback(Object.assign(new Error(\"no dir\"), { code: \"EPERM\" }))); } } });\nconst mkdirError = await h.event(mkdirFails, \"error\");\nreturn { error, state, reopen, reopenFile, calls, seen, mkdirError, exists: fs.existsSync(f) };",
+   "result": {
+    "error": [
+     {
+      "name": "Error",
+      "ctor": "Error",
+      "message": "no",
+      "code": "EACCES"
+     }
+    ],
+    "state": {
+     "mode": 416,
+     "file": null,
+     "fd": -1,
+     "minLength": 0,
+     "maxLength": 0,
+     "writing": false,
+     "sync": false,
+     "fsync": false,
+     "append": false,
+     "periodicFlush": 0,
+     "contentMode": "utf8",
+     "mkdir": true
+    },
+    "reopen": {
+     "error": {
+      "name": "Error",
+      "ctor": "Error",
+      "message": "Operation failed: Unable to reopen a file descriptor, you must pass a file to SonicBoom",
+      "code": "ERR_OPERATION_FAILED"
+     }
+    },
+    "reopenFile": {
+     "error": {
+      "name": "Error",
+      "ctor": "Error",
+      "message": "Operation failed: Unable to reopen a file descriptor, you must pass a file to SonicBoom",
+      "code": "ERR_OPERATION_FAILED"
+     }
+    },
+    "calls": [
+     [
+      "mkdir",
+      "/work/open-failure",
+      {
+       "recursive": true
+      },
+      "function"
+     ],
+     [
+      "open",
+      "/work/open-failure/a.log",
+      "w",
+      416,
+      "function"
+     ]
+    ],
+    "seen": [
+     [
+      "error",
+      {
+       "name": "Error",
+       "ctor": "Error",
+       "message": "no",
+       "code": "EACCES"
+      }
+     ]
+    ],
+    "mkdirError": [
+     {
+      "name": "Error",
+      "ctor": "Error",
+      "message": "no dir",
+      "code": "EPERM"
+     }
+    ],
+    "exists": false
+   }
+  },
+  "partial-async": {
+   "source": "const U = fs.Utf8Stream, f = h.dir + \"/a.log\", calls = [];\nconst s = new U({ dest: f, fs: { write(fd, data, encoding, callback) {\n  const bytes = h.Buffer.from(data, encoding), part = bytes.subarray(0, Math.min(bytes.length, 5));\n  calls.push([data, part.length]);\n  fs.write(fd, part, 0, part.length, null, (error, written) => callback(error, written));\n} } }), seen = h.log(s);\nawait h.event(s, \"ready\");\nconst returns = [s.write(\"aé€🙂b\\n\"), s.write(\"żółw\\n\")];\nawait h.event(s, \"drain\");\ns.end();\nawait h.event(s, \"close\");\nreturn { returns, calls, seen, hex: fs.readFileSync(f).toString(\"hex\"), text: h.text(f) };",
+   "result": {
+    "returns": [
+     true,
+     true
+    ],
+    "calls": [
+     [
+      "aé€🙂b\n",
+      5
+     ],
+     [
+      "€🙂b\n",
+      5
+     ],
+     [
+      "🙂b\n",
+      5
+     ],
+     [
+      "\n",
+      1
+     ],
+     [
+      "żółw\n",
+      5
+     ],
+     [
+      "łw\n",
+      4
+     ]
+    ],
+    "seen": [
+     [
+      "ready"
+     ],
+     [
+      "write",
+      5
+     ],
+     [
+      "write",
+      5
+     ],
+     [
+      "write",
+      5
+     ],
+     [
+      "write",
+      1
+     ],
+     [
+      "write",
+      5
+     ],
+     [
+      "write",
+      4
+     ],
+     [
+      "drain"
+     ],
+     [
+      "finish"
+     ],
+     [
+      "close"
+     ]
+    ],
+    "hex": "61c3a9e282e282acf09ff09f9982620ac5bcc3b3c5c582770a",
+    "text": "aé�€�🙂b\nżó�łw\n"
+   }
+  },
+  "partial-sync": {
+   "source": "const U = fs.Utf8Stream, f = h.dir + \"/a.log\", calls = [];\nconst s = new U({ dest: f, sync: true, minLength: 4, fs: { writeSync(fd, data, encoding) {\n  const bytes = h.Buffer.from(data, encoding), part = bytes.subarray(0, Math.min(bytes.length, 4));\n  calls.push([data, part.length]);\n  return fs.writeSync(fd, part, 0, part.length, null);\n} } }), seen = h.log(s);\nconst returns = [s.write(\"a🙂€b\\n\")], text = h.text(f);\ns.write(\"éé\"); const flushSync = h.attempt(() => s.flushSync());\ns.end();\nawait h.event(s, \"close\");\nreturn { returns, text, flushSync, calls, seen, hex: fs.readFileSync(f).toString(\"hex\") };",
+   "result": {
+    "returns": [
+     true
+    ],
+    "text": "a�🙂€b\n",
+    "flushSync": {},
+    "calls": [
+     [
+      "a🙂€b\n",
+      4
+     ],
+     [
+      "🙂€b\n",
+      4
+     ],
+     [
+      "€b\n",
+      4
+     ],
+     [
+      "\n",
+      1
+     ],
+     [
+      "éé",
+      4
+     ]
+    ],
+    "seen": [
+     [
+      "write",
+      4
+     ],
+     [
+      "ready"
+     ],
+     [
+      "drain"
+     ],
+     [
+      "finish"
+     ],
+     [
+      "close"
+     ]
+    ],
+    "hex": "61f09f99f09f9982e282ac620ac3a9c3a9"
+   }
+  },
+  "periodic-flush": {
+   "source": "const U = fs.Utf8Stream, f = h.dir + \"/a.log\";\nconst s = new U({ dest: f, minLength: 50, periodicFlush: 100 }), seen = h.log(s);\nawait h.event(s, \"ready\");\ns.write(\"buffered\\n\");\nawait h.sleep(150);\nconst middle = { text: h.text(f), uncaught: h.uncaught.slice(), seen: seen.slice(), state: h.state(s) };\ns.destroy();\nawait h.event(s, \"close\");\nawait h.sleep(150);\nreturn { middle, uncaught: h.uncaught.slice(), seen, text: h.text(f) };",
+   "result": {
+    "middle": {
+     "text": "",
+     "uncaught": [
+      {
+       "name": "TypeError",
+       "ctor": "TypeError",
+       "message": "The \"cb\" argument must be of type function. Received null",
+       "code": "ERR_INVALID_ARG_TYPE"
+      }
+     ],
+     "seen": [
+      [
+       "ready"
+      ]
+     ],
+     "state": {
+      "mode": "undefined",
+      "file": "/work/periodic-flush/a.log",
+      "fd": "open",
+      "minLength": 50,
+      "maxLength": 0,
+      "writing": false,
+      "sync": false,
+      "fsync": false,
+      "append": true,
+      "periodicFlush": 100,
+      "contentMode": "utf8",
+      "mkdir": false
+     }
+    },
+    "uncaught": [
+     {
+      "name": "TypeError",
+      "ctor": "TypeError",
+      "message": "The \"cb\" argument must be of type function. Received null",
+      "code": "ERR_INVALID_ARG_TYPE"
+     }
+    ],
+    "seen": [
+     [
+      "ready"
+     ],
+     [
+      "close"
+     ]
+    ],
+    "text": ""
+   }
+  },
+  "reopen-file": {
+   "source": "const U = fs.Utf8Stream, f = h.dir + \"/a.log\", g = h.dir + \"/b.log\";\nconst s = new U({ dest: f }), seen = h.log(s);\ns.reopen(g);\nseen.push(\"reopen before ready returned\");\ns.write(\"one\\n\");\nawait h.event(s, \"drain\");\nconst first = [s.file, fs.existsSync(f), fs.existsSync(g)];\nawait h.turns();\ns.write(\"x\".repeat(40000)); s.reopen(f); seen.push([\"reopen while writing\", s.writing]);\nconst drained = h.event(s, \"drain\");\nawait h.event(s, \"ready\");\nawait drained;\ns.end(); const afterEnd = h.attempt(() => s.reopen(g));\nawait h.event(s, \"close\");\nreturn { first, afterEnd, seen, a: h.text(f).length, b: h.text(g).length, file: s.file, destroyed: h.attempt(() => s.reopen()) };",
+   "result": {
+    "first": [
+     "/work/reopen-file/b.log",
+     true,
+     true
+    ],
+    "afterEnd": {
+     "error": {
+      "name": "Error",
+      "ctor": "Error",
+      "message": "Invalid state: Utf8Stream is destroyed",
+      "code": "ERR_INVALID_STATE"
+     }
+    },
+    "seen": [
+     "reopen before ready returned",
+     [
+      "ready"
+     ],
+     [
+      "ready"
+     ],
+     [
+      "write",
+      4
+     ],
+     [
+      "drain"
+     ],
+     [
+      "reopen while writing",
+      true
+     ],
+     [
+      "write",
+      40000
+     ],
+     [
+      "ready"
+     ],
+     [
+      "drain"
+     ],
+     [
+      "finish"
+     ],
+     [
+      "close"
+     ]
+    ],
+    "a": 0,
+    "b": 40004,
+    "file": "/work/reopen-file/a.log",
+    "destroyed": {
+     "error": {
+      "name": "Error",
+      "ctor": "Error",
+      "message": "Invalid state: Utf8Stream is destroyed",
+      "code": "ERR_INVALID_STATE"
+     }
+    }
+   }
+  },
+  "reopen-sync": {
+   "source": "const U = fs.Utf8Stream, f = h.dir + \"/a.log\", moved = h.dir + \"/a.log.1\";\nconst s = new U({ dest: f, sync: true }), seen = h.log(s);\ns.write(\"before\\n\");\nfs.renameSync(f, moved);\nconst first = s.fd; s.reopen();\nconst changed = s.fd !== first, immediately = seen.slice();\ns.write(\"after\\n\");\nawait h.turns();\nconst bad = h.attempt(() => s.reopen(h.dir + \"/missing/x.log\"));\nawait h.turns();\nconst state = h.state(s);\ns.write(\"still\\n\");\ns.end();\nawait h.event(s, \"close\");\nreturn { changed, immediately, bad, state, seen, moved: h.text(moved), text: h.text(f) };",
+   "result": {
+    "changed": true,
+    "immediately": [
+     [
+      "write",
+      7
+     ]
+    ],
+    "bad": {
+     "error": {
+      "name": "Error",
+      "ctor": "Error",
+      "message": "ENOENT: no such file or directory, open '/work/reopen-sync/missing/x.log'",
+      "code": "ENOENT",
+      "errno": -2,
+      "syscall": "open",
+      "path": "/work/reopen-sync/missing/x.log"
+     }
+    },
+    "state": {
+     "mode": "undefined",
+     "file": "/work/reopen-sync/missing/x.log",
+     "fd": "open",
+     "minLength": 0,
+     "maxLength": 0,
+     "writing": false,
+     "sync": true,
+     "fsync": false,
+     "append": true,
+     "periodicFlush": 0,
+     "contentMode": "utf8",
+     "mkdir": false
+    },
+    "seen": [
+     [
+      "write",
+      7
+     ],
+     [
+      "write",
+      6
+     ],
+     [
+      "ready"
+     ],
+     [
+      "drain"
+     ],
+     [
+      "ready"
+     ],
+     [
+      "drain"
+     ],
+     [
+      "drain"
+     ],
+     [
+      "error",
+      {
+       "name": "Error",
+       "ctor": "Error",
+       "message": "ENOENT: no such file or directory, open '/work/reopen-sync/missing/x.log'",
+       "code": "ENOENT",
+       "errno": -2,
+       "syscall": "open",
+       "path": "/work/reopen-sync/missing/x.log"
+      }
+     ],
+     [
+      "write",
+      6
+     ],
+     [
+      "drain"
+     ],
+     [
+      "finish"
+     ],
+     [
+      "close"
+     ]
+    ],
+    "moved": "before\n",
+    "text": "after\nstill\n"
+   }
+  },
+  "reopen": {
+   "source": "const U = fs.Utf8Stream, f = h.dir + \"/a.log\", moved = h.dir + \"/a.log.1\";\nconst s = new U({ dest: f }), seen = h.log(s);\ns.write(\"before\\n\");\nawait h.event(s, \"drain\");\nfs.renameSync(f, moved);\nconst first = s.fd, returned = s.reopen(), writing = s.writing;\ns.write(\"during\\n\");\nawait h.event(s, \"ready\");\nconst changed = s.fd !== first;\nawait h.event(s, \"drain\");\nawait h.turns();\nconst oldClosed = h.attempt(() => fs.fstatSync(first).size);\ns.write(\"after\\n\");\ns.end();\nawait h.event(s, \"close\");\nreturn { returned: returned === undefined, writing, changed, oldClosed: \"error\" in oldClosed ? oldClosed.error.code : oldClosed, seen, moved: h.text(moved), text: h.text(f), file: s.file };",
+   "result": {
+    "returned": true,
+    "writing": true,
+    "changed": true,
+    "oldClosed": "EBADF",
+    "seen": [
+     [
+      "ready"
+     ],
+     [
+      "write",
+      7
+     ],
+     [
+      "drain"
+     ],
+     [
+      "ready"
+     ],
+     [
+      "write",
+      7
+     ],
+     [
+      "drain"
+     ],
+     [
+      "write",
+      6
+     ],
+     [
+      "finish"
+     ],
+     [
+      "close"
+     ]
+    ],
+    "moved": "before\n",
+    "text": "during\nafter\n",
+    "file": "/work/reopen/a.log"
+   }
+  },
+  "surface": {
+   "source": "const U = fs.Utf8Stream, P = U.prototype, f = h.dir + \"/a.log\";\nconst members = Object.getOwnPropertyNames(P).map(name => { const d = Object.getOwnPropertyDescriptor(P, name); return [name, d.get ? [\"get\", d.get.name, d.get.length, d.set === undefined] : [d.value.name, d.value.length, d.writable], d.enumerable, d.configurable]; });\nconst dispose = Object.getOwnPropertyDescriptor(P, Symbol.dispose);\nconst s = new U({ dest: f, sync: true });\nconst result = { name: U.name, length: U.length, type: typeof U, members, symbols: Object.getOwnPropertySymbols(P).map(String), dispose: [dispose.value.name, dispose.value.length, dispose.enumerable, dispose.configurable, dispose.writable],\n  statics: Object.getOwnPropertyNames(U), tag: Object.prototype.toString.call(s), keys: Object.keys(s), emitter: typeof s.on === \"function\" && typeof s.emit === \"function\", listeners: s.eventNames().map(String), newListener: s.listenerCount(\"newListener\"),\n  call: h.attempt(() => U({ dest: f })), state: h.state(s), instance: s instanceof U };\ns.destroy();\nreturn result;",
+   "result": {
+    "name": "Utf8Stream",
+    "length": 0,
+    "type": "function",
+    "members": [
+     [
+      "constructor",
+      [
+       "Utf8Stream",
+       0,
+       true
+      ],
+      false,
+      true
+     ],
+     [
+      "write",
+      [
+       "write",
+       1,
+       true
+      ],
+      false,
+      true
+     ],
+     [
+      "flush",
+      [
+       "flush",
+       0,
+       true
+      ],
+      false,
+      true
+     ],
+     [
+      "flushSync",
+      [
+       "flushSync",
+       0,
+       true
+      ],
+      false,
+      true
+     ],
+     [
+      "reopen",
+      [
+       "reopen",
+       1,
+       true
+      ],
+      false,
+      true
+     ],
+     [
+      "end",
+      [
+       "end",
+       0,
+       true
+      ],
+      false,
+      true
+     ],
+     [
+      "destroy",
+      [
+       "destroy",
+       0,
+       true
+      ],
+      false,
+      true
+     ],
+     [
+      "mode",
+      [
+       "get",
+       "get mode",
+       0,
+       true
+      ],
+      false,
+      true
+     ],
+     [
+      "file",
+      [
+       "get",
+       "get file",
+       0,
+       true
+      ],
+      false,
+      true
+     ],
+     [
+      "fd",
+      [
+       "get",
+       "get fd",
+       0,
+       true
+      ],
+      false,
+      true
+     ],
+     [
+      "minLength",
+      [
+       "get",
+       "get minLength",
+       0,
+       true
+      ],
+      false,
+      true
+     ],
+     [
+      "maxLength",
+      [
+       "get",
+       "get maxLength",
+       0,
+       true
+      ],
+      false,
+      true
+     ],
+     [
+      "writing",
+      [
+       "get",
+       "get writing",
+       0,
+       true
+      ],
+      false,
+      true
+     ],
+     [
+      "sync",
+      [
+       "get",
+       "get sync",
+       0,
+       true
+      ],
+      false,
+      true
+     ],
+     [
+      "fsync",
+      [
+       "get",
+       "get fsync",
+       0,
+       true
+      ],
+      false,
+      true
+     ],
+     [
+      "append",
+      [
+       "get",
+       "get append",
+       0,
+       true
+      ],
+      false,
+      true
+     ],
+     [
+      "periodicFlush",
+      [
+       "get",
+       "get periodicFlush",
+       0,
+       true
+      ],
+      false,
+      true
+     ],
+     [
+      "contentMode",
+      [
+       "get",
+       "get contentMode",
+       0,
+       true
+      ],
+      false,
+      true
+     ],
+     [
+      "mkdir",
+      [
+       "get",
+       "get mkdir",
+       0,
+       true
+      ],
+      false,
+      true
+     ]
+    ],
+    "symbols": [
+     "Symbol(Symbol.dispose)"
+    ],
+    "dispose": [
+     "[Symbol.dispose]",
+     0,
+     false,
+     true,
+     true
+    ],
+    "statics": [
+     "length",
+     "name",
+     "prototype"
+    ],
+    "tag": "[object Object]",
+    "keys": [
+     "_events",
+     "_eventsCount",
+     "_maxListeners"
+    ],
+    "emitter": true,
+    "listeners": [
+     "newListener"
+    ],
+    "newListener": 1,
+    "call": {
+     "error": {
+      "name": "TypeError",
+      "ctor": "TypeError",
+      "message": "Class constructor Utf8Stream cannot be invoked without 'new'"
+     }
+    },
+    "state": {
+     "mode": "undefined",
+     "file": "/work/surface/a.log",
+     "fd": "open",
+     "minLength": 0,
+     "maxLength": 0,
+     "writing": false,
+     "sync": true,
+     "fsync": false,
+     "append": true,
+     "periodicFlush": 0,
+     "contentMode": "utf8",
+     "mkdir": false
+    },
+    "instance": true
+   }
+  },
+  "sync-basic": {
+   "source": "const U = fs.Utf8Stream, f = h.dir + \"/a.log\";\nconst s = new U({ dest: f, sync: true }), seen = h.log(s);\nconst before = h.state(s), texts = [];\nconst returns = [s.write(\"hello \")]; texts.push(h.text(f));\nreturns.push(s.write(\"world\\n\")); texts.push(h.text(f));\nconst beforeTick = seen.slice();\nawait h.turns();\nconst afterTick = seen.slice();\nreturns.push(s.write(\"again\\n\"));\nawait h.turns();\ns.end();\nconst atEnd = seen.slice();\nawait h.event(s, \"close\");\nreturn { before, returns, texts, beforeTick, afterTick, atEnd, seen, text: h.text(f), after: h.state(s) };",
+   "result": {
+    "before": {
+     "mode": "undefined",
+     "file": "/work/sync-basic/a.log",
+     "fd": "open",
+     "minLength": 0,
+     "maxLength": 0,
+     "writing": false,
+     "sync": true,
+     "fsync": false,
+     "append": true,
+     "periodicFlush": 0,
+     "contentMode": "utf8",
+     "mkdir": false
+    },
+    "returns": [
+     true,
+     true,
+     true
+    ],
+    "texts": [
+     "hello ",
+     "hello world\n"
+    ],
+    "beforeTick": [
+     [
+      "write",
+      6
+     ],
+     [
+      "write",
+      6
+     ]
+    ],
+    "afterTick": [
+     [
+      "write",
+      6
+     ],
+     [
+      "write",
+      6
+     ],
+     [
+      "ready"
+     ],
+     [
+      "drain"
+     ]
+    ],
+    "atEnd": [
+     [
+      "write",
+      6
+     ],
+     [
+      "write",
+      6
+     ],
+     [
+      "ready"
+     ],
+     [
+      "drain"
+     ],
+     [
+      "write",
+      6
+     ],
+     [
+      "drain"
+     ]
+    ],
+    "seen": [
+     [
+      "write",
+      6
+     ],
+     [
+      "write",
+      6
+     ],
+     [
+      "ready"
+     ],
+     [
+      "drain"
+     ],
+     [
+      "write",
+      6
+     ],
+     [
+      "drain"
+     ],
+     [
+      "finish"
+     ],
+     [
+      "close"
+     ]
+    ],
+    "text": "hello world\nagain\n",
+    "after": {
+     "mode": "undefined",
+     "file": "/work/sync-basic/a.log",
+     "fd": "open",
+     "minLength": 0,
+     "maxLength": 0,
+     "writing": false,
+     "sync": true,
+     "fsync": false,
+     "append": true,
+     "periodicFlush": 0,
+     "contentMode": "utf8",
+     "mkdir": false
+    }
+   }
+  },
+  "sync-minlength": {
+   "source": "const U = fs.Utf8Stream, f = h.dir + \"/a.log\";\nconst s = new U({ dest: f, sync: true, minLength: 20 }), seen = h.log(s), steps = [];\nfor (const chunk of [\"12345\\n\", \"abcde\\n\", \"ABCDEFGHIJ\\n\", \"z\\n\"]) steps.push([s.write(chunk), h.text(f), s.writing]);\nawait h.turns();\nconst flushed = []; s.flush((...args) => flushed.push(args.map(h.show)));\nsteps.push([\"flush\", h.text(f), flushed.slice()]);\nawait h.turns();\nsteps.push([\"later\", h.text(f), flushed.slice()]);\ns.write(\"q\\n\"); s.flushSync(); steps.push([\"flushSync\", h.text(f)]);\ns.write(\"end\\n\"); s.end();\nsteps.push([\"end\", h.text(f)]);\nawait h.event(s, \"close\");\nreturn { steps, seen };",
+   "result": {
+    "steps": [
+     [
+      true,
+      "",
+      false
+     ],
+     [
+      true,
+      "",
+      false
+     ],
+     [
+      true,
+      "12345\nabcde\nABCDEFGHIJ\n",
+      false
+     ],
+     [
+      true,
+      "12345\nabcde\nABCDEFGHIJ\n",
+      false
+     ],
+     [
+      "flush",
+      "12345\nabcde\nABCDEFGHIJ\nz\n",
+      []
+     ],
+     [
+      "later",
+      "12345\nabcde\nABCDEFGHIJ\nz\n",
+      [
+       [
+        null
+       ]
+      ]
+     ],
+     [
+      "flushSync",
+      "12345\nabcde\nABCDEFGHIJ\nz\nq\n"
+     ],
+     [
+      "end",
+      "12345\nabcde\nABCDEFGHIJ\nz\nq\nend\n"
+     ]
+    ],
+    "seen": [
+     [
+      "write",
+      23
+     ],
+     [
+      "ready"
+     ],
+     [
+      "drain"
+     ],
+     [
+      "write",
+      2
+     ],
+     [
+      "drain"
+     ],
+     [
+      "write",
+      4
+     ],
+     [
+      "finish"
+     ],
+     [
+      "close"
+     ]
+    ]
+   }
+  },
+  "validation": {
+   "source": "const U = fs.Utf8Stream, f = h.dir + \"/a.log\", fd = fs.openSync(f, \"a\");\nconst make = options => h.attempt(() => { new U(options); return \"made\"; });\nconst s = new U({ fd }), b = new U({ fd, contentMode: \"buffer\" });\nconst result = {\n  none: h.attempt(() => new U()), null: make(null), number: make(1), array: make([]), fn: make(() => 1), empty: make({}), fdBoolean: make({ fd: true }), fdNull: make({ fd: null }), destNumber: make({ dest: 5 }) ,\n  minNegative: make({ fd, minLength: -1 }), minText: make({ fd, minLength: \"a\" }), minBig: make({ fd, minLength: 20000 }), minEqual: make({ fd, minLength: 5, maxWrite: 5 }), minFraction: make({ fd, minLength: 1.5 }),\n  maxLengthText: make({ fd, maxLength: \"9\" }), maxLengthNegative: make({ fd, maxLength: -3 }), maxWriteFraction: make({ fd, maxWrite: 1.5 }), maxWriteBig: make({ fd, maxWrite: 2 ** 33 }), periodicBig: make({ fd, periodicFlush: 2 ** 32 }), periodicText: make({ fd, periodicFlush: \"1\" }),\n  syncNumber: make({ fd, sync: 1 }), syncNull: make({ fd, sync: null }), fsyncText: make({ fd, fsync: \"x\" }), appendText: make({ fd, append: \"x\" }), appendNull: make({ fd, append: null }), appendZero: make({ fd, append: 0 }), mkdirText: make({ fd, mkdir: \"x\" }),\n  retryNumber: make({ fd, retryEAGAIN: 1 }), contentMode: make({ fd, contentMode: \"x\" }), contentModeNull: make({ fd, contentMode: null }), fsNumber: make({ fd, fs: 1 }), fsNull: make({ fd, fs: null }), fsArray: make({ fd, fs: [] }),\n  fsWrite: make({ fd, fs: { write: 1 } }), fsWriteSync: make({ fd, fs: { writeSync: 1 } }), fsFsync: make({ fd, fs: { fsync: 1 } }), fsFsyncSync: make({ fd, fs: { fsyncSync: 1 } }), fsClose: make({ fd, fs: { close: 1 } }), fsOpen: make({ fd, fs: { open: 1 } }), fsMkdir: make({ fd, fs: { mkdir: 1 } }), fsMkdirSync: make({ fd, fs: { mkdirSync: 1 } }),\n  order: make({ fd, fs: 1, minLength: -1, sync: 1 }), order2: make({ fd: true, minLength: -1 }), order3: make({ fd: true, minLength: 20000 }), modeAny: h.attempt(() => { return new U({ fd, mode: \"anything\" }).mode; }),\n  writeNumber: h.attempt(() => s.write(1)), writeNone: h.attempt(() => s.write()), writeBuffer: h.attempt(() => s.write(h.Buffer.from(\"x\"))), flushNumber: h.attempt(() => s.flush(1)), flushNull: h.attempt(() => s.flush(null)), flushNone: h.attempt(() => s.flush()),\n  reopen: h.attempt(() => s.reopen()), reopenFile: h.attempt(() => s.reopen(f)),\n  bufferText: h.attempt(() => b.write(\"x\")), bufferBytes: h.attempt(() => b.write(new Uint8Array(1))), bufferNone: h.attempt(() => b.write()), bufferFlush: h.attempt(() => b.flush(1)), bufferMode: b.contentMode,\n};\nawait h.turns();\nreturn result;",
+   "result": {
+    "none": {
+     "error": {
+      "name": "TypeError",
+      "ctor": "TypeError",
+      "message": "The \"fd\" argument must be one of type number or string. Received undefined",
+      "code": "ERR_INVALID_ARG_TYPE"
+     }
+    },
+    "null": {
+     "error": {
+      "name": "TypeError",
+      "ctor": "TypeError",
+      "message": "The \"options\" argument must be of type object. Received null",
+      "code": "ERR_INVALID_ARG_TYPE"
+     }
+    },
+    "number": {
+     "error": {
+      "name": "TypeError",
+      "ctor": "TypeError",
+      "message": "The \"options\" argument must be of type object. Received type number (1)",
+      "code": "ERR_INVALID_ARG_TYPE"
+     }
+    },
+    "array": {
+     "error": {
+      "name": "TypeError",
+      "ctor": "TypeError",
+      "message": "The \"options\" argument must be of type object. Received an instance of Array",
+      "code": "ERR_INVALID_ARG_TYPE"
+     }
+    },
+    "fn": {
+     "error": {
+      "name": "TypeError",
+      "ctor": "TypeError",
+      "message": "The \"options\" argument must be of type object. Received function ",
+      "code": "ERR_INVALID_ARG_TYPE"
+     }
+    },
+    "empty": {
+     "error": {
+      "name": "TypeError",
+      "ctor": "TypeError",
+      "message": "The \"fd\" argument must be one of type number or string. Received undefined",
+      "code": "ERR_INVALID_ARG_TYPE"
+     }
+    },
+    "fdBoolean": {
+     "error": {
+      "name": "TypeError",
+      "ctor": "TypeError",
+      "message": "The \"fd\" argument must be one of type number or string. Received type boolean (true)",
+      "code": "ERR_INVALID_ARG_TYPE"
+     }
+    },
+    "fdNull": {
+     "error": {
+      "name": "TypeError",
+      "ctor": "TypeError",
+      "message": "The \"fd\" argument must be one of type number or string. Received undefined",
+      "code": "ERR_INVALID_ARG_TYPE"
+     }
+    },
+    "destNumber": {
+     "ok": "made"
+    },
+    "minNegative": {
+     "error": {
+      "name": "RangeError",
+      "ctor": "RangeError",
+      "message": "The value of \"options.minLength\" is out of range. It must be >= 0 && <= 4294967295. Received -1",
+      "code": "ERR_OUT_OF_RANGE"
+     }
+    },
+    "minText": {
+     "error": {
+      "name": "RangeError",
+      "ctor": "RangeError",
+      "message": "The value of \"options.hwm\" is out of range. It must be an integer. Received NaN",
+      "code": "ERR_OUT_OF_RANGE"
+     }
+    },
+    "minBig": {
+     "error": {
+      "name": "RangeError",
+      "ctor": "RangeError",
+      "message": "The argument 'minLength' should be smaller than maxWrite (16384). Received 20000",
+      "code": "ERR_INVALID_ARG_VALUE"
+     }
+    },
+    "minEqual": {
+     "error": {
+      "name": "RangeError",
+      "ctor": "RangeError",
+      "message": "The argument 'minLength' should be smaller than maxWrite (5). Received 5",
+      "code": "ERR_INVALID_ARG_VALUE"
+     }
+    },
+    "minFraction": {
+     "error": {
+      "name": "RangeError",
+      "ctor": "RangeError",
+      "message": "The value of \"options.minLength\" is out of range. It must be an integer. Received 1.5",
+      "code": "ERR_OUT_OF_RANGE"
+     }
+    },
+    "maxLengthText": {
+     "error": {
+      "name": "TypeError",
+      "ctor": "TypeError",
+      "message": "The \"options.maxLength\" property must be of type number. Received type string ('9')",
+      "code": "ERR_INVALID_ARG_TYPE"
+     }
+    },
+    "maxLengthNegative": {
+     "error": {
+      "name": "RangeError",
+      "ctor": "RangeError",
+      "message": "The value of \"options.maxLength\" is out of range. It must be >= 0 && <= 4294967295. Received -3",
+      "code": "ERR_OUT_OF_RANGE"
+     }
+    },
+    "maxWriteFraction": {
+     "error": {
+      "name": "RangeError",
+      "ctor": "RangeError",
+      "message": "The value of \"options.maxWrite\" is out of range. It must be an integer. Received 1.5",
+      "code": "ERR_OUT_OF_RANGE"
+     }
+    },
+    "maxWriteBig": {
+     "error": {
+      "name": "RangeError",
+      "ctor": "RangeError",
+      "message": "The value of \"options.maxWrite\" is out of range. It must be >= 0 && <= 4294967295. Received 8_589_934_592",
+      "code": "ERR_OUT_OF_RANGE"
+     }
+    },
+    "periodicBig": {
+     "error": {
+      "name": "RangeError",
+      "ctor": "RangeError",
+      "message": "The value of \"options.periodicFlush\" is out of range. It must be >= 0 && <= 4294967295. Received 4294967296",
+      "code": "ERR_OUT_OF_RANGE"
+     }
+    },
+    "periodicText": {
+     "error": {
+      "name": "TypeError",
+      "ctor": "TypeError",
+      "message": "The \"options.periodicFlush\" property must be of type number. Received type string ('1')",
+      "code": "ERR_INVALID_ARG_TYPE"
+     }
+    },
+    "syncNumber": {
+     "error": {
+      "name": "TypeError",
+      "ctor": "TypeError",
+      "message": "The \"options.sync\" property must be of type boolean. Received type number (1)",
+      "code": "ERR_INVALID_ARG_TYPE"
+     }
+    },
+    "syncNull": {
+     "ok": "made"
+    },
+    "fsyncText": {
+     "error": {
+      "name": "TypeError",
+      "ctor": "TypeError",
+      "message": "The \"options.fsync\" property must be of type boolean. Received type string ('x')",
+      "code": "ERR_INVALID_ARG_TYPE"
+     }
+    },
+    "appendText": {
+     "error": {
+      "name": "TypeError",
+      "ctor": "TypeError",
+      "message": "The \"options.append\" property must be of type boolean. Received type string ('x')",
+      "code": "ERR_INVALID_ARG_TYPE"
+     }
+    },
+    "appendNull": {
+     "ok": "made"
+    },
+    "appendZero": {
+     "ok": "made"
+    },
+    "mkdirText": {
+     "error": {
+      "name": "TypeError",
+      "ctor": "TypeError",
+      "message": "The \"options.mkdir\" property must be of type boolean. Received type string ('x')",
+      "code": "ERR_INVALID_ARG_TYPE"
+     }
+    },
+    "retryNumber": {
+     "error": {
+      "name": "TypeError",
+      "ctor": "TypeError",
+      "message": "The \"options.retryEAGAIN\" property must be of type function. Received type number (1)",
+      "code": "ERR_INVALID_ARG_TYPE"
+     }
+    },
+    "contentMode": {
+     "error": {
+      "name": "TypeError",
+      "ctor": "TypeError",
+      "message": "The property 'options.contentMode' must be one of: 'buffer', 'utf8'. Received 'x'",
+      "code": "ERR_INVALID_ARG_VALUE"
+     }
+    },
+    "contentModeNull": {
+     "error": {
+      "name": "TypeError",
+      "ctor": "TypeError",
+      "message": "The property 'options.contentMode' must be one of: 'buffer', 'utf8'. Received null",
+      "code": "ERR_INVALID_ARG_VALUE"
+     }
+    },
+    "fsNumber": {
+     "error": {
+      "name": "TypeError",
+      "ctor": "TypeError",
+      "message": "The \"options.fs\" property must be of type object. Received type number (1)",
+      "code": "ERR_INVALID_ARG_TYPE"
+     }
+    },
+    "fsNull": {
+     "error": {
+      "name": "TypeError",
+      "ctor": "TypeError",
+      "message": "The \"options.fs\" property must be of type object. Received null",
+      "code": "ERR_INVALID_ARG_TYPE"
+     }
+    },
+    "fsArray": {
+     "error": {
+      "name": "TypeError",
+      "ctor": "TypeError",
+      "message": "The \"options.fs\" property must be of type object. Received an instance of Array",
+      "code": "ERR_INVALID_ARG_TYPE"
+     }
+    },
+    "fsWrite": {
+     "error": {
+      "name": "TypeError",
+      "ctor": "TypeError",
+      "message": "The \"options.fs.write\" property must be of type function. Received type number (1)",
+      "code": "ERR_INVALID_ARG_TYPE"
+     }
+    },
+    "fsWriteSync": {
+     "error": {
+      "name": "TypeError",
+      "ctor": "TypeError",
+      "message": "The \"options.fs.writeSync\" property must be of type function. Received type number (1)",
+      "code": "ERR_INVALID_ARG_TYPE"
+     }
+    },
+    "fsFsync": {
+     "error": {
+      "name": "TypeError",
+      "ctor": "TypeError",
+      "message": "The \"options.fs.fsync\" property must be of type function. Received type number (1)",
+      "code": "ERR_INVALID_ARG_TYPE"
+     }
+    },
+    "fsFsyncSync": {
+     "error": {
+      "name": "TypeError",
+      "ctor": "TypeError",
+      "message": "The \"options.fs.fsyncSync\" property must be of type function. Received type number (1)",
+      "code": "ERR_INVALID_ARG_TYPE"
+     }
+    },
+    "fsClose": {
+     "error": {
+      "name": "TypeError",
+      "ctor": "TypeError",
+      "message": "The \"options.fs.close\" property must be of type function. Received type number (1)",
+      "code": "ERR_INVALID_ARG_TYPE"
+     }
+    },
+    "fsOpen": {
+     "error": {
+      "name": "TypeError",
+      "ctor": "TypeError",
+      "message": "The \"options.fs.open\" property must be of type function. Received type number (1)",
+      "code": "ERR_INVALID_ARG_TYPE"
+     }
+    },
+    "fsMkdir": {
+     "error": {
+      "name": "TypeError",
+      "ctor": "TypeError",
+      "message": "The \"options.fs.mkdir\" property must be of type function. Received type number (1)",
+      "code": "ERR_INVALID_ARG_TYPE"
+     }
+    },
+    "fsMkdirSync": {
+     "error": {
+      "name": "TypeError",
+      "ctor": "TypeError",
+      "message": "The \"options.fs.mkdirSync\" property must be of type function. Received type number (1)",
+      "code": "ERR_INVALID_ARG_TYPE"
+     }
+    },
+    "order": {
+     "error": {
+      "name": "TypeError",
+      "ctor": "TypeError",
+      "message": "The \"options.fs\" property must be of type object. Received type number (1)",
+      "code": "ERR_INVALID_ARG_TYPE"
+     }
+    },
+    "order2": {
+     "error": {
+      "name": "RangeError",
+      "ctor": "RangeError",
+      "message": "The value of \"options.minLength\" is out of range. It must be >= 0 && <= 4294967295. Received -1",
+      "code": "ERR_OUT_OF_RANGE"
+     }
+    },
+    "order3": {
+     "error": {
+      "name": "TypeError",
+      "ctor": "TypeError",
+      "message": "The \"fd\" argument must be one of type number or string. Received type boolean (true)",
+      "code": "ERR_INVALID_ARG_TYPE"
+     }
+    },
+    "modeAny": {
+     "ok": "anything"
+    },
+    "writeNumber": {
+     "error": {
+      "name": "TypeError",
+      "ctor": "TypeError",
+      "message": "The \"data\" argument must be of type string. Received type number (1)",
+      "code": "ERR_INVALID_ARG_TYPE"
+     }
+    },
+    "writeNone": {
+     "error": {
+      "name": "TypeError",
+      "ctor": "TypeError",
+      "message": "The \"data\" argument must be of type string. Received undefined",
+      "code": "ERR_INVALID_ARG_TYPE"
+     }
+    },
+    "writeBuffer": {
+     "error": {
+      "name": "TypeError",
+      "ctor": "TypeError",
+      "message": "The \"data\" argument must be of type string. Received an instance of Buffer",
+      "code": "ERR_INVALID_ARG_TYPE"
+     }
+    },
+    "flushNumber": {
+     "error": {
+      "name": "TypeError",
+      "ctor": "TypeError",
+      "message": "The \"cb\" argument must be of type function. Received type number (1)",
+      "code": "ERR_INVALID_ARG_TYPE"
+     }
+    },
+    "flushNull": {
+     "error": {
+      "name": "TypeError",
+      "ctor": "TypeError",
+      "message": "The \"cb\" argument must be of type function. Received null",
+      "code": "ERR_INVALID_ARG_TYPE"
+     }
+    },
+    "flushNone": {},
+    "reopen": {
+     "error": {
+      "name": "Error",
+      "ctor": "Error",
+      "message": "Operation failed: Unable to reopen a file descriptor, you must pass a file to SonicBoom",
+      "code": "ERR_OPERATION_FAILED"
+     }
+    },
+    "reopenFile": {
+     "error": {
+      "name": "Error",
+      "ctor": "Error",
+      "message": "Operation failed: Unable to reopen a file descriptor, you must pass a file to SonicBoom",
+      "code": "ERR_OPERATION_FAILED"
+     }
+    },
+    "bufferText": {
+     "error": {
+      "name": "TypeError",
+      "ctor": "TypeError",
+      "message": "The \"data\" argument must be an instance of Buffer. Received type string ('x')",
+      "code": "ERR_INVALID_ARG_TYPE"
+     }
+    },
+    "bufferBytes": {
+     "error": {
+      "name": "TypeError",
+      "ctor": "TypeError",
+      "message": "The \"data\" argument must be an instance of Buffer. Received an instance of Uint8Array",
+      "code": "ERR_INVALID_ARG_TYPE"
+     }
+    },
+    "bufferNone": {
+     "error": {
+      "name": "TypeError",
+      "ctor": "TypeError",
+      "message": "The \"data\" argument must be an instance of Buffer. Received undefined",
+      "code": "ERR_INVALID_ARG_TYPE"
+     }
+    },
+    "bufferFlush": {
+     "error": {
+      "name": "TypeError",
+      "ctor": "TypeError",
+      "message": "The \"cb\" argument must be of type function. Received type number (1)",
+      "code": "ERR_INVALID_ARG_TYPE"
+     }
+    },
+    "bufferMode": "buffer"
+   }
+  },
+  "write-during-flush": {
+   "source": "const U = fs.Utf8Stream, f = h.dir + \"/a.log\";\nconst s = new U({ dest: f, minLength: 50 }), seen = h.log(s);\nawait h.event(s, \"ready\");\ns.write(\"a\\n\");\nconst first = new Promise(resolve => s.flush((...args) => { seen.push([\"flush 1\", ...args.map(h.show), h.text(f)]); resolve(); }));\nseen.push([\"writing\", s.writing]);\ns.write(\"b\\n\");\nconst second = new Promise(resolve => s.flush((...args) => { seen.push([\"flush 2\", ...args.map(h.show), h.text(f)]); resolve(); }));\ns.write(\"c\\n\");\nawait first; await second;\nawait h.turns();\nconst middle = h.text(f);\ns.end();\nawait h.event(s, \"close\");\nreturn { seen, middle, text: h.text(f) };",
+   "result": {
+    "seen": [
+     [
+      "ready"
+     ],
+     [
+      "writing",
+      true
+     ],
+     [
+      "write",
+      2
+     ],
+     [
+      "drain"
+     ],
+     [
+      "flush 1",
+      null,
+      "a\n"
+     ],
+     [
+      "flush 2",
+      null,
+      "a\n"
+     ],
+     [
+      "write",
+      4
+     ],
+     [
+      "finish"
+     ],
+     [
+      "close"
+     ]
+    ],
+    "middle": "a\n",
+    "text": "a\nb\nc\n"
+   }
+  }
+ },
+ "lifetime": {
+  "pending-write": {
+   "source": "const fs = require(\"fs\"); const s = new fs.Utf8Stream({ dest: \"/work/lifetime/a.log\" }); for (let i = 0; i < 64; i += 1) s.write(\"x\".repeat(16383) + \"\\n\"); process.on(\"exit\", () => console.log(JSON.stringify({ size: fs.statSync(\"/work/lifetime/a.log\").size, writing: s.writing })));",
+   "status": 0,
+   "signal": null,
+   "stdout": "{\"size\":1048576,\"writing\":false}",
+   "stderr": []
+  },
+  "buffered-at-exit": {
+   "source": "const fs = require(\"fs\"); const started = Date.now(); const s = new fs.Utf8Stream({ dest: \"/work/lifetime/b.log\", minLength: 100, periodicFlush: 60000 }); s.write(\"never written\\n\"); process.on(\"exit\", () => console.log(JSON.stringify({ size: fs.statSync(\"/work/lifetime/b.log\").size, early: Date.now() - started < 5000 })));",
+   "status": 0,
+   "signal": null,
+   "stdout": "{\"size\":0,\"early\":true}",
+   "stderr": []
+  },
+  "retry-timer": {
+   "source": "const fs = require(\"fs\"); let fail = true; const s = new fs.Utf8Stream({ dest: \"/work/lifetime/c.log\", fs: { write(fd, data, encoding, callback) { if (fail) { fail = false; callback(Object.assign(new Error(\"again\"), { code: \"EAGAIN\" })); return; } fs.write(fd, data, null, encoding, callback); } } }); s.write(\"after the retry\\n\"); process.on(\"exit\", () => console.log(JSON.stringify({ text: fs.readFileSync(\"/work/lifetime/c.log\", \"utf8\") })));",
+   "status": 0,
+   "signal": null,
+   "stdout": "{\"text\":\"after the retry\\n\"}",
+   "stderr": []
+  },
+  "pending-flush": {
+   "source": "const fs = require(\"fs\"); const s = new fs.Utf8Stream({ dest: \"/work/lifetime/d.log\", minLength: 100 }); s.write(\"flushed\\n\"); let called = false; s.flush(() => { called = true; }); process.on(\"exit\", () => console.log(JSON.stringify({ called, text: fs.readFileSync(\"/work/lifetime/d.log\", \"utf8\") })));",
+   "status": 0,
+   "signal": null,
+   "stdout": "{\"called\":true,\"text\":\"flushed\\n\"}",
+   "stderr": []
+  },
+  "periodic-flush-crash": {
+   "source": "const fs = require(\"fs\"); const s = new fs.Utf8Stream({ dest: \"/work/lifetime/e.log\", minLength: 100, periodicFlush: 50 }); s.write(\"x\\n\"); setTimeout(() => console.log(\"survived\"), 200);",
+   "status": 1,
+   "signal": null,
+   "stdout": "",
+   "stderr": [
+    "TypeError [ERR_INVALID_ARG_TYPE]: The \"cb\" argument must be of type function. Received null",
+    "code: 'ERR_INVALID_ARG_TYPE'"
+   ]
+  }
+ }
+}

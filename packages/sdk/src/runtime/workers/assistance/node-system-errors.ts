@@ -88,6 +88,21 @@ export const SYSTEM_ERROR_MESSAGES: Readonly<Record<string, string>> = {
   EOF: "end of file",
 };
 
+/** libuv's error numbers on Linux, keyed by error name, in the order Node.js 24.18.1 iterates
+ * `util.getSystemErrorMap()`. `node-system-errors.test.ts` and `node-util-system.test.ts` keep it equal to the recorded controls. */
+export const SYSTEM_ERROR_NUMBERS: Readonly<Record<string, number>> = {
+  E2BIG: -7, EACCES: -13, EADDRINUSE: -98, EADDRNOTAVAIL: -99, EAFNOSUPPORT: -97, EAGAIN: -11, EAI_ADDRFAMILY: -3000, EAI_AGAIN: -3001,
+  EAI_BADFLAGS: -3002, EAI_BADHINTS: -3013, EAI_CANCELED: -3003, EAI_FAIL: -3004, EAI_FAMILY: -3005, EAI_MEMORY: -3006, EAI_NODATA: -3007,
+  EAI_NONAME: -3008, EAI_OVERFLOW: -3009, EAI_PROTOCOL: -3014, EAI_SERVICE: -3010, EAI_SOCKTYPE: -3011, EALREADY: -114, EBADF: -9, EBUSY: -16,
+  ECANCELED: -125, ECHARSET: -4080, ECONNABORTED: -103, ECONNREFUSED: -111, ECONNRESET: -104, EDESTADDRREQ: -89, EEXIST: -17, EFAULT: -14,
+  EFBIG: -27, EHOSTUNREACH: -113, EINTR: -4, EINVAL: -22, EIO: -5, EISCONN: -106, EISDIR: -21, ELOOP: -40, EMFILE: -24, EMSGSIZE: -90,
+  ENAMETOOLONG: -36, ENETDOWN: -100, ENETUNREACH: -101, ENFILE: -23, ENOBUFS: -105, ENODEV: -19, ENOENT: -2, ENOMEM: -12, ENONET: -64,
+  ENOPROTOOPT: -92, ENOSPC: -28, ENOSYS: -38, ENOTCONN: -107, ENOTDIR: -20, ENOTEMPTY: -39, ENOTSOCK: -88, ENOTSUP: -95, EOVERFLOW: -75, EPERM: -1,
+  EPIPE: -32, EPROTO: -71, EPROTONOSUPPORT: -93, EPROTOTYPE: -91, ERANGE: -34, EROFS: -30, ESHUTDOWN: -108, ESPIPE: -29, ESRCH: -3, ETIMEDOUT: -110,
+  ETXTBSY: -26, EXDEV: -18, UNKNOWN: -4094, EOF: -4095, ENXIO: -6, EMLINK: -31, EHOSTDOWN: -112, EREMOTEIO: -121, ENOTTY: -25, EFTYPE: -4028,
+  EILSEQ: -84, ESOCKTNOSUPPORT: -94, ENODATA: -61, EUNATCH: -49, ENOEXEC: -8,
+};
+
 /** The message of Node's `uvException`: `CODE: description, syscall 'path' -> 'dest'`. A code libuv does not name
  * keeps the short `CODE: syscall` form. */
 export function systemErrorMessage(code: string, syscall: string, path: string | null, destination: string | null): string {

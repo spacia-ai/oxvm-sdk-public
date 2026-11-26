@@ -47,6 +47,11 @@ function writeNanoTime(writer: Writer, time: LinuxNanoTime): Writer {
   if (seconds < I64_MIN || seconds > I64_MAX) invalid("A Linux time must fit signed 64-bit seconds");
   return writer.u64(BigInt.asUintN(64, seconds)).u64(remainder);
 }
+/** A uid or gid as chown takes it: 0 to 2^32-1, or -1 for "leave this ID unchanged", which Linux reads as `(uid_t)-1`. */
+function idArgument(id: number, label: string): number {
+  if (!Number.isSafeInteger(id) || id < -1 || id > 0xffff_ffff) invalid(`${label} must be an integer from -1 to 4294967295`);
+  return id === -1 ? 0xffff_ffff : id;
+}
 function decodeTarget(result: LinuxResult): Uint8Array {
   if (result.bytes.byteLength === 0 || result.bytes.byteLength > 4095 || result.value !== BigInt(result.bytes.byteLength)) protocol("Invalid Linux readlinkat result");
   return result.bytes.slice();
@@ -116,6 +121,12 @@ export const atFileOperations = {
   /** OXJR 65551: dirfd, path (empty with AT_EMPTY_PATH), access and modification as seconds and nanoseconds, flags. */
   utimensAt: (at: number, path: LinuxPath, access: LinuxNanoTime, modification: LinuxNanoTime, flags = 0): LinuxOperation<void> =>
     operation(65551, writeNanoTime(writeNanoTime(new Writer().u64(dir(at)).path(path), access), modification).u64(flagsArgument(flags, "utimensat flags")), noValue),
+  /** OXJR 260 (Userspace API 154): dirfd, path, uid, gid (four bytes each), flags. chown sends no flags and lchown AT_SYMLINK_NOFOLLOW (0x100). */
+  chownAt: (at: number, path: LinuxPath, uid: number, gid: number, flags = 0): LinuxOperation<void> =>
+    operation(260, new Writer().u64(dir(at)).path(path).u32(idArgument(uid, "A chown uid")).u32(idArgument(gid, "A chown gid")).u64(flagsArgument(flags, "fchownat flags")), noValue),
+  /** OXJR 93 (Userspace API 154): fd, uid, gid. */
+  fchown: (fd: number, uid: number, gid: number): LinuxOperation<void> =>
+    operation(93, new Writer().u64(fdOf(fd)).u32(idArgument(uid, "A chown uid")).u32(idArgument(gid, "A chown gid")), noValue),
   /** OXJR 17: fd, count, offset; the bytes read, never more than asked. */
   pread: (fd: number, count: number, offset: bigint): LinuxOperation<Uint8Array> =>
     operation(17, new Writer().u64(fdOf(fd)).u64(countArgument(count, "A pread count", 0, JS_MAX_IO_BYTES)).u64(offsetArgument(offset)), result => {

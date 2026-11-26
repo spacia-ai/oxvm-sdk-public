@@ -1,5 +1,9 @@
+import type { Inspect } from "./node-arg-type.ts";
+import { matchGlob } from "./node-path-glob.ts";
+import { createNodeWin32Path } from "./node-path-win32.ts";
+
 /** POSIX string operations only. Resolution never reads or caches Linux files. */
-export function createNodePath(cwd: () => string) {
+export function createNodePath(cwd: () => string, inspect: Inspect = plainInspect) {
   const resolve = (...values: unknown[]): string => {
     const paths = values.map(pathString);
     let combined = "";
@@ -46,11 +50,19 @@ export function createNodePath(cwd: () => string) {
       return dir === "" ? base : dir === root ? dir + base : `${dir}/${base}`;
     },
     toNamespacedPath: (value: unknown): unknown => value,
+    matchesGlob: (path: unknown, pattern: unknown): boolean => matchGlob(path, pattern, false, inspect),
   };
-  // shortcut: win32 exposes platform constants; add its string operations when a qualified workload calls them.
-  return Object.assign(api, { posix: api, win32: { sep: "\\", delimiter: ";" } });
+  // Node links the two flavours to each other and keeps `_makeLong` as the old name of `toNamespacedPath`.
+  const win32 = createNodeWin32Path(cwd, inspect);
+  const linked = Object.assign(win32, { win32, posix: api, _makeLong: win32.toNamespacedPath });
+  return Object.assign(api, { win32: linked, posix: api, _makeLong: api.toNamespacedPath });
 }
 
+/** Stands in for `util.inspect` where the process supplies none. Node's argument errors only inspect a value that has no
+ * named constructor (a null-prototype object), so this module keeps clear of the whole inspection graph. */
+function plainInspect(value: unknown): string {
+  return typeof value === "object" && value !== null ? Object.prototype.toString.call(value) : String(value);
+}
 function pathString(value: unknown): string {
   if (typeof value !== "string") throw invalid();
   return value;

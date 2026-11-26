@@ -1,0 +1,390 @@
+{
+ "//": "Recorded from Node.js v24.18.1: docker run --rm -v $PWD:/w node:24.18.1-alpine node /w/rec-trace.cjs (the script under \"recorder\"). `emptyCategory` and `worker` were recorded with one-line `node -e` runs: a Tracing object whose only category is '' reports no enabled category, and require('trace_events') in a worker thread throws.",
+ "recorder": "const te = require('trace_events'); const util = require('util');\nfunction shape(target) { return Object.fromEntries(Reflect.ownKeys(target).map(key => { const d = Object.getOwnPropertyDescriptor(target, key), v = d.value; return [String(key), [typeof v, typeof v === 'function' ? v.name : null, typeof v === 'function' ? v.length : null, d.enumerable, d.writable ?? null, d.configurable, typeof d.get, typeof d.set]]; })); }\nfunction outcome(run) { try { const v = run(); return { ok: v === undefined ? '$undefined' : v }; } catch (e) { return { error: { name: e.name, code: e.code, message: e.message, ctor: e.constructor.name } }; } }\nconst out = { node: process.version, keys: Object.keys(te), shape: shape(te) };\nout.initial = outcome(() => te.getEnabledCategories());\nconst bad = { noArgs: [], undef: [undefined], nul: [null], num: [1], str: ['x'], arr: [[]], fn: [() => {}], noCats: [{}], catsStr: [{ categories: 'a' }], catsNull: [{ categories: null }], catsObj: [{ categories: {} }], empty: [{ categories: [] }], nonString: [{ categories: [1, {}] }], emptyString: [{ categories: [''] }], sym: [{ categories: [Symbol('x')] }] };\nout.validation = Object.fromEntries(Object.entries(bad).map(([k, a]) => [k, outcome(() => { const t = te.createTracing(...a); return { categories: t.categories, enabled: t.enabled }; })]));\nconst t = te.createTracing({ categories: ['node.perf', 'v8', 'node.perf'] });\nconst proto = Object.getPrototypeOf(t);\nout.tracing = { ctor: t.constructor.name, ctorLength: t.constructor.length, protoShape: shape(proto), ownKeys: Reflect.ownKeys(t).map(String), tag: Object.prototype.toString.call(t), inspect: util.inspect(t), inspectDepthNeg: util.inspect(t, { depth: -1 }), inspectNested: util.inspect({ t }, { depth: 0 }), json: JSON.stringify(t), categories: t.categories, enabled: t.enabled,\n  newDirect: outcome(() => { const x = new t.constructor(['a']); return { c: x.categories, e: x.enabled }; }), callDirect: outcome(() => t.constructor(['a'])),\n  setEnabled: outcome(() => { 'use strict'; t.enabled = true; return t.enabled; }), setCats: outcome(() => { 'use strict'; t.categories = 'x'; return t.categories; }) };\nconst seq = [];\nseq.push(['enable', outcome(() => t.enable()), t.enabled, outcome(() => te.getEnabledCategories())]);\nseq.push(['enable again', outcome(() => t.enable()), t.enabled, outcome(() => te.getEnabledCategories())]);\nconst u = te.createTracing({ categories: ['v8', 'node.async_hooks', 'custom'] });\nseq.push(['u created', null, u.enabled, outcome(() => te.getEnabledCategories())]);\nu.enable(); seq.push(['u enable', null, u.enabled, outcome(() => te.getEnabledCategories())]);\nt.disable(); seq.push(['t disable', null, t.enabled, outcome(() => te.getEnabledCategories())]);\nseq.push(['t disable again', outcome(() => t.disable()), t.enabled, outcome(() => te.getEnabledCategories())]);\nu.disable(); seq.push(['u disable', null, u.enabled, outcome(() => te.getEnabledCategories())]);\nconst w = te.createTracing({ categories: ['b', 'a', 'b', ' c '] }); w.enable(); seq.push(['w', w.categories, w.enabled, outcome(() => te.getEnabledCategories())]);\nconst z = te.createTracing({ categories: ['z', 'a'] }); z.enable(); seq.push(['z', z.categories, z.enabled, outcome(() => te.getEnabledCategories())]); w.disable(); z.disable();\nout.sequence = seq;\nout.detached = { enable: outcome(() => proto.enable.call({})), enabledGet: outcome(() => Object.getOwnPropertyDescriptor(proto, 'enabled').get.call({})), inspectProto: outcome(() => util.inspect(proto)) };\nconst inspectSym = Reflect.ownKeys(proto).find(k => typeof k === 'symbol'); out.inspectSymbol = String(inspectSym);\nout.customInspect = { neg: outcome(() => proto[inspectSym].call(t, -1, {})), zero: outcome(() => proto[inspectSym].call(t, 0, {})), ctx: outcome(() => proto[inspectSym].call(t, 2, { depth: 0 })), badCtx: outcome(() => proto[inspectSym].call(t, 2, 1)) };\n// many: warning on > 10 enabled\nconst warnings = []; process.on('warning', w2 => warnings.push({ name: w2.name, message: w2.message, code: w2.code }));\nconst many = []; for (let i = 0; i < 12; i++) { const m = te.createTracing({ categories: ['m' + i] }); m.enable(); many.push(m); }\nout.manyCategories = te.getEnabledCategories(); many.forEach(m => m.disable());\nsetImmediate(() => { out.warnings = warnings; console.log(JSON.stringify(out)); });\n",
+ "node": "v24.18.1",
+ "keys": [
+  "createTracing",
+  "getEnabledCategories"
+ ],
+ "shape": {
+  "createTracing": [
+   "function",
+   "createTracing",
+   1,
+   true,
+   true,
+   true,
+   "undefined",
+   "undefined"
+  ],
+  "getEnabledCategories": [
+   "function",
+   "getEnabledCategories",
+   0,
+   true,
+   true,
+   true,
+   "undefined",
+   "undefined"
+  ]
+ },
+ "initial": {
+  "ok": "$undefined"
+ },
+ "validation": {
+  "noArgs": {
+   "error": {
+    "name": "TypeError",
+    "code": "ERR_INVALID_ARG_TYPE",
+    "message": "The \"options\" argument must be of type object. Received undefined",
+    "ctor": "TypeError"
+   }
+  },
+  "undef": {
+   "error": {
+    "name": "TypeError",
+    "code": "ERR_INVALID_ARG_TYPE",
+    "message": "The \"options\" argument must be of type object. Received undefined",
+    "ctor": "TypeError"
+   }
+  },
+  "nul": {
+   "error": {
+    "name": "TypeError",
+    "code": "ERR_INVALID_ARG_TYPE",
+    "message": "The \"options\" argument must be of type object. Received null",
+    "ctor": "TypeError"
+   }
+  },
+  "num": {
+   "error": {
+    "name": "TypeError",
+    "code": "ERR_INVALID_ARG_TYPE",
+    "message": "The \"options\" argument must be of type object. Received type number (1)",
+    "ctor": "TypeError"
+   }
+  },
+  "str": {
+   "error": {
+    "name": "TypeError",
+    "code": "ERR_INVALID_ARG_TYPE",
+    "message": "The \"options\" argument must be of type object. Received type string ('x')",
+    "ctor": "TypeError"
+   }
+  },
+  "arr": {
+   "error": {
+    "name": "TypeError",
+    "code": "ERR_INVALID_ARG_TYPE",
+    "message": "The \"options\" argument must be of type object. Received an instance of Array",
+    "ctor": "TypeError"
+   }
+  },
+  "fn": {
+   "error": {
+    "name": "TypeError",
+    "code": "ERR_INVALID_ARG_TYPE",
+    "message": "The \"options\" argument must be of type object. Received function ",
+    "ctor": "TypeError"
+   }
+  },
+  "noCats": {
+   "error": {
+    "name": "TypeError",
+    "code": "ERR_INVALID_ARG_TYPE",
+    "message": "The \"options.categories\" property must be an instance of Array. Received undefined",
+    "ctor": "TypeError"
+   }
+  },
+  "catsStr": {
+   "error": {
+    "name": "TypeError",
+    "code": "ERR_INVALID_ARG_TYPE",
+    "message": "The \"options.categories\" property must be an instance of Array. Received type string ('a')",
+    "ctor": "TypeError"
+   }
+  },
+  "catsNull": {
+   "error": {
+    "name": "TypeError",
+    "code": "ERR_INVALID_ARG_TYPE",
+    "message": "The \"options.categories\" property must be an instance of Array. Received null",
+    "ctor": "TypeError"
+   }
+  },
+  "catsObj": {
+   "error": {
+    "name": "TypeError",
+    "code": "ERR_INVALID_ARG_TYPE",
+    "message": "The \"options.categories\" property must be an instance of Array. Received an instance of Object",
+    "ctor": "TypeError"
+   }
+  },
+  "empty": {
+   "error": {
+    "name": "TypeError",
+    "code": "ERR_TRACE_EVENTS_CATEGORY_REQUIRED",
+    "message": "At least one category is required",
+    "ctor": "TypeError"
+   }
+  },
+  "nonString": {
+   "error": {
+    "name": "TypeError",
+    "code": "ERR_INVALID_ARG_TYPE",
+    "message": "The \"options.categories[0]\" property must be of type string. Received type number (1)",
+    "ctor": "TypeError"
+   }
+  },
+  "emptyString": {
+   "ok": {
+    "categories": "",
+    "enabled": false
+   }
+  },
+  "sym": {
+   "error": {
+    "name": "TypeError",
+    "code": "ERR_INVALID_ARG_TYPE",
+    "message": "The \"options.categories[0]\" property must be of type string. Received type symbol (Symbol(x))",
+    "ctor": "TypeError"
+   }
+  }
+ },
+ "tracing": {
+  "ctor": "Tracing",
+  "ctorLength": 1,
+  "protoShape": {
+   "constructor": [
+    "function",
+    "Tracing",
+    1,
+    false,
+    true,
+    true,
+    "undefined",
+    "undefined"
+   ],
+   "enable": [
+    "function",
+    "enable",
+    0,
+    false,
+    true,
+    true,
+    "undefined",
+    "undefined"
+   ],
+   "disable": [
+    "function",
+    "disable",
+    0,
+    false,
+    true,
+    true,
+    "undefined",
+    "undefined"
+   ],
+   "enabled": [
+    "undefined",
+    null,
+    null,
+    false,
+    null,
+    true,
+    "function",
+    "undefined"
+   ],
+   "categories": [
+    "undefined",
+    null,
+    null,
+    false,
+    null,
+    true,
+    "function",
+    "undefined"
+   ],
+   "Symbol(nodejs.util.inspect.custom)": [
+    "function",
+    "[nodejs.util.inspect.custom]",
+    2,
+    false,
+    true,
+    true,
+    "undefined",
+    "undefined"
+   ]
+  },
+  "ownKeys": [],
+  "tag": "[object Object]",
+  "inspect": "Tracing { enabled: false, categories: 'node.perf,v8,node.perf' }",
+  "inspectDepthNeg": "Tracing {}",
+  "inspectNested": "{ t: Tracing {} }",
+  "json": "{}",
+  "categories": "node.perf,v8,node.perf",
+  "enabled": false,
+  "newDirect": {
+   "ok": {
+    "c": "a",
+    "e": false
+   }
+  },
+  "callDirect": {
+   "error": {
+    "name": "TypeError",
+    "message": "Class constructor Tracing cannot be invoked without 'new'",
+    "ctor": "TypeError"
+   }
+  },
+  "setEnabled": {
+   "error": {
+    "name": "TypeError",
+    "message": "Cannot set property enabled of #<Tracing> which has only a getter",
+    "ctor": "TypeError"
+   }
+  },
+  "setCats": {
+   "error": {
+    "name": "TypeError",
+    "message": "Cannot set property categories of #<Tracing> which has only a getter",
+    "ctor": "TypeError"
+   }
+  }
+ },
+ "sequence": [
+  [
+   "enable",
+   {
+    "ok": "$undefined"
+   },
+   true,
+   {
+    "ok": "node.perf,v8"
+   }
+  ],
+  [
+   "enable again",
+   {
+    "ok": "$undefined"
+   },
+   true,
+   {
+    "ok": "node.perf,v8"
+   }
+  ],
+  [
+   "u created",
+   null,
+   false,
+   {
+    "ok": "node.perf,v8"
+   }
+  ],
+  [
+   "u enable",
+   null,
+   true,
+   {
+    "ok": "custom,node.async_hooks,node.perf,v8"
+   }
+  ],
+  [
+   "t disable",
+   null,
+   false,
+   {
+    "ok": "custom,node.async_hooks,v8"
+   }
+  ],
+  [
+   "t disable again",
+   {
+    "ok": "$undefined"
+   },
+   false,
+   {
+    "ok": "custom,node.async_hooks,v8"
+   }
+  ],
+  [
+   "u disable",
+   null,
+   false,
+   {
+    "ok": "$undefined"
+   }
+  ],
+  [
+   "w",
+   "b,a,b, c ",
+   true,
+   {
+    "ok": " c ,a,b"
+   }
+  ],
+  [
+   "z",
+   "z,a",
+   true,
+   {
+    "ok": " c ,a,b,z"
+   }
+  ]
+ ],
+ "detached": {
+  "enable": {
+   "error": {
+    "name": "TypeError",
+    "message": "Cannot read private member #enabled from an object whose class did not declare it",
+    "ctor": "TypeError"
+   }
+  },
+  "enabledGet": {
+   "error": {
+    "name": "TypeError",
+    "message": "Cannot read private member #enabled from an object whose class did not declare it",
+    "ctor": "TypeError"
+   }
+  },
+  "inspectProto": {
+   "ok": "{}"
+  }
+ },
+ "inspectSymbol": "Symbol(nodejs.util.inspect.custom)",
+ "customInspect": {
+  "neg": {
+   "ok": {}
+  },
+  "zero": {
+   "ok": "Tracing { enabled: false, categories: 'node.perf,v8,node.perf' }"
+  },
+  "ctx": {
+   "ok": "Tracing { enabled: false, categories: 'node.perf,v8,node.perf' }"
+  },
+  "badCtx": {
+   "ok": "Tracing { enabled: false, categories: 'node.perf,v8,node.perf' }"
+  }
+ },
+ "manyCategories": "m0,m1,m10,m11,m2,m3,m4,m5,m6,m7,m8,m9",
+ "warnings": [
+  {
+   "name": "Warning",
+   "message": "Possible trace_events memory leak detected. There are more than 10 enabled Tracing objects."
+  },
+  {
+   "name": "Warning",
+   "message": "Possible trace_events memory leak detected. There are more than 10 enabled Tracing objects."
+  }
+ ],
+ "emptyCategory": {
+  "enabledAlone": "$undefined",
+  "sharedCategoryAfterOneDisable": "a",
+  "afterBothDisabled": "$undefined"
+ },
+ "worker": {
+  "name": "Error",
+  "code": "ERR_TRACE_EVENTS_UNAVAILABLE",
+  "message": "Trace events are unavailable"
+ }
+}

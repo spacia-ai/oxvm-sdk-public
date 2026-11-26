@@ -1,0 +1,779 @@
+{
+ "node": {
+  "version": "v24.18.1",
+  "image": "node:24.18.1-alpine"
+ },
+ "modules": {
+  "_http_agent": [
+   [
+    "Agent",
+    "function",
+    "Agent",
+    1
+   ],
+   [
+    "globalAgent",
+    "object",
+    null,
+    null
+   ]
+  ],
+  "_http_client": [
+   [
+    "ClientRequest",
+    "function",
+    "ClientRequest",
+    3
+   ]
+  ],
+  "_http_common": [
+   [
+    "_checkInvalidHeaderChar",
+    "function",
+    "checkInvalidHeaderChar",
+    1
+   ],
+   [
+    "_checkIsHttpToken",
+    "function",
+    "checkIsHttpToken",
+    1
+   ],
+   [
+    "chunkExpression",
+    "object",
+    null,
+    null
+   ],
+   [
+    "continueExpression",
+    "object",
+    null,
+    null
+   ],
+   [
+    "CRLF",
+    "string",
+    null,
+    null
+   ],
+   [
+    "freeParser",
+    "function",
+    "freeParser",
+    3
+   ],
+   [
+    "methods",
+    "object",
+    null,
+    null
+   ],
+   [
+    "parsers",
+    "object",
+    null,
+    null
+   ],
+   [
+    "kIncomingMessage",
+    "symbol",
+    null,
+    null
+   ],
+   [
+    "HTTPParser",
+    "function",
+    "HTTPParser",
+    0
+   ],
+   [
+    "isLenient",
+    "function",
+    "isLenient",
+    0
+   ],
+   [
+    "prepareError",
+    "function",
+    "prepareError",
+    3
+   ],
+   [
+    "kSkipPendingData",
+    "symbol",
+    null,
+    null
+   ]
+  ],
+  "_http_incoming": [
+   [
+    "IncomingMessage",
+    "function",
+    "IncomingMessage",
+    1
+   ],
+   [
+    "readStart",
+    "function",
+    "readStart",
+    1
+   ],
+   [
+    "readStop",
+    "function",
+    "readStop",
+    1
+   ]
+  ],
+  "_http_outgoing": [
+   [
+    "kHighWaterMark",
+    "symbol",
+    null,
+    null
+   ],
+   [
+    "kUniqueHeaders",
+    "symbol",
+    null,
+    null
+   ],
+   [
+    "parseUniqueHeadersOption",
+    "function",
+    "parseUniqueHeadersOption",
+    1
+   ],
+   [
+    "validateHeaderName",
+    "function",
+    "validateHeaderName",
+    0
+   ],
+   [
+    "validateHeaderValue",
+    "function",
+    "validateHeaderValue",
+    0
+   ],
+   [
+    "OutgoingMessage",
+    "function",
+    "OutgoingMessage",
+    1
+   ]
+  ],
+  "_http_server": [
+   [
+    "STATUS_CODES",
+    "object",
+    null,
+    null
+   ],
+   [
+    "Server",
+    "function",
+    "Server",
+    2
+   ],
+   [
+    "ServerResponse",
+    "function",
+    "ServerResponse",
+    2
+   ],
+   [
+    "setupConnectionsTracking",
+    "function",
+    "setupConnectionsTracking",
+    0
+   ],
+   [
+    "storeHTTPOptions",
+    "function",
+    "storeHTTPOptions",
+    1
+   ],
+   [
+    "_connectionListener",
+    "function",
+    "connectionListener",
+    1
+   ],
+   [
+    "kServerResponse",
+    "symbol",
+    null,
+    null
+   ],
+   [
+    "httpServerPreClose",
+    "function",
+    "httpServerPreClose",
+    1
+   ],
+   [
+    "kConnectionsCheckingInterval",
+    "symbol",
+    null,
+    null
+   ]
+  ]
+ },
+ "identity": {
+  "Agent": true,
+  "globalAgent": true,
+  "ClientRequest": true,
+  "IncomingMessage": true,
+  "OutgoingMessage": true,
+  "validateHeaderName": true,
+  "validateHeaderValue": true,
+  "STATUS_CODES": true,
+  "Server": true,
+  "ServerResponse": true,
+  "_connectionListener": true,
+  "methods": false,
+  "methodsEqual": false
+ },
+ "common": {
+  "CRLF": "\r\n",
+  "chunkExpression": "/(?:^|\\W)chunked(?:$|\\W)/i",
+  "continueExpression": "/(?:^|\\W)100-continue(?:$|\\W)/i",
+  "kIncomingMessage": "Symbol(IncomingMessage)",
+  "kSkipPendingData": "Symbol(SkipPendingData)",
+  "parsers": "FreeList",
+  "isLenient": false,
+  "token": [
+   [
+    "abc",
+    true
+   ],
+   [
+    "a b",
+    false
+   ],
+   [
+    "",
+    false
+   ],
+   [
+    "a:b",
+    false
+   ],
+   [
+    "A-b_c!",
+    true
+   ],
+   [
+    "é",
+    false
+   ],
+   [
+    "a\tb",
+    false
+   ],
+   [
+    "(x)",
+    false
+   ],
+   [
+    "x-y.z~|^`*+'&%$#",
+    true
+   ]
+  ],
+  "invalidChar": [
+   [
+    "abc",
+    false
+   ],
+   [
+    "a\nb",
+    true
+   ],
+   [
+    "a\tb",
+    false
+   ],
+   [
+    "é",
+    false
+   ],
+   [
+    "Ā",
+    true
+   ],
+   [
+    "ab",
+    true
+   ],
+   [
+    "",
+    false
+   ],
+   [
+    "a\u0000b",
+    true
+   ],
+   [
+    "a\rb",
+    true
+   ],
+   [
+    "ÿ",
+    false
+   ]
+  ],
+  "tokenLoose": [
+   {
+    "error": {
+     "name": "TypeError",
+     "code": null,
+     "message": "Cannot read properties of undefined (reading 'length')",
+     "ctor": "TypeError"
+    }
+   },
+   {
+    "error": {
+     "name": "TypeError",
+     "code": null,
+     "message": "Cannot read properties of null (reading 'length')",
+     "ctor": "TypeError"
+    }
+   },
+   {
+    "value": true
+   }
+  ],
+  "charLoose": [
+   {
+    "value": false
+   },
+   {
+    "value": false
+   },
+   {
+    "value": false
+   }
+  ]
+ },
+ "outgoing": {
+  "kHighWaterMark": "Symbol(kHighWaterMark)",
+  "kUniqueHeaders": "Symbol(kUniqueHeaders)",
+  "unique": [
+   {
+    "arg": {
+     "$": "undefined"
+    },
+    "value": null
+   },
+   {
+    "arg": null,
+    "value": null
+   },
+   {
+    "arg": [
+     "A",
+     "b"
+    ],
+    "value": "object"
+   },
+   {
+    "arg": [
+     "a",
+     [
+      "B",
+      "c"
+     ]
+    ],
+    "error": {
+     "name": "TypeError",
+     "code": null,
+     "message": "headers[i].toLowerCase is not a function",
+     "ctor": "TypeError"
+    }
+   },
+   {
+    "arg": [],
+    "value": "object"
+   },
+   {
+    "arg": "x",
+    "value": null
+   },
+   {
+    "arg": 1,
+    "value": null
+   },
+   {
+    "arg": [
+     1
+    ],
+    "error": {
+     "name": "TypeError",
+     "code": null,
+     "message": "headers[i].toLowerCase is not a function",
+     "ctor": "TypeError"
+    }
+   },
+   {
+    "arg": {},
+    "value": null
+   }
+  ]
+ },
+ "server": {
+  "kServerResponse": "Symbol(ServerResponse)",
+  "kConnectionsCheckingInterval": "Symbol(http.server.connectionsCheckingInterval)"
+ },
+ "connectionListener": {
+  "name": "connectionListener",
+  "length": 1,
+  "isServerListener": true
+ },
+ "setGlobalProxyFromEnv": {
+  "name": "setGlobalProxyFromEnv",
+  "length": 0
+ },
+ "proxy": [
+  {
+   "env": {},
+   "value": {
+    "type": "function",
+    "name": "",
+    "length": 0,
+    "changed": [
+     false,
+     false
+    ],
+    "restored": [
+     true,
+     true
+    ],
+    "back": {
+     "$": "undefined"
+    }
+   }
+  },
+  {
+   "env": {
+    "HTTP_PROXY": ""
+   },
+   "value": {
+    "type": "function",
+    "name": "",
+    "length": 0,
+    "changed": [
+     false,
+     false
+    ],
+    "restored": [
+     true,
+     true
+    ],
+    "back": {
+     "$": "undefined"
+    }
+   }
+  },
+  {
+   "env": {
+    "NO_PROXY": "x"
+   },
+   "value": {
+    "type": "function",
+    "name": "",
+    "length": 0,
+    "changed": [
+     false,
+     false
+    ],
+    "restored": [
+     true,
+     true
+    ],
+    "back": {
+     "$": "undefined"
+    }
+   }
+  },
+  {
+   "env": {
+    "http_proxy": "http://p:1"
+   },
+   "value": {
+    "type": "function",
+    "name": "restore",
+    "length": 0,
+    "changed": [
+     true,
+     false
+    ],
+    "restored": [
+     true,
+     true
+    ],
+    "back": {
+     "$": "undefined"
+    }
+   }
+  },
+  {
+   "env": {
+    "HTTP_PROXY": "http://p:1"
+   },
+   "value": {
+    "type": "function",
+    "name": "restore",
+    "length": 0,
+    "changed": [
+     true,
+     false
+    ],
+    "restored": [
+     true,
+     true
+    ],
+    "back": {
+     "$": "undefined"
+    }
+   }
+  },
+  {
+   "env": {
+    "HTTPS_PROXY": "http://p:1"
+   },
+   "value": {
+    "type": "function",
+    "name": "restore",
+    "length": 0,
+    "changed": [
+     false,
+     true
+    ],
+    "restored": [
+     true,
+     true
+    ],
+    "back": {
+     "$": "undefined"
+    }
+   }
+  },
+  {
+   "env": {
+    "https_proxy": "http://p:1"
+   },
+   "value": {
+    "type": "function",
+    "name": "restore",
+    "length": 0,
+    "changed": [
+     false,
+     true
+    ],
+    "restored": [
+     true,
+     true
+    ],
+    "back": {
+     "$": "undefined"
+    }
+   }
+  },
+  {
+   "env": {
+    "HTTP_PROXY": "not a url"
+   },
+   "error": {
+    "name": "Error",
+    "code": "ERR_PROXY_INVALID_CONFIG",
+    "message": "not a url",
+    "ctor": "Error"
+   }
+  },
+  {
+   "env": {
+    "HTTPS_PROXY": "::"
+   },
+   "error": {
+    "name": "Error",
+    "code": "ERR_PROXY_INVALID_CONFIG",
+    "message": "::",
+    "ctor": "Error"
+   }
+  },
+  {
+   "env": {
+    "HTTP_PROXY": "p:1"
+   },
+   "error": {
+    "name": "InvalidArgumentError",
+    "code": "UND_ERR_INVALID_ARG",
+    "message": "Invalid URL protocol: the URL must start with `http:` or `https:`.",
+    "ctor": "InvalidArgumentError"
+   }
+  },
+  {
+   "env": {
+    "HTTP_PROXY": "socks5://p:1"
+   },
+   "value": {
+    "type": "function",
+    "name": "restore",
+    "length": 0,
+    "changed": [
+     true,
+     false
+    ],
+    "restored": [
+     true,
+     true
+    ],
+    "back": {
+     "$": "undefined"
+    }
+   }
+  },
+  {
+   "env": {
+    "ALL_PROXY": "http://p:1"
+   },
+   "value": {
+    "type": "function",
+    "name": "",
+    "length": 0,
+    "changed": [
+     false,
+     false
+    ],
+    "restored": [
+     true,
+     true
+    ],
+    "back": {
+     "$": "undefined"
+    }
+   }
+  },
+  {
+   "env": {
+    "HTTP_PROXY": 1
+   },
+   "error": {
+    "name": "TypeError",
+    "code": null,
+    "message": "proxyUrl.includes is not a function",
+    "ctor": "TypeError"
+   }
+  },
+  {
+   "env": {
+    "http_proxy": "",
+    "HTTP_PROXY": "http://p:1"
+   },
+   "value": {
+    "type": "function",
+    "name": "restore",
+    "length": 0,
+    "changed": [
+     true,
+     false
+    ],
+    "restored": [
+     true,
+     true
+    ],
+    "back": {
+     "$": "undefined"
+    }
+   }
+  },
+  {
+   "env": {
+    "http_proxy": "bad url",
+    "HTTP_PROXY": "http://p:1"
+   },
+   "error": {
+    "name": "Error",
+    "code": "ERR_PROXY_INVALID_CONFIG",
+    "message": "bad url",
+    "ctor": "Error"
+   }
+  }
+ ],
+ "proxyLoose": [
+  {
+   "arg": null,
+   "error": {
+    "name": "TypeError",
+    "code": "ERR_INVALID_ARG_TYPE",
+    "message": "The \"proxyEnv\" argument must be of type object. Received null",
+    "ctor": "TypeError"
+   }
+  },
+  {
+   "arg": 1,
+   "error": {
+    "name": "TypeError",
+    "code": "ERR_INVALID_ARG_TYPE",
+    "message": "The \"proxyEnv\" argument must be of type object. Received type number (1)",
+    "ctor": "TypeError"
+   }
+  },
+  {
+   "arg": "x",
+   "error": {
+    "name": "TypeError",
+    "code": "ERR_INVALID_ARG_TYPE",
+    "message": "The \"proxyEnv\" argument must be of type object. Received type string ('x')",
+    "ctor": "TypeError"
+   }
+  },
+  {
+   "arg": [],
+   "error": {
+    "name": "TypeError",
+    "code": "ERR_INVALID_ARG_TYPE",
+    "message": "The \"proxyEnv\" argument must be of type object. Received an instance of Array",
+    "ctor": "TypeError"
+   }
+  },
+  {
+   "arg": {
+    "$": "fn"
+   },
+   "error": {
+    "name": "TypeError",
+    "code": "ERR_INVALID_ARG_TYPE",
+    "message": "The \"proxyEnv\" argument must be of type object. Received function fn",
+    "ctor": "TypeError"
+   }
+  }
+ ],
+ "ws": {
+  "WebSocket": true,
+  "CloseEvent": true,
+  "MessageEvent": true,
+  "names": [
+   "WebSocket",
+   "CloseEvent",
+   "MessageEvent"
+  ],
+  "close": [
+   "close",
+   1001,
+   "bye",
+   true,
+   true
+  ],
+  "message": [
+   "message",
+   "d",
+   "o",
+   "7",
+   true
+  ]
+ },
+ "recorder": "\"use strict\";\nconst http = require(\"http\"), https = require(\"https\");\nconst err = e => ({ name: e.name, code: e.code === undefined ? null : e.code, message: e.message, ctor: e.constructor.name });\nconst run = f => { try { return { value: f() }; } catch (e) { return { error: err(e) }; } };\nconst U = { $: \"undefined\" }, dec = v => v && typeof v === \"object\" && v.$ === \"undefined\" ? undefined : v && typeof v === \"object\" && v.$ === \"fn\" ? function fn() {} : v;\nconst out = { node: { version: process.version, image: \"node:24.18.1-alpine\" } };\nconst names = m => { const o = require(m); return Object.keys(o).map(k => [k, typeof o[k], typeof o[k] === \"function\" ? o[k].name : null, typeof o[k] === \"function\" ? o[k].length : null]); };\nout.modules = Object.fromEntries([\"_http_agent\", \"_http_client\", \"_http_common\", \"_http_incoming\", \"_http_outgoing\", \"_http_server\"].map(m => [m, names(m)]));\nconst c = require(\"_http_common\"), o = require(\"_http_outgoing\"), s = require(\"_http_server\"), a = require(\"_http_agent\"), cl = require(\"_http_client\"), inc = require(\"_http_incoming\");\nout.identity = { Agent: a.Agent === http.Agent, globalAgent: a.globalAgent === http.globalAgent, ClientRequest: cl.ClientRequest === http.ClientRequest, IncomingMessage: inc.IncomingMessage === http.IncomingMessage, OutgoingMessage: o.OutgoingMessage === http.OutgoingMessage, validateHeaderName: o.validateHeaderName === http.validateHeaderName, validateHeaderValue: o.validateHeaderValue === http.validateHeaderValue, STATUS_CODES: s.STATUS_CODES === http.STATUS_CODES, Server: s.Server === http.Server, ServerResponse: s.ServerResponse === http.ServerResponse, _connectionListener: s._connectionListener === http._connectionListener, methods: c.methods === http.METHODS, methodsEqual: JSON.stringify(c.methods) === JSON.stringify(http.METHODS) };\nout.common = { CRLF: c.CRLF, chunkExpression: String(c.chunkExpression), continueExpression: String(c.continueExpression), kIncomingMessage: String(c.kIncomingMessage), kSkipPendingData: String(c.kSkipPendingData), parsers: c.parsers.constructor.name, isLenient: c.isLenient(),\n  token: [\"abc\", \"a b\", \"\", \"a:b\", \"A-b_c!\", \"é\", \"a\\tb\", \"(x)\", \"x-y.z~|^`*+'&%$#\"].map(v => [v, c._checkIsHttpToken(v)]), invalidChar: [\"abc\", \"a\\nb\", \"a\\tb\", \"é\", \"Ā\", \"a\\x7fb\", \"\", \"a\\0b\", \"a\\rb\", \"\\xff\"].map(v => [v, c._checkInvalidHeaderChar(v)]),\n  tokenLoose: [U, null, 1].map(v => run(() => c._checkIsHttpToken(dec(v)))), charLoose: [U, null, 1].map(v => run(() => c._checkInvalidHeaderChar(dec(v)))) };\nout.outgoing = { kHighWaterMark: String(o.kHighWaterMark), kUniqueHeaders: String(o.kUniqueHeaders), unique: [U, null, [\"A\", \"b\"], [\"a\", [\"B\", \"c\"]], [], \"x\", 1, [1], {}].map(v => ({ arg: v, ...run(() => { const r = o.parseUniqueHeadersOption(dec(v)); return r === null ? null : r instanceof Set ? { set: [...r] } : typeof r; }) })) };\nout.server = { kServerResponse: String(s.kServerResponse), kConnectionsCheckingInterval: String(s.kConnectionsCheckingInterval) };\nout.connectionListener = { name: http._connectionListener.name, length: http._connectionListener.length, isServerListener: (() => { const srv = http.createServer(); return srv.listeners(\"connection\").includes(http._connectionListener); })() };\nout.setGlobalProxyFromEnv = { name: http.setGlobalProxyFromEnv.name, length: http.setGlobalProxyFromEnv.length };\nconst envs = [{}, { HTTP_PROXY: \"\" }, { NO_PROXY: \"x\" }, { http_proxy: \"http://p:1\" }, { HTTP_PROXY: \"http://p:1\" }, { HTTPS_PROXY: \"http://p:1\" }, { https_proxy: \"http://p:1\" }, { HTTP_PROXY: \"not a url\" }, { HTTPS_PROXY: \"::\" }, { HTTP_PROXY: \"p:1\" }, { HTTP_PROXY: \"socks5://p:1\" }, { ALL_PROXY: \"http://p:1\" }, { HTTP_PROXY: 1 }, { http_proxy: \"\", HTTP_PROXY: \"http://p:1\" }, { http_proxy: \"bad url\", HTTP_PROXY: \"http://p:1\" }];\nout.proxy = envs.map(e => ({ env: e, ...run(() => { const before = [http.globalAgent, https.globalAgent]; const r = http.setGlobalProxyFromEnv(e); const changed = [http.globalAgent !== before[0], https.globalAgent !== before[1]]; const info = { type: typeof r, name: r.name, length: r.length, changed }; const back = r(); info.restored = [http.globalAgent === before[0], https.globalAgent === before[1]]; info.back = back === undefined ? U : back; return info; }) }));\nout.proxyLoose = [null, 1, \"x\", [], { $: \"fn\" }].map(v => ({ arg: v, ...run(() => typeof http.setGlobalProxyFromEnv(dec(v))) }));\nout.ws = { WebSocket: http.WebSocket === globalThis.WebSocket, CloseEvent: http.CloseEvent === globalThis.CloseEvent, MessageEvent: http.MessageEvent === globalThis.MessageEvent, names: [http.WebSocket.name, http.CloseEvent.name, http.MessageEvent.name],\n  close: (() => { const e = new http.CloseEvent(\"close\", { code: 1001, reason: \"bye\", wasClean: true }); return [e.type, e.code, e.reason, e.wasClean, e instanceof Event]; })(), message: (() => { const e = new http.MessageEvent(\"message\", { data: \"d\", origin: \"o\", lastEventId: \"7\" }); return [e.type, e.data, e.origin, e.lastEventId, e instanceof Event]; })() };\nout.recorder = require(\"fs\").readFileSync(__filename, \"utf8\");\nprocess.stdout.write(JSON.stringify(out, null, 1));\n"
+}

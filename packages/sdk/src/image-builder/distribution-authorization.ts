@@ -13,9 +13,13 @@ export function releasePath(value: unknown): string {
 
 /** Shared artifact-bound review boundary for SDK releases, images, and sites. */
 export function decodeDistributionAuthorization(value: unknown, expected: { readonly candidateSHA256: string; readonly legalScopeSHA256: string }) {
-  const input = record(value, "release authorization"); exactKeys(input, ["schemaVersion", "candidateSHA256", "legalScopeSHA256", "legalReview", "ownerApproval"]);
-  if (input["schemaVersion"] !== 1 || input["candidateSHA256"] !== expected.candidateSHA256) throw new Error("Owner approval belongs to another release candidate");
-  if (input["legalScopeSHA256"] !== expected.legalScopeSHA256) throw new Error("Legal review belongs to another legal scope");
+  const input = record(value, "release authorization");
+  const version = input["schemaVersion"];
+  if (version !== 1 && version !== 2) throw new Error("Unknown release authorization schema");
+  const required = ["schemaVersion", "candidateSHA256", "legalScopeSHA256", "ownerApproval"];
+  exactKeys(input, version === 1 ? [...required, "legalReview"] : required);
+  if (input["candidateSHA256"] !== expected.candidateSHA256) throw new Error("Owner approval belongs to another release candidate");
+  if (input["legalScopeSHA256"] !== expected.legalScopeSHA256) throw new Error("Owner approval belongs to another legal scope");
   function review(name: "legalReview" | "ownerApproval") {
     const item = record(input[name], name); exactKeys(item, ["status", "reviewer", "reviewedAt", "evidence", "sha256"]);
     if (item["status"] !== "approved") throw new Error(`${name} is pending; no external publication is authorized`);
@@ -24,5 +28,6 @@ export function decodeDistributionAuthorization(value: unknown, expected: { read
     if (!/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}Z$/u.test(reviewedAt) || !Number.isFinite(Date.parse(reviewedAt))) throw new Error("Invalid human review date");
     return { reviewer, reviewedAt, evidence: releasePath(item["evidence"]), sha256: releaseDigest(item["sha256"]) };
   }
-  return { legalReview: review("legalReview"), ownerApproval: review("ownerApproval") };
+  const ownerApproval = review("ownerApproval");
+  return version === 1 ? { ownerApproval, legalReview: review("legalReview") } : { ownerApproval };
 }

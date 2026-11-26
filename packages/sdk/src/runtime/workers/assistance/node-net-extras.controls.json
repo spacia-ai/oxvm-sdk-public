@@ -1,0 +1,4863 @@
+{
+ "node": {
+  "version": "v24.18.1",
+  "image": "node:24.18.1-alpine"
+ },
+ "surface": {
+  "BlockList": {
+   "name": "BlockList",
+   "length": 0,
+   "static": [
+    "isBlockList",
+    "length",
+    "name",
+    "prototype"
+   ],
+   "proto": [
+    [
+     "constructor",
+     {
+      "e": false,
+      "w": true,
+      "c": true,
+      "get": "undefined",
+      "set": "undefined",
+      "type": "function",
+      "length": 0,
+      "name": "BlockList"
+     }
+    ],
+    [
+     "addAddress",
+     {
+      "e": false,
+      "w": true,
+      "c": true,
+      "get": "undefined",
+      "set": "undefined",
+      "type": "function",
+      "length": 1,
+      "name": "addAddress"
+     }
+    ],
+    [
+     "addRange",
+     {
+      "e": false,
+      "w": true,
+      "c": true,
+      "get": "undefined",
+      "set": "undefined",
+      "type": "function",
+      "length": 2,
+      "name": "addRange"
+     }
+    ],
+    [
+     "addSubnet",
+     {
+      "e": false,
+      "w": true,
+      "c": true,
+      "get": "undefined",
+      "set": "undefined",
+      "type": "function",
+      "length": 2,
+      "name": "addSubnet"
+     }
+    ],
+    [
+     "check",
+     {
+      "e": false,
+      "w": true,
+      "c": true,
+      "get": "undefined",
+      "set": "undefined",
+      "type": "function",
+      "length": 1,
+      "name": "check"
+     }
+    ],
+    [
+     "toJSON",
+     {
+      "e": false,
+      "w": true,
+      "c": true,
+      "get": "undefined",
+      "set": "undefined",
+      "type": "function",
+      "length": 0,
+      "name": "toJSON"
+     }
+    ],
+    [
+     "fromJSON",
+     {
+      "e": false,
+      "w": true,
+      "c": true,
+      "get": "undefined",
+      "set": "undefined",
+      "type": "function",
+      "length": 1,
+      "name": "fromJSON"
+     }
+    ],
+    [
+     "rules",
+     {
+      "e": false,
+      "w": null,
+      "c": true,
+      "get": "function",
+      "set": "undefined",
+      "type": "function",
+      "length": 0,
+      "name": "get rules"
+     }
+    ]
+   ],
+   "symbols": [
+    "Symbol(nodejs.util.inspect.custom)",
+    "Symbol(messaging_clone_symbol)",
+    "Symbol(messaging_deserialize_symbol)"
+   ],
+   "staticDesc": [
+    [
+     "isBlockList",
+     {
+      "e": false,
+      "w": true,
+      "c": true,
+      "get": "undefined",
+      "set": "undefined",
+      "type": "function",
+      "length": 1,
+      "name": "isBlockList"
+     }
+    ]
+   ]
+  },
+  "SocketAddress": {
+   "name": "SocketAddress",
+   "length": 0,
+   "static": [
+    "isSocketAddress",
+    "length",
+    "name",
+    "parse",
+    "prototype"
+   ],
+   "proto": [
+    [
+     "constructor",
+     {
+      "e": false,
+      "w": true,
+      "c": true,
+      "get": "undefined",
+      "set": "undefined",
+      "type": "function",
+      "length": 0,
+      "name": "SocketAddress"
+     }
+    ],
+    [
+     "address",
+     {
+      "e": false,
+      "w": null,
+      "c": true,
+      "get": "function",
+      "set": "undefined",
+      "type": "function",
+      "length": 0,
+      "name": "get address"
+     }
+    ],
+    [
+     "port",
+     {
+      "e": false,
+      "w": null,
+      "c": true,
+      "get": "function",
+      "set": "undefined",
+      "type": "function",
+      "length": 0,
+      "name": "get port"
+     }
+    ],
+    [
+     "family",
+     {
+      "e": false,
+      "w": null,
+      "c": true,
+      "get": "function",
+      "set": "undefined",
+      "type": "function",
+      "length": 0,
+      "name": "get family"
+     }
+    ],
+    [
+     "flowlabel",
+     {
+      "e": false,
+      "w": null,
+      "c": true,
+      "get": "function",
+      "set": "undefined",
+      "type": "function",
+      "length": 0,
+      "name": "get flowlabel"
+     }
+    ],
+    [
+     "toJSON",
+     {
+      "e": false,
+      "w": true,
+      "c": true,
+      "get": "undefined",
+      "set": "undefined",
+      "type": "function",
+      "length": 0,
+      "name": "toJSON"
+     }
+    ]
+   ],
+   "symbols": [
+    "Symbol(nodejs.util.inspect.custom)",
+    "Symbol(messaging_clone_symbol)",
+    "Symbol(messaging_deserialize_symbol)"
+   ],
+   "staticDesc": [
+    [
+     "isSocketAddress",
+     {
+      "e": false,
+      "w": true,
+      "c": true,
+      "get": "undefined",
+      "set": "undefined",
+      "type": "function",
+      "length": 1,
+      "name": "isSocketAddress"
+     }
+    ],
+    [
+     "parse",
+     {
+      "e": false,
+      "w": true,
+      "c": true,
+      "get": "undefined",
+      "set": "undefined",
+      "type": "function",
+      "length": 1,
+      "name": "parse"
+     }
+    ]
+   ]
+  },
+  "callWithoutNew": [
+   {
+    "error": {
+     "name": "TypeError",
+     "code": null,
+     "message": "Class constructor BlockList cannot be invoked without 'new'",
+     "ctor": "TypeError"
+    }
+   },
+   {
+    "error": {
+     "name": "TypeError",
+     "code": null,
+     "message": "Class constructor SocketAddress cannot be invoked without 'new'",
+     "ctor": "TypeError"
+    }
+   }
+  ],
+  "tags": [
+   "[object Object]",
+   "[object Object]"
+  ],
+  "ownKeys": [
+   [
+    "Symbol(kHandle)"
+   ],
+   [
+    "Symbol(kHandle)",
+    "Symbol(kDetail)"
+   ]
+  ]
+ },
+ "lists": {
+  "basic": {
+   "steps": [
+    [
+     "addAddress",
+     "1.1.1.1"
+    ],
+    [
+     "addRange",
+     "10.0.0.1",
+     "10.0.0.10"
+    ],
+    [
+     "addSubnet",
+     "8592:757c:efae:4e45::",
+     64,
+     "ipv6"
+    ],
+    [
+     "addSubnet",
+     "192.168.0.0",
+     16
+    ],
+    [
+     "addAddress",
+     "::1",
+     "ipv6"
+    ],
+    [
+     "addRange",
+     "2001:db8::1",
+     "2001:db8::ff",
+     "ipv6"
+    ]
+   ],
+   "applied": [
+    {},
+    {},
+    {},
+    {},
+    {},
+    {}
+   ],
+   "rules": [
+    "Range: IPv6 2001:db8::1-2001:db8::ff",
+    "Address: IPv6 ::1",
+    "Subnet: IPv4 192.168.0.0/16",
+    "Subnet: IPv6 8592:757c:efae:4e45::/64",
+    "Range: IPv4 10.0.0.1-10.0.0.10",
+    "Address: IPv4 1.1.1.1"
+   ],
+   "json": {
+    "value": [
+     "Range: IPv6 2001:db8::1-2001:db8::ff",
+     "Address: IPv6 ::1",
+     "Subnet: IPv4 192.168.0.0/16",
+     "Subnet: IPv6 8592:757c:efae:4e45::/64",
+     "Range: IPv4 10.0.0.1-10.0.0.10",
+     "Address: IPv4 1.1.1.1"
+    ]
+   },
+   "checks": [
+    {
+     "args": [
+      "1.1.1.1"
+     ],
+     "value": true
+    },
+    {
+     "args": [
+      "1.1.1.2"
+     ],
+     "value": false
+    },
+    {
+     "args": [
+      "10.0.0.1"
+     ],
+     "value": true
+    },
+    {
+     "args": [
+      "10.0.0.5"
+     ],
+     "value": true
+    },
+    {
+     "args": [
+      "10.0.0.10"
+     ],
+     "value": true
+    },
+    {
+     "args": [
+      "10.0.0.11"
+     ],
+     "value": false
+    },
+    {
+     "args": [
+      "10.0.0.0"
+     ],
+     "value": false
+    },
+    {
+     "args": [
+      "192.168.255.255"
+     ],
+     "value": true
+    },
+    {
+     "args": [
+      "192.169.0.0"
+     ],
+     "value": false
+    },
+    {
+     "args": [
+      "8592:757c:efae:4e45:1::",
+      "ipv6"
+     ],
+     "value": true
+    },
+    {
+     "args": [
+      "8592:757c:efae:4e46::",
+      "ipv6"
+     ],
+     "value": false
+    },
+    {
+     "args": [
+      "::1",
+      "ipv6"
+     ],
+     "value": true
+    },
+    {
+     "args": [
+      "::1"
+     ],
+     "value": false
+    },
+    {
+     "args": [
+      "::2",
+      "ipv6"
+     ],
+     "value": false
+    },
+    {
+     "args": [
+      "2001:db8::80",
+      "ipv6"
+     ],
+     "value": true
+    },
+    {
+     "args": [
+      "2001:db8::100",
+      "ipv6"
+     ],
+     "value": false
+    },
+    {
+     "args": [
+      "::ffff:1.1.1.1",
+      "ipv6"
+     ],
+     "value": true
+    },
+    {
+     "args": [
+      "::ffff:101:101",
+      "ipv6"
+     ],
+     "value": true
+    },
+    {
+     "args": [
+      "::ffff:10.0.0.5",
+      "ipv6"
+     ],
+     "value": true
+    },
+    {
+     "args": [
+      "::ffff:1.2.3.4",
+      "ipv6"
+     ],
+     "value": false
+    },
+    {
+     "args": [
+      "1.2.3.4"
+     ],
+     "value": false
+    },
+    {
+     "args": [
+      "1.2.3.4",
+      "ipv4"
+     ],
+     "value": false
+    },
+    {
+     "args": [
+      "172.16.5.5"
+     ],
+     "value": false
+    },
+    {
+     "args": [
+      "::ffff:172.31.255.255",
+      "ipv6"
+     ],
+     "value": false
+    },
+    {
+     "args": [
+      "172.32.0.0"
+     ],
+     "value": false
+    },
+    {
+     "args": [
+      "10.0.0.200"
+     ],
+     "value": false
+    },
+    {
+     "args": [
+      "::ffff:10.0.0.200",
+      "ipv6"
+     ],
+     "value": false
+    },
+    {
+     "args": [
+      "::0.0.0.5",
+      "ipv6"
+     ],
+     "value": false
+    },
+    {
+     "args": [
+      "0.0.0.5"
+     ],
+     "value": false
+    },
+    {
+     "args": [
+      "fe80::1",
+      "ipv6"
+     ],
+     "value": false
+    },
+    {
+     "args": [
+      "FE80::1",
+      "ipv6"
+     ],
+     "value": false
+    },
+    {
+     "args": [
+      "fe80::1%eth0",
+      "ipv6"
+     ],
+     "value": false
+    },
+    {
+     "args": [
+      "5.5.5.5"
+     ],
+     "value": false
+    },
+    {
+     "args": [
+      "255.255.255.255"
+     ],
+     "value": false
+    },
+    {
+     "args": [
+      "9.9.9.9"
+     ],
+     "value": false
+    },
+    {
+     "args": [
+      "7.0.0.4"
+     ],
+     "value": false
+    },
+    {
+     "args": [
+      "fd12::1",
+      "ipv6"
+     ],
+     "value": false
+    },
+    {
+     "args": [
+      "fe00::1",
+      "ipv6"
+     ],
+     "value": false
+    },
+    {
+     "args": [
+      "1.1.1.1",
+      "ipv6"
+     ],
+     "value": false
+    },
+    {
+     "args": [
+      "::1",
+      "ipv4"
+     ],
+     "value": false
+    },
+    {
+     "args": [
+      "bad"
+     ],
+     "value": false
+    },
+    {
+     "args": [
+      "bad",
+      "ipv6"
+     ],
+     "value": false
+    },
+    {
+     "args": [
+      "1.1.1.1",
+      "IPv4"
+     ],
+     "value": true
+    },
+    {
+     "args": [
+      "1.1.1.1",
+      "IPV4"
+     ],
+     "value": true
+    },
+    {
+     "args": [
+      "1.1.1.1",
+      "x"
+     ],
+     "value": false
+    },
+    {
+     "args": [
+      1
+     ],
+     "error": {
+      "name": "TypeError",
+      "code": "ERR_INVALID_ARG_TYPE",
+      "message": "The \"address\" argument must be of type string. Received type number (1)",
+      "ctor": "TypeError"
+     }
+    },
+    {
+     "args": [
+      {
+       "$": "undefined"
+      }
+     ],
+     "error": {
+      "name": "TypeError",
+      "code": "ERR_INVALID_ARG_TYPE",
+      "message": "The \"address\" argument must be of type string. Received undefined",
+      "ctor": "TypeError"
+     }
+    },
+    {
+     "args": [
+      null
+     ],
+     "error": {
+      "name": "TypeError",
+      "code": "ERR_INVALID_ARG_TYPE",
+      "message": "The \"address\" argument must be of type string. Received null",
+      "ctor": "TypeError"
+     }
+    },
+    {
+     "args": [
+      {
+       "$": "sa",
+       "v": {
+        "address": "1.1.1.1"
+       }
+      }
+     ],
+     "value": true
+    },
+    {
+     "args": [
+      {
+       "$": "sa",
+       "v": {
+        "address": "::ffff:1.1.1.1",
+        "family": "ipv6"
+       }
+      }
+     ],
+     "value": true
+    },
+    {
+     "args": [
+      {
+       "address": "1.1.1.1",
+       "family": "ipv4"
+      }
+     ],
+     "error": {
+      "name": "TypeError",
+      "code": "ERR_INVALID_ARG_TYPE",
+      "message": "The \"address\" argument must be of type string. Received an instance of Object",
+      "ctor": "TypeError"
+     }
+    },
+    {
+     "args": [
+      "1.1.1.1",
+      4
+     ],
+     "error": {
+      "name": "TypeError",
+      "code": "ERR_INVALID_ARG_TYPE",
+      "message": "The \"family\" argument must be of type string. Received type number (4)",
+      "ctor": "TypeError"
+     }
+    },
+    {
+     "args": [
+      "1.1.1.1",
+      null
+     ],
+     "error": {
+      "name": "TypeError",
+      "code": "ERR_INVALID_ARG_TYPE",
+      "message": "The \"family\" argument must be of type string. Received null",
+      "ctor": "TypeError"
+     }
+    }
+   ],
+   "inspect": "BlockList {\n  rules: [\n    'Range: IPv6 2001:db8::1-2001:db8::ff',\n    'Address: IPv6 ::1',\n    'Subnet: IPv4 192.168.0.0/16',\n    'Subnet: IPv6 8592:757c:efae:4e45::/64',\n    'Range: IPv4 10.0.0.1-10.0.0.10',\n    'Address: IPv4 1.1.1.1'\n  ]\n}"
+  },
+  "mapped": {
+   "steps": [
+    [
+     "addAddress",
+     "::ffff:1.2.3.4",
+     "ipv6"
+    ],
+    [
+     "addSubnet",
+     "172.16.0.0",
+     12,
+     "ipv4"
+    ],
+    [
+     "addRange",
+     "::ffff:10.0.0.0",
+     "::ffff:10.0.0.255",
+     "ipv6"
+    ]
+   ],
+   "applied": [
+    {},
+    {},
+    {}
+   ],
+   "rules": [
+    "Range: IPv6 ::ffff:10.0.0.0-::ffff:10.0.0.255",
+    "Subnet: IPv4 172.16.0.0/12",
+    "Address: IPv6 ::ffff:1.2.3.4"
+   ],
+   "json": {
+    "value": [
+     "Range: IPv6 ::ffff:10.0.0.0-::ffff:10.0.0.255",
+     "Subnet: IPv4 172.16.0.0/12",
+     "Address: IPv6 ::ffff:1.2.3.4"
+    ]
+   },
+   "checks": [
+    {
+     "args": [
+      "1.1.1.1"
+     ],
+     "value": false
+    },
+    {
+     "args": [
+      "1.1.1.2"
+     ],
+     "value": false
+    },
+    {
+     "args": [
+      "10.0.0.1"
+     ],
+     "value": true
+    },
+    {
+     "args": [
+      "10.0.0.5"
+     ],
+     "value": true
+    },
+    {
+     "args": [
+      "10.0.0.10"
+     ],
+     "value": true
+    },
+    {
+     "args": [
+      "10.0.0.11"
+     ],
+     "value": true
+    },
+    {
+     "args": [
+      "10.0.0.0"
+     ],
+     "value": true
+    },
+    {
+     "args": [
+      "192.168.255.255"
+     ],
+     "value": false
+    },
+    {
+     "args": [
+      "192.169.0.0"
+     ],
+     "value": false
+    },
+    {
+     "args": [
+      "8592:757c:efae:4e45:1::",
+      "ipv6"
+     ],
+     "value": false
+    },
+    {
+     "args": [
+      "8592:757c:efae:4e46::",
+      "ipv6"
+     ],
+     "value": false
+    },
+    {
+     "args": [
+      "::1",
+      "ipv6"
+     ],
+     "value": false
+    },
+    {
+     "args": [
+      "::1"
+     ],
+     "value": false
+    },
+    {
+     "args": [
+      "::2",
+      "ipv6"
+     ],
+     "value": false
+    },
+    {
+     "args": [
+      "2001:db8::80",
+      "ipv6"
+     ],
+     "value": false
+    },
+    {
+     "args": [
+      "2001:db8::100",
+      "ipv6"
+     ],
+     "value": false
+    },
+    {
+     "args": [
+      "::ffff:1.1.1.1",
+      "ipv6"
+     ],
+     "value": false
+    },
+    {
+     "args": [
+      "::ffff:101:101",
+      "ipv6"
+     ],
+     "value": false
+    },
+    {
+     "args": [
+      "::ffff:10.0.0.5",
+      "ipv6"
+     ],
+     "value": true
+    },
+    {
+     "args": [
+      "::ffff:1.2.3.4",
+      "ipv6"
+     ],
+     "value": true
+    },
+    {
+     "args": [
+      "1.2.3.4"
+     ],
+     "value": true
+    },
+    {
+     "args": [
+      "1.2.3.4",
+      "ipv4"
+     ],
+     "value": true
+    },
+    {
+     "args": [
+      "172.16.5.5"
+     ],
+     "value": true
+    },
+    {
+     "args": [
+      "::ffff:172.31.255.255",
+      "ipv6"
+     ],
+     "value": true
+    },
+    {
+     "args": [
+      "172.32.0.0"
+     ],
+     "value": false
+    },
+    {
+     "args": [
+      "10.0.0.200"
+     ],
+     "value": true
+    },
+    {
+     "args": [
+      "::ffff:10.0.0.200",
+      "ipv6"
+     ],
+     "value": true
+    },
+    {
+     "args": [
+      "::0.0.0.5",
+      "ipv6"
+     ],
+     "value": false
+    },
+    {
+     "args": [
+      "0.0.0.5"
+     ],
+     "value": false
+    },
+    {
+     "args": [
+      "fe80::1",
+      "ipv6"
+     ],
+     "value": false
+    },
+    {
+     "args": [
+      "FE80::1",
+      "ipv6"
+     ],
+     "value": false
+    },
+    {
+     "args": [
+      "fe80::1%eth0",
+      "ipv6"
+     ],
+     "value": false
+    },
+    {
+     "args": [
+      "5.5.5.5"
+     ],
+     "value": false
+    },
+    {
+     "args": [
+      "255.255.255.255"
+     ],
+     "value": false
+    },
+    {
+     "args": [
+      "9.9.9.9"
+     ],
+     "value": false
+    },
+    {
+     "args": [
+      "7.0.0.4"
+     ],
+     "value": false
+    },
+    {
+     "args": [
+      "fd12::1",
+      "ipv6"
+     ],
+     "value": false
+    },
+    {
+     "args": [
+      "fe00::1",
+      "ipv6"
+     ],
+     "value": false
+    },
+    {
+     "args": [
+      "1.1.1.1",
+      "ipv6"
+     ],
+     "value": false
+    },
+    {
+     "args": [
+      "::1",
+      "ipv4"
+     ],
+     "value": false
+    },
+    {
+     "args": [
+      "bad"
+     ],
+     "value": false
+    },
+    {
+     "args": [
+      "bad",
+      "ipv6"
+     ],
+     "value": false
+    },
+    {
+     "args": [
+      "1.1.1.1",
+      "IPv4"
+     ],
+     "value": false
+    },
+    {
+     "args": [
+      "1.1.1.1",
+      "IPV4"
+     ],
+     "value": false
+    },
+    {
+     "args": [
+      "1.1.1.1",
+      "x"
+     ],
+     "value": false
+    },
+    {
+     "args": [
+      1
+     ],
+     "error": {
+      "name": "TypeError",
+      "code": "ERR_INVALID_ARG_TYPE",
+      "message": "The \"address\" argument must be of type string. Received type number (1)",
+      "ctor": "TypeError"
+     }
+    },
+    {
+     "args": [
+      {
+       "$": "undefined"
+      }
+     ],
+     "error": {
+      "name": "TypeError",
+      "code": "ERR_INVALID_ARG_TYPE",
+      "message": "The \"address\" argument must be of type string. Received undefined",
+      "ctor": "TypeError"
+     }
+    },
+    {
+     "args": [
+      null
+     ],
+     "error": {
+      "name": "TypeError",
+      "code": "ERR_INVALID_ARG_TYPE",
+      "message": "The \"address\" argument must be of type string. Received null",
+      "ctor": "TypeError"
+     }
+    },
+    {
+     "args": [
+      {
+       "$": "sa",
+       "v": {
+        "address": "1.1.1.1"
+       }
+      }
+     ],
+     "value": false
+    },
+    {
+     "args": [
+      {
+       "$": "sa",
+       "v": {
+        "address": "::ffff:1.1.1.1",
+        "family": "ipv6"
+       }
+      }
+     ],
+     "value": false
+    },
+    {
+     "args": [
+      {
+       "address": "1.1.1.1",
+       "family": "ipv4"
+      }
+     ],
+     "error": {
+      "name": "TypeError",
+      "code": "ERR_INVALID_ARG_TYPE",
+      "message": "The \"address\" argument must be of type string. Received an instance of Object",
+      "ctor": "TypeError"
+     }
+    },
+    {
+     "args": [
+      "1.1.1.1",
+      4
+     ],
+     "error": {
+      "name": "TypeError",
+      "code": "ERR_INVALID_ARG_TYPE",
+      "message": "The \"family\" argument must be of type string. Received type number (4)",
+      "ctor": "TypeError"
+     }
+    },
+    {
+     "args": [
+      "1.1.1.1",
+      null
+     ],
+     "error": {
+      "name": "TypeError",
+      "code": "ERR_INVALID_ARG_TYPE",
+      "message": "The \"family\" argument must be of type string. Received null",
+      "ctor": "TypeError"
+     }
+    }
+   ],
+   "inspect": "BlockList {\n  rules: [\n    'Range: IPv6 ::ffff:10.0.0.0-::ffff:10.0.0.255',\n    'Subnet: IPv4 172.16.0.0/12',\n    'Address: IPv6 ::ffff:1.2.3.4'\n  ]\n}"
+  },
+  "v6only": {
+   "steps": [
+    [
+     "addSubnet",
+     "::",
+     96,
+     "ipv6"
+    ],
+    [
+     "addAddress",
+     "fe80::1",
+     "ipv6"
+    ]
+   ],
+   "applied": [
+    {},
+    {}
+   ],
+   "rules": [
+    "Address: IPv6 fe80::1",
+    "Subnet: IPv6 ::/96"
+   ],
+   "json": {
+    "value": [
+     "Address: IPv6 fe80::1",
+     "Subnet: IPv6 ::/96"
+    ]
+   },
+   "checks": [
+    {
+     "args": [
+      "1.1.1.1"
+     ],
+     "value": false
+    },
+    {
+     "args": [
+      "1.1.1.2"
+     ],
+     "value": false
+    },
+    {
+     "args": [
+      "10.0.0.1"
+     ],
+     "value": false
+    },
+    {
+     "args": [
+      "10.0.0.5"
+     ],
+     "value": false
+    },
+    {
+     "args": [
+      "10.0.0.10"
+     ],
+     "value": false
+    },
+    {
+     "args": [
+      "10.0.0.11"
+     ],
+     "value": false
+    },
+    {
+     "args": [
+      "10.0.0.0"
+     ],
+     "value": false
+    },
+    {
+     "args": [
+      "192.168.255.255"
+     ],
+     "value": false
+    },
+    {
+     "args": [
+      "192.169.0.0"
+     ],
+     "value": false
+    },
+    {
+     "args": [
+      "8592:757c:efae:4e45:1::",
+      "ipv6"
+     ],
+     "value": false
+    },
+    {
+     "args": [
+      "8592:757c:efae:4e46::",
+      "ipv6"
+     ],
+     "value": false
+    },
+    {
+     "args": [
+      "::1",
+      "ipv6"
+     ],
+     "value": true
+    },
+    {
+     "args": [
+      "::1"
+     ],
+     "value": false
+    },
+    {
+     "args": [
+      "::2",
+      "ipv6"
+     ],
+     "value": true
+    },
+    {
+     "args": [
+      "2001:db8::80",
+      "ipv6"
+     ],
+     "value": false
+    },
+    {
+     "args": [
+      "2001:db8::100",
+      "ipv6"
+     ],
+     "value": false
+    },
+    {
+     "args": [
+      "::ffff:1.1.1.1",
+      "ipv6"
+     ],
+     "value": false
+    },
+    {
+     "args": [
+      "::ffff:101:101",
+      "ipv6"
+     ],
+     "value": false
+    },
+    {
+     "args": [
+      "::ffff:10.0.0.5",
+      "ipv6"
+     ],
+     "value": false
+    },
+    {
+     "args": [
+      "::ffff:1.2.3.4",
+      "ipv6"
+     ],
+     "value": false
+    },
+    {
+     "args": [
+      "1.2.3.4"
+     ],
+     "value": false
+    },
+    {
+     "args": [
+      "1.2.3.4",
+      "ipv4"
+     ],
+     "value": false
+    },
+    {
+     "args": [
+      "172.16.5.5"
+     ],
+     "value": false
+    },
+    {
+     "args": [
+      "::ffff:172.31.255.255",
+      "ipv6"
+     ],
+     "value": false
+    },
+    {
+     "args": [
+      "172.32.0.0"
+     ],
+     "value": false
+    },
+    {
+     "args": [
+      "10.0.0.200"
+     ],
+     "value": false
+    },
+    {
+     "args": [
+      "::ffff:10.0.0.200",
+      "ipv6"
+     ],
+     "value": false
+    },
+    {
+     "args": [
+      "::0.0.0.5",
+      "ipv6"
+     ],
+     "value": true
+    },
+    {
+     "args": [
+      "0.0.0.5"
+     ],
+     "value": false
+    },
+    {
+     "args": [
+      "fe80::1",
+      "ipv6"
+     ],
+     "value": true
+    },
+    {
+     "args": [
+      "FE80::1",
+      "ipv6"
+     ],
+     "value": true
+    },
+    {
+     "args": [
+      "fe80::1%eth0",
+      "ipv6"
+     ],
+     "value": true
+    },
+    {
+     "args": [
+      "5.5.5.5"
+     ],
+     "value": false
+    },
+    {
+     "args": [
+      "255.255.255.255"
+     ],
+     "value": false
+    },
+    {
+     "args": [
+      "9.9.9.9"
+     ],
+     "value": false
+    },
+    {
+     "args": [
+      "7.0.0.4"
+     ],
+     "value": false
+    },
+    {
+     "args": [
+      "fd12::1",
+      "ipv6"
+     ],
+     "value": false
+    },
+    {
+     "args": [
+      "fe00::1",
+      "ipv6"
+     ],
+     "value": false
+    },
+    {
+     "args": [
+      "1.1.1.1",
+      "ipv6"
+     ],
+     "value": false
+    },
+    {
+     "args": [
+      "::1",
+      "ipv4"
+     ],
+     "value": false
+    },
+    {
+     "args": [
+      "bad"
+     ],
+     "value": false
+    },
+    {
+     "args": [
+      "bad",
+      "ipv6"
+     ],
+     "value": false
+    },
+    {
+     "args": [
+      "1.1.1.1",
+      "IPv4"
+     ],
+     "value": false
+    },
+    {
+     "args": [
+      "1.1.1.1",
+      "IPV4"
+     ],
+     "value": false
+    },
+    {
+     "args": [
+      "1.1.1.1",
+      "x"
+     ],
+     "value": false
+    },
+    {
+     "args": [
+      1
+     ],
+     "error": {
+      "name": "TypeError",
+      "code": "ERR_INVALID_ARG_TYPE",
+      "message": "The \"address\" argument must be of type string. Received type number (1)",
+      "ctor": "TypeError"
+     }
+    },
+    {
+     "args": [
+      {
+       "$": "undefined"
+      }
+     ],
+     "error": {
+      "name": "TypeError",
+      "code": "ERR_INVALID_ARG_TYPE",
+      "message": "The \"address\" argument must be of type string. Received undefined",
+      "ctor": "TypeError"
+     }
+    },
+    {
+     "args": [
+      null
+     ],
+     "error": {
+      "name": "TypeError",
+      "code": "ERR_INVALID_ARG_TYPE",
+      "message": "The \"address\" argument must be of type string. Received null",
+      "ctor": "TypeError"
+     }
+    },
+    {
+     "args": [
+      {
+       "$": "sa",
+       "v": {
+        "address": "1.1.1.1"
+       }
+      }
+     ],
+     "value": false
+    },
+    {
+     "args": [
+      {
+       "$": "sa",
+       "v": {
+        "address": "::ffff:1.1.1.1",
+        "family": "ipv6"
+       }
+      }
+     ],
+     "value": false
+    },
+    {
+     "args": [
+      {
+       "address": "1.1.1.1",
+       "family": "ipv4"
+      }
+     ],
+     "error": {
+      "name": "TypeError",
+      "code": "ERR_INVALID_ARG_TYPE",
+      "message": "The \"address\" argument must be of type string. Received an instance of Object",
+      "ctor": "TypeError"
+     }
+    },
+    {
+     "args": [
+      "1.1.1.1",
+      4
+     ],
+     "error": {
+      "name": "TypeError",
+      "code": "ERR_INVALID_ARG_TYPE",
+      "message": "The \"family\" argument must be of type string. Received type number (4)",
+      "ctor": "TypeError"
+     }
+    },
+    {
+     "args": [
+      "1.1.1.1",
+      null
+     ],
+     "error": {
+      "name": "TypeError",
+      "code": "ERR_INVALID_ARG_TYPE",
+      "message": "The \"family\" argument must be of type string. Received null",
+      "ctor": "TypeError"
+     }
+    }
+   ],
+   "inspect": "BlockList { rules: [ 'Address: IPv6 fe80::1', 'Subnet: IPv6 ::/96' ] }"
+  },
+  "edges": {
+   "steps": [
+    [
+     "addSubnet",
+     "0.0.0.0",
+     0
+    ],
+    [
+     "addSubnet",
+     "1.2.3.4",
+     32
+    ],
+    [
+     "addRange",
+     "5.5.5.5",
+     "5.5.5.5"
+    ]
+   ],
+   "applied": [
+    {},
+    {},
+    {}
+   ],
+   "rules": [
+    "Range: IPv4 5.5.5.5-5.5.5.5",
+    "Subnet: IPv4 1.2.3.4/32",
+    "Subnet: IPv4 0.0.0.0/0"
+   ],
+   "json": {
+    "value": [
+     "Range: IPv4 5.5.5.5-5.5.5.5",
+     "Subnet: IPv4 1.2.3.4/32",
+     "Subnet: IPv4 0.0.0.0/0"
+    ]
+   },
+   "checks": [
+    {
+     "args": [
+      "1.1.1.1"
+     ],
+     "value": true
+    },
+    {
+     "args": [
+      "1.1.1.2"
+     ],
+     "value": true
+    },
+    {
+     "args": [
+      "10.0.0.1"
+     ],
+     "value": true
+    },
+    {
+     "args": [
+      "10.0.0.5"
+     ],
+     "value": true
+    },
+    {
+     "args": [
+      "10.0.0.10"
+     ],
+     "value": true
+    },
+    {
+     "args": [
+      "10.0.0.11"
+     ],
+     "value": true
+    },
+    {
+     "args": [
+      "10.0.0.0"
+     ],
+     "value": true
+    },
+    {
+     "args": [
+      "192.168.255.255"
+     ],
+     "value": true
+    },
+    {
+     "args": [
+      "192.169.0.0"
+     ],
+     "value": true
+    },
+    {
+     "args": [
+      "8592:757c:efae:4e45:1::",
+      "ipv6"
+     ],
+     "value": false
+    },
+    {
+     "args": [
+      "8592:757c:efae:4e46::",
+      "ipv6"
+     ],
+     "value": false
+    },
+    {
+     "args": [
+      "::1",
+      "ipv6"
+     ],
+     "value": false
+    },
+    {
+     "args": [
+      "::1"
+     ],
+     "value": false
+    },
+    {
+     "args": [
+      "::2",
+      "ipv6"
+     ],
+     "value": false
+    },
+    {
+     "args": [
+      "2001:db8::80",
+      "ipv6"
+     ],
+     "value": false
+    },
+    {
+     "args": [
+      "2001:db8::100",
+      "ipv6"
+     ],
+     "value": false
+    },
+    {
+     "args": [
+      "::ffff:1.1.1.1",
+      "ipv6"
+     ],
+     "value": true
+    },
+    {
+     "args": [
+      "::ffff:101:101",
+      "ipv6"
+     ],
+     "value": true
+    },
+    {
+     "args": [
+      "::ffff:10.0.0.5",
+      "ipv6"
+     ],
+     "value": true
+    },
+    {
+     "args": [
+      "::ffff:1.2.3.4",
+      "ipv6"
+     ],
+     "value": true
+    },
+    {
+     "args": [
+      "1.2.3.4"
+     ],
+     "value": true
+    },
+    {
+     "args": [
+      "1.2.3.4",
+      "ipv4"
+     ],
+     "value": true
+    },
+    {
+     "args": [
+      "172.16.5.5"
+     ],
+     "value": true
+    },
+    {
+     "args": [
+      "::ffff:172.31.255.255",
+      "ipv6"
+     ],
+     "value": true
+    },
+    {
+     "args": [
+      "172.32.0.0"
+     ],
+     "value": true
+    },
+    {
+     "args": [
+      "10.0.0.200"
+     ],
+     "value": true
+    },
+    {
+     "args": [
+      "::ffff:10.0.0.200",
+      "ipv6"
+     ],
+     "value": true
+    },
+    {
+     "args": [
+      "::0.0.0.5",
+      "ipv6"
+     ],
+     "value": false
+    },
+    {
+     "args": [
+      "0.0.0.5"
+     ],
+     "value": true
+    },
+    {
+     "args": [
+      "fe80::1",
+      "ipv6"
+     ],
+     "value": false
+    },
+    {
+     "args": [
+      "FE80::1",
+      "ipv6"
+     ],
+     "value": false
+    },
+    {
+     "args": [
+      "fe80::1%eth0",
+      "ipv6"
+     ],
+     "value": false
+    },
+    {
+     "args": [
+      "5.5.5.5"
+     ],
+     "value": true
+    },
+    {
+     "args": [
+      "255.255.255.255"
+     ],
+     "value": true
+    },
+    {
+     "args": [
+      "9.9.9.9"
+     ],
+     "value": true
+    },
+    {
+     "args": [
+      "7.0.0.4"
+     ],
+     "value": true
+    },
+    {
+     "args": [
+      "fd12::1",
+      "ipv6"
+     ],
+     "value": false
+    },
+    {
+     "args": [
+      "fe00::1",
+      "ipv6"
+     ],
+     "value": false
+    },
+    {
+     "args": [
+      "1.1.1.1",
+      "ipv6"
+     ],
+     "value": false
+    },
+    {
+     "args": [
+      "::1",
+      "ipv4"
+     ],
+     "value": false
+    },
+    {
+     "args": [
+      "bad"
+     ],
+     "value": false
+    },
+    {
+     "args": [
+      "bad",
+      "ipv6"
+     ],
+     "value": false
+    },
+    {
+     "args": [
+      "1.1.1.1",
+      "IPv4"
+     ],
+     "value": true
+    },
+    {
+     "args": [
+      "1.1.1.1",
+      "IPV4"
+     ],
+     "value": true
+    },
+    {
+     "args": [
+      "1.1.1.1",
+      "x"
+     ],
+     "value": false
+    },
+    {
+     "args": [
+      1
+     ],
+     "error": {
+      "name": "TypeError",
+      "code": "ERR_INVALID_ARG_TYPE",
+      "message": "The \"address\" argument must be of type string. Received type number (1)",
+      "ctor": "TypeError"
+     }
+    },
+    {
+     "args": [
+      {
+       "$": "undefined"
+      }
+     ],
+     "error": {
+      "name": "TypeError",
+      "code": "ERR_INVALID_ARG_TYPE",
+      "message": "The \"address\" argument must be of type string. Received undefined",
+      "ctor": "TypeError"
+     }
+    },
+    {
+     "args": [
+      null
+     ],
+     "error": {
+      "name": "TypeError",
+      "code": "ERR_INVALID_ARG_TYPE",
+      "message": "The \"address\" argument must be of type string. Received null",
+      "ctor": "TypeError"
+     }
+    },
+    {
+     "args": [
+      {
+       "$": "sa",
+       "v": {
+        "address": "1.1.1.1"
+       }
+      }
+     ],
+     "value": true
+    },
+    {
+     "args": [
+      {
+       "$": "sa",
+       "v": {
+        "address": "::ffff:1.1.1.1",
+        "family": "ipv6"
+       }
+      }
+     ],
+     "value": true
+    },
+    {
+     "args": [
+      {
+       "address": "1.1.1.1",
+       "family": "ipv4"
+      }
+     ],
+     "error": {
+      "name": "TypeError",
+      "code": "ERR_INVALID_ARG_TYPE",
+      "message": "The \"address\" argument must be of type string. Received an instance of Object",
+      "ctor": "TypeError"
+     }
+    },
+    {
+     "args": [
+      "1.1.1.1",
+      4
+     ],
+     "error": {
+      "name": "TypeError",
+      "code": "ERR_INVALID_ARG_TYPE",
+      "message": "The \"family\" argument must be of type string. Received type number (4)",
+      "ctor": "TypeError"
+     }
+    },
+    {
+     "args": [
+      "1.1.1.1",
+      null
+     ],
+     "error": {
+      "name": "TypeError",
+      "code": "ERR_INVALID_ARG_TYPE",
+      "message": "The \"family\" argument must be of type string. Received null",
+      "ctor": "TypeError"
+     }
+    }
+   ],
+   "inspect": "BlockList {\n  rules: [\n    'Range: IPv4 5.5.5.5-5.5.5.5',\n    'Subnet: IPv4 1.2.3.4/32',\n    'Subnet: IPv4 0.0.0.0/0'\n  ]\n}"
+  },
+  "objects": {
+   "steps": [
+    [
+     "addAddress",
+     {
+      "$": "sa",
+      "v": {
+       "address": "9.9.9.9"
+      }
+     }
+    ],
+    [
+     "addRange",
+     {
+      "$": "sa",
+      "v": {
+       "address": "7.0.0.0"
+      }
+     },
+     {
+      "$": "sa",
+      "v": {
+       "address": "7.0.0.9"
+      }
+     }
+    ],
+    [
+     "addSubnet",
+     {
+      "$": "sa",
+      "v": {
+       "address": "fd00::",
+       "family": "ipv6"
+      }
+     },
+     8
+    ]
+   ],
+   "applied": [
+    {},
+    {},
+    {}
+   ],
+   "rules": [
+    "Subnet: IPv6 fd00::/8",
+    "Range: IPv4 7.0.0.0-7.0.0.9",
+    "Address: IPv4 9.9.9.9"
+   ],
+   "json": {
+    "value": [
+     "Subnet: IPv6 fd00::/8",
+     "Range: IPv4 7.0.0.0-7.0.0.9",
+     "Address: IPv4 9.9.9.9"
+    ]
+   },
+   "checks": [
+    {
+     "args": [
+      "1.1.1.1"
+     ],
+     "value": false
+    },
+    {
+     "args": [
+      "1.1.1.2"
+     ],
+     "value": false
+    },
+    {
+     "args": [
+      "10.0.0.1"
+     ],
+     "value": false
+    },
+    {
+     "args": [
+      "10.0.0.5"
+     ],
+     "value": false
+    },
+    {
+     "args": [
+      "10.0.0.10"
+     ],
+     "value": false
+    },
+    {
+     "args": [
+      "10.0.0.11"
+     ],
+     "value": false
+    },
+    {
+     "args": [
+      "10.0.0.0"
+     ],
+     "value": false
+    },
+    {
+     "args": [
+      "192.168.255.255"
+     ],
+     "value": false
+    },
+    {
+     "args": [
+      "192.169.0.0"
+     ],
+     "value": false
+    },
+    {
+     "args": [
+      "8592:757c:efae:4e45:1::",
+      "ipv6"
+     ],
+     "value": false
+    },
+    {
+     "args": [
+      "8592:757c:efae:4e46::",
+      "ipv6"
+     ],
+     "value": false
+    },
+    {
+     "args": [
+      "::1",
+      "ipv6"
+     ],
+     "value": false
+    },
+    {
+     "args": [
+      "::1"
+     ],
+     "value": false
+    },
+    {
+     "args": [
+      "::2",
+      "ipv6"
+     ],
+     "value": false
+    },
+    {
+     "args": [
+      "2001:db8::80",
+      "ipv6"
+     ],
+     "value": false
+    },
+    {
+     "args": [
+      "2001:db8::100",
+      "ipv6"
+     ],
+     "value": false
+    },
+    {
+     "args": [
+      "::ffff:1.1.1.1",
+      "ipv6"
+     ],
+     "value": false
+    },
+    {
+     "args": [
+      "::ffff:101:101",
+      "ipv6"
+     ],
+     "value": false
+    },
+    {
+     "args": [
+      "::ffff:10.0.0.5",
+      "ipv6"
+     ],
+     "value": false
+    },
+    {
+     "args": [
+      "::ffff:1.2.3.4",
+      "ipv6"
+     ],
+     "value": false
+    },
+    {
+     "args": [
+      "1.2.3.4"
+     ],
+     "value": false
+    },
+    {
+     "args": [
+      "1.2.3.4",
+      "ipv4"
+     ],
+     "value": false
+    },
+    {
+     "args": [
+      "172.16.5.5"
+     ],
+     "value": false
+    },
+    {
+     "args": [
+      "::ffff:172.31.255.255",
+      "ipv6"
+     ],
+     "value": false
+    },
+    {
+     "args": [
+      "172.32.0.0"
+     ],
+     "value": false
+    },
+    {
+     "args": [
+      "10.0.0.200"
+     ],
+     "value": false
+    },
+    {
+     "args": [
+      "::ffff:10.0.0.200",
+      "ipv6"
+     ],
+     "value": false
+    },
+    {
+     "args": [
+      "::0.0.0.5",
+      "ipv6"
+     ],
+     "value": false
+    },
+    {
+     "args": [
+      "0.0.0.5"
+     ],
+     "value": false
+    },
+    {
+     "args": [
+      "fe80::1",
+      "ipv6"
+     ],
+     "value": false
+    },
+    {
+     "args": [
+      "FE80::1",
+      "ipv6"
+     ],
+     "value": false
+    },
+    {
+     "args": [
+      "fe80::1%eth0",
+      "ipv6"
+     ],
+     "value": false
+    },
+    {
+     "args": [
+      "5.5.5.5"
+     ],
+     "value": false
+    },
+    {
+     "args": [
+      "255.255.255.255"
+     ],
+     "value": false
+    },
+    {
+     "args": [
+      "9.9.9.9"
+     ],
+     "value": true
+    },
+    {
+     "args": [
+      "7.0.0.4"
+     ],
+     "value": true
+    },
+    {
+     "args": [
+      "fd12::1",
+      "ipv6"
+     ],
+     "value": true
+    },
+    {
+     "args": [
+      "fe00::1",
+      "ipv6"
+     ],
+     "value": false
+    },
+    {
+     "args": [
+      "1.1.1.1",
+      "ipv6"
+     ],
+     "value": false
+    },
+    {
+     "args": [
+      "::1",
+      "ipv4"
+     ],
+     "value": false
+    },
+    {
+     "args": [
+      "bad"
+     ],
+     "value": false
+    },
+    {
+     "args": [
+      "bad",
+      "ipv6"
+     ],
+     "value": false
+    },
+    {
+     "args": [
+      "1.1.1.1",
+      "IPv4"
+     ],
+     "value": false
+    },
+    {
+     "args": [
+      "1.1.1.1",
+      "IPV4"
+     ],
+     "value": false
+    },
+    {
+     "args": [
+      "1.1.1.1",
+      "x"
+     ],
+     "value": false
+    },
+    {
+     "args": [
+      1
+     ],
+     "error": {
+      "name": "TypeError",
+      "code": "ERR_INVALID_ARG_TYPE",
+      "message": "The \"address\" argument must be of type string. Received type number (1)",
+      "ctor": "TypeError"
+     }
+    },
+    {
+     "args": [
+      {
+       "$": "undefined"
+      }
+     ],
+     "error": {
+      "name": "TypeError",
+      "code": "ERR_INVALID_ARG_TYPE",
+      "message": "The \"address\" argument must be of type string. Received undefined",
+      "ctor": "TypeError"
+     }
+    },
+    {
+     "args": [
+      null
+     ],
+     "error": {
+      "name": "TypeError",
+      "code": "ERR_INVALID_ARG_TYPE",
+      "message": "The \"address\" argument must be of type string. Received null",
+      "ctor": "TypeError"
+     }
+    },
+    {
+     "args": [
+      {
+       "$": "sa",
+       "v": {
+        "address": "1.1.1.1"
+       }
+      }
+     ],
+     "value": false
+    },
+    {
+     "args": [
+      {
+       "$": "sa",
+       "v": {
+        "address": "::ffff:1.1.1.1",
+        "family": "ipv6"
+       }
+      }
+     ],
+     "value": false
+    },
+    {
+     "args": [
+      {
+       "address": "1.1.1.1",
+       "family": "ipv4"
+      }
+     ],
+     "error": {
+      "name": "TypeError",
+      "code": "ERR_INVALID_ARG_TYPE",
+      "message": "The \"address\" argument must be of type string. Received an instance of Object",
+      "ctor": "TypeError"
+     }
+    },
+    {
+     "args": [
+      "1.1.1.1",
+      4
+     ],
+     "error": {
+      "name": "TypeError",
+      "code": "ERR_INVALID_ARG_TYPE",
+      "message": "The \"family\" argument must be of type string. Received type number (4)",
+      "ctor": "TypeError"
+     }
+    },
+    {
+     "args": [
+      "1.1.1.1",
+      null
+     ],
+     "error": {
+      "name": "TypeError",
+      "code": "ERR_INVALID_ARG_TYPE",
+      "message": "The \"family\" argument must be of type string. Received null",
+      "ctor": "TypeError"
+     }
+    }
+   ],
+   "inspect": "BlockList {\n  rules: [\n    'Subnet: IPv6 fd00::/8',\n    'Range: IPv4 7.0.0.0-7.0.0.9',\n    'Address: IPv4 9.9.9.9'\n  ]\n}"
+  }
+ },
+ "invalid": [
+  {
+   "step": [
+    "addAddress"
+   ],
+   "error": {
+    "name": "TypeError",
+    "code": "ERR_INVALID_ARG_TYPE",
+    "message": "The \"address\" argument must be of type string. Received undefined",
+    "ctor": "TypeError"
+   }
+  },
+  {
+   "step": [
+    "addAddress",
+    1
+   ],
+   "error": {
+    "name": "TypeError",
+    "code": "ERR_INVALID_ARG_TYPE",
+    "message": "The \"address\" argument must be of type string. Received type number (1)",
+    "ctor": "TypeError"
+   }
+  },
+  {
+   "step": [
+    "addAddress",
+    "bad"
+   ],
+   "error": {
+    "name": "Error",
+    "code": "ERR_INVALID_ADDRESS",
+    "message": "Invalid socket address",
+    "ctor": "Error"
+   }
+  },
+  {
+   "step": [
+    "addAddress",
+    "1.1.1.1",
+    "ipv6"
+   ],
+   "error": {
+    "name": "Error",
+    "code": "ERR_INVALID_ADDRESS",
+    "message": "Invalid socket address",
+    "ctor": "Error"
+   }
+  },
+  {
+   "step": [
+    "addAddress",
+    "::1"
+   ],
+   "error": {
+    "name": "Error",
+    "code": "ERR_INVALID_ADDRESS",
+    "message": "Invalid socket address",
+    "ctor": "Error"
+   }
+  },
+  {
+   "step": [
+    "addAddress",
+    "1.1.1.1",
+    "x"
+   ],
+   "error": {
+    "name": "TypeError",
+    "code": "ERR_INVALID_ARG_VALUE",
+    "message": "The property 'options.family' is invalid. Received 'x'",
+    "ctor": "TypeError"
+   }
+  },
+  {
+   "step": [
+    "addAddress",
+    "1.1.1.1",
+    4
+   ],
+   "error": {
+    "name": "TypeError",
+    "code": "ERR_INVALID_ARG_TYPE",
+    "message": "The \"family\" argument must be of type string. Received type number (4)",
+    "ctor": "TypeError"
+   }
+  },
+  {
+   "step": [
+    "addAddress",
+    "1.1.1.1",
+    null
+   ],
+   "error": {
+    "name": "TypeError",
+    "code": "ERR_INVALID_ARG_TYPE",
+    "message": "The \"family\" argument must be of type string. Received null",
+    "ctor": "TypeError"
+   }
+  },
+  {
+   "step": [
+    "addRange",
+    "1.1.1.1"
+   ],
+   "error": {
+    "name": "TypeError",
+    "code": "ERR_INVALID_ARG_TYPE",
+    "message": "The \"end\" argument must be of type string. Received undefined",
+    "ctor": "TypeError"
+   }
+  },
+  {
+   "step": [
+    "addRange",
+    "1.1.1.2",
+    "1.1.1.1"
+   ],
+   "error": {
+    "name": "TypeError",
+    "code": "ERR_INVALID_ARG_VALUE",
+    "message": "The argument 'start' must come before end. Received SocketAddress { address: '1.1.1.2', port: 0, family: 'ipv4', flowlabel: 0 }",
+    "ctor": "TypeError"
+   }
+  },
+  {
+   "step": [
+    "addRange",
+    "1.1.1.1",
+    "::1"
+   ],
+   "error": {
+    "name": "Error",
+    "code": "ERR_INVALID_ADDRESS",
+    "message": "Invalid socket address",
+    "ctor": "Error"
+   }
+  },
+  {
+   "step": [
+    "addRange",
+    "1.1.1.1",
+    "bad"
+   ],
+   "error": {
+    "name": "Error",
+    "code": "ERR_INVALID_ADDRESS",
+    "message": "Invalid socket address",
+    "ctor": "Error"
+   }
+  },
+  {
+   "step": [
+    "addRange",
+    "bad",
+    "1.1.1.1"
+   ],
+   "error": {
+    "name": "Error",
+    "code": "ERR_INVALID_ADDRESS",
+    "message": "Invalid socket address",
+    "ctor": "Error"
+   }
+  },
+  {
+   "step": [
+    "addRange",
+    1,
+    2
+   ],
+   "error": {
+    "name": "TypeError",
+    "code": "ERR_INVALID_ARG_TYPE",
+    "message": "The \"start\" argument must be of type string. Received type number (1)",
+    "ctor": "TypeError"
+   }
+  },
+  {
+   "step": [
+    "addRange",
+    "::2",
+    "::1",
+    "ipv6"
+   ],
+   "error": {
+    "name": "TypeError",
+    "code": "ERR_INVALID_ARG_VALUE",
+    "message": "The argument 'start' must come before end. Received SocketAddress { address: '::2', port: 0, family: 'ipv6', flowlabel: 0 }",
+    "ctor": "TypeError"
+   }
+  },
+  {
+   "step": [
+    "addRange",
+    {
+     "$": "sa",
+     "v": {
+      "address": "1.1.1.1"
+     }
+    },
+    {
+     "$": "sa",
+     "v": {
+      "address": "::1",
+      "family": "ipv6"
+     }
+    }
+   ],
+   "value": {
+    "returned": {
+     "$": "undefined"
+    },
+    "rules": [
+     "Range: IPv4 1.1.1.1-::1"
+    ]
+   }
+  },
+  {
+   "step": [
+    "addSubnet",
+    "1.1.1.1"
+   ],
+   "error": {
+    "name": "TypeError",
+    "code": "ERR_INVALID_ARG_TYPE",
+    "message": "The \"prefix\" argument must be of type number. Received undefined",
+    "ctor": "TypeError"
+   }
+  },
+  {
+   "step": [
+    "addSubnet",
+    "1.1.1.1",
+    33
+   ],
+   "error": {
+    "name": "RangeError",
+    "code": "ERR_OUT_OF_RANGE",
+    "message": "The value of \"prefix\" is out of range. It must be >= 0 && <= 32. Received 33",
+    "ctor": "RangeError"
+   }
+  },
+  {
+   "step": [
+    "addSubnet",
+    "1.1.1.1",
+    -1
+   ],
+   "error": {
+    "name": "RangeError",
+    "code": "ERR_OUT_OF_RANGE",
+    "message": "The value of \"prefix\" is out of range. It must be >= 0 && <= 32. Received -1",
+    "ctor": "RangeError"
+   }
+  },
+  {
+   "step": [
+    "addSubnet",
+    "1.1.1.1",
+    1.5
+   ],
+   "error": {
+    "name": "RangeError",
+    "code": "ERR_OUT_OF_RANGE",
+    "message": "The value of \"prefix\" is out of range. It must be an integer. Received 1.5",
+    "ctor": "RangeError"
+   }
+  },
+  {
+   "step": [
+    "addSubnet",
+    "1.1.1.1",
+    "8"
+   ],
+   "error": {
+    "name": "TypeError",
+    "code": "ERR_INVALID_ARG_TYPE",
+    "message": "The \"prefix\" argument must be of type number. Received type string ('8')",
+    "ctor": "TypeError"
+   }
+  },
+  {
+   "step": [
+    "addSubnet",
+    "::",
+    129,
+    "ipv6"
+   ],
+   "error": {
+    "name": "RangeError",
+    "code": "ERR_OUT_OF_RANGE",
+    "message": "The value of \"prefix\" is out of range. It must be >= 0 && <= 128. Received 129",
+    "ctor": "RangeError"
+   }
+  },
+  {
+   "step": [
+    "addSubnet",
+    "::",
+    128,
+    "ipv6"
+   ],
+   "value": {
+    "returned": {
+     "$": "undefined"
+    },
+    "rules": [
+     "Subnet: IPv6 ::/128"
+    ]
+   }
+  },
+  {
+   "step": [
+    "addSubnet",
+    "bad",
+    8
+   ],
+   "error": {
+    "name": "Error",
+    "code": "ERR_INVALID_ADDRESS",
+    "message": "Invalid socket address",
+    "ctor": "Error"
+   }
+  },
+  {
+   "step": [
+    "addSubnet",
+    "::",
+    64
+   ],
+   "error": {
+    "name": "Error",
+    "code": "ERR_INVALID_ADDRESS",
+    "message": "Invalid socket address",
+    "ctor": "Error"
+   }
+  },
+  {
+   "step": [
+    "addSubnet",
+    "1.1.1.1",
+    8,
+    "x"
+   ],
+   "error": {
+    "name": "TypeError",
+    "code": "ERR_INVALID_ARG_VALUE",
+    "message": "The property 'options.family' is invalid. Received 'x'",
+    "ctor": "TypeError"
+   }
+  },
+  {
+   "step": [
+    "addSubnet",
+    "1.1.1.1",
+    {
+     "$": "NaN"
+    }
+   ],
+   "error": {
+    "name": "RangeError",
+    "code": "ERR_OUT_OF_RANGE",
+    "message": "The value of \"prefix\" is out of range. It must be an integer. Received NaN",
+    "ctor": "RangeError"
+   }
+  }
+ ],
+ "isBlockList": [
+  {
+   "i": 0,
+   "value": true
+  },
+  {
+   "i": 1,
+   "value": false
+  },
+  {
+   "i": 2,
+   "value": false
+  },
+  {
+   "i": 3,
+   "value": false
+  },
+  {
+   "i": 4,
+   "value": false
+  },
+  {
+   "i": 5,
+   "value": false
+  },
+  {
+   "i": 6,
+   "value": false
+  }
+ ],
+ "json": {
+  "toJSON": [
+   "Subnet: IPv4 10.0.0.0/8",
+   "Range: IPv6 ::1-::9",
+   "Address: IPv4 1.1.1.1"
+  ],
+  "toJSONisRules": false,
+  "stringify": "[\"Subnet: IPv4 10.0.0.0/8\",\"Range: IPv6 ::1-::9\",\"Address: IPv4 1.1.1.1\"]",
+  "from": [
+   {
+    "input": [
+     "Subnet: IPv4 10.0.0.0/8",
+     "Range: IPv6 ::1-::9",
+     "Address: IPv4 1.1.1.1"
+    ],
+    "value": {
+     "returned": {
+      "$": "undefined"
+     },
+     "rules": [
+      "Address: IPv4 1.1.1.1",
+      "Range: IPv6 ::1-::9",
+      "Subnet: IPv4 10.0.0.0/8"
+     ]
+    }
+   },
+   {
+    "input": "[\"Subnet: IPv4 10.0.0.0/8\",\"Range: IPv6 ::1-::9\",\"Address: IPv4 1.1.1.1\"]",
+    "value": {
+     "returned": {
+      "$": "undefined"
+     },
+     "rules": [
+      "Address: IPv4 1.1.1.1",
+      "Range: IPv6 ::1-::9",
+      "Subnet: IPv4 10.0.0.0/8"
+     ]
+    }
+   },
+   {
+    "input": [
+     "Subnet: IPv4 9.0.0.0/8",
+     "Address: IPv6 ::5",
+     "Range: IPv4 3.3.3.1-3.3.3.9"
+    ],
+    "value": {
+     "returned": {
+      "$": "undefined"
+     },
+     "rules": [
+      "Range: IPv4 3.3.3.1-3.3.3.9",
+      "Address: IPv6 ::5",
+      "Subnet: IPv4 9.0.0.0/8"
+     ]
+    }
+   },
+   {
+    "input": [
+     "garbage"
+    ],
+    "value": {
+     "returned": {
+      "$": "undefined"
+     },
+     "rules": []
+    }
+   },
+   {
+    "input": [
+     "Address: IPv4 bad"
+    ],
+    "value": {
+     "returned": {
+      "$": "undefined"
+     },
+     "rules": []
+    }
+   },
+   {
+    "input": [
+     "Subnet: IPv4 9.0.0.0/99"
+    ],
+    "error": {
+     "name": "RangeError",
+     "code": "ERR_OUT_OF_RANGE",
+     "message": "The value of \"prefix\" is out of range. It must be >= 0 && <= 32. Received 99",
+     "ctor": "RangeError"
+    }
+   },
+   {
+    "input": "not json",
+    "error": {
+     "name": "SyntaxError",
+     "code": null,
+     "message": "Unexpected token 'o', \"not json\" is not valid JSON",
+     "ctor": "SyntaxError"
+    }
+   },
+   {
+    "input": "{}",
+    "error": {
+     "name": "TypeError",
+     "code": "ERR_INVALID_ARG_TYPE",
+     "message": "The \"data\" argument must be of type string or string[]. Received an instance of Object",
+     "ctor": "TypeError"
+    }
+   },
+   {
+    "input": 1,
+    "error": {
+     "name": "TypeError",
+     "code": "ERR_INVALID_ARG_TYPE",
+     "message": "The \"data\" argument must be of type string or string[]. Received type number (1)",
+     "ctor": "TypeError"
+    }
+   },
+   {
+    "input": null,
+    "error": {
+     "name": "TypeError",
+     "code": "ERR_INVALID_ARG_TYPE",
+     "message": "The \"data\" argument must be of type string or string[]. Received null",
+     "ctor": "TypeError"
+    }
+   },
+   {
+    "input": {
+     "$": "undefined"
+    },
+    "error": {
+     "name": "TypeError",
+     "code": "ERR_INVALID_ARG_TYPE",
+     "message": "The \"data\" argument must be of type string or string[]. Received undefined",
+     "ctor": "TypeError"
+    }
+   },
+   {
+    "input": [
+     1
+    ],
+    "error": {
+     "name": "TypeError",
+     "code": "ERR_INVALID_ARG_TYPE",
+     "message": "The \"data\" argument must be of type string or string[]. Received an instance of Array",
+     "ctor": "TypeError"
+    }
+   },
+   {
+    "input": [
+     "address: ipv4 4.4.4.4"
+    ],
+    "value": {
+     "returned": {
+      "$": "undefined"
+     },
+     "rules": []
+    }
+   },
+   {
+    "input": [
+     "Address: IPv4 4.4.4.4 "
+    ],
+    "value": {
+     "returned": {
+      "$": "undefined"
+     },
+     "rules": [
+      "Address: IPv4 4.4.4.4"
+     ]
+    }
+   },
+   {
+    "input": [
+     "Range: IPv4 3.3.3.9-3.3.3.1"
+    ],
+    "error": {
+     "name": "TypeError",
+     "code": "ERR_INVALID_ARG_VALUE",
+     "message": "The argument 'start' must come before end. Received SocketAddress { address: '3.3.3.9', port: 0, family: 'ipv4', flowlabel: 0 }",
+     "ctor": "TypeError"
+    }
+   },
+   {
+    "input": [],
+    "value": {
+     "returned": {
+      "$": "undefined"
+     },
+     "rules": []
+    }
+   }
+  ],
+  "hasStatic": "undefined",
+  "protoFrom": "function",
+  "lengths": [
+   1,
+   0,
+   1,
+   1,
+   2,
+   2
+  ]
+ },
+ "socketAddress": [
+  {
+   "args": [],
+   "value": {
+    "address": "127.0.0.1",
+    "port": 0,
+    "family": "ipv4",
+    "flowlabel": 0,
+    "json": {
+     "address": "127.0.0.1",
+     "port": 0,
+     "family": "ipv4",
+     "flowlabel": 0
+    },
+    "inspect": "SocketAddress { address: '127.0.0.1', port: 0, family: 'ipv4', flowlabel: 0 }",
+    "keys": []
+   }
+  },
+  {
+   "args": [
+    {
+     "$": "undefined"
+    }
+   ],
+   "value": {
+    "address": "127.0.0.1",
+    "port": 0,
+    "family": "ipv4",
+    "flowlabel": 0,
+    "json": {
+     "address": "127.0.0.1",
+     "port": 0,
+     "family": "ipv4",
+     "flowlabel": 0
+    },
+    "inspect": "SocketAddress { address: '127.0.0.1', port: 0, family: 'ipv4', flowlabel: 0 }",
+    "keys": []
+   }
+  },
+  {
+   "args": [
+    {}
+   ],
+   "value": {
+    "address": "127.0.0.1",
+    "port": 0,
+    "family": "ipv4",
+    "flowlabel": 0,
+    "json": {
+     "address": "127.0.0.1",
+     "port": 0,
+     "family": "ipv4",
+     "flowlabel": 0
+    },
+    "inspect": "SocketAddress { address: '127.0.0.1', port: 0, family: 'ipv4', flowlabel: 0 }",
+    "keys": []
+   }
+  },
+  {
+   "args": [
+    {
+     "address": "1.2.3.4"
+    }
+   ],
+   "value": {
+    "address": "1.2.3.4",
+    "port": 0,
+    "family": "ipv4",
+    "flowlabel": 0,
+    "json": {
+     "address": "1.2.3.4",
+     "port": 0,
+     "family": "ipv4",
+     "flowlabel": 0
+    },
+    "inspect": "SocketAddress { address: '1.2.3.4', port: 0, family: 'ipv4', flowlabel: 0 }",
+    "keys": []
+   }
+  },
+  {
+   "args": [
+    {
+     "address": "1.2.3.4",
+     "port": 80
+    }
+   ],
+   "value": {
+    "address": "1.2.3.4",
+    "port": 80,
+    "family": "ipv4",
+    "flowlabel": 0,
+    "json": {
+     "address": "1.2.3.4",
+     "port": 80,
+     "family": "ipv4",
+     "flowlabel": 0
+    },
+    "inspect": "SocketAddress { address: '1.2.3.4', port: 80, family: 'ipv4', flowlabel: 0 }",
+    "keys": []
+   }
+  },
+  {
+   "args": [
+    {
+     "address": "::1",
+     "family": "ipv6",
+     "port": 65535,
+     "flowlabel": 5
+    }
+   ],
+   "value": {
+    "address": "::1",
+    "port": 65535,
+    "family": "ipv6",
+    "flowlabel": 5,
+    "json": {
+     "address": "::1",
+     "port": 65535,
+     "family": "ipv6",
+     "flowlabel": 5
+    },
+    "inspect": "SocketAddress { address: '::1', port: 65535, family: 'ipv6', flowlabel: 5 }",
+    "keys": []
+   }
+  },
+  {
+   "args": [
+    {
+     "address": "::1"
+    }
+   ],
+   "error": {
+    "name": "Error",
+    "code": "ERR_INVALID_ADDRESS",
+    "message": "Invalid socket address",
+    "ctor": "Error"
+   }
+  },
+  {
+   "args": [
+    {
+     "address": "1.2.3.4",
+     "family": "ipv6"
+    }
+   ],
+   "error": {
+    "name": "Error",
+    "code": "ERR_INVALID_ADDRESS",
+    "message": "Invalid socket address",
+    "ctor": "Error"
+   }
+  },
+  {
+   "args": [
+    {
+     "family": "ipv6"
+    }
+   ],
+   "value": {
+    "address": "::",
+    "port": 0,
+    "family": "ipv6",
+    "flowlabel": 0,
+    "json": {
+     "address": "::",
+     "port": 0,
+     "family": "ipv6",
+     "flowlabel": 0
+    },
+    "inspect": "SocketAddress { address: '::', port: 0, family: 'ipv6', flowlabel: 0 }",
+    "keys": []
+   }
+  },
+  {
+   "args": [
+    {
+     "family": "IPv6"
+    }
+   ],
+   "value": {
+    "address": "::",
+    "port": 0,
+    "family": "ipv6",
+    "flowlabel": 0,
+    "json": {
+     "address": "::",
+     "port": 0,
+     "family": "ipv6",
+     "flowlabel": 0
+    },
+    "inspect": "SocketAddress { address: '::', port: 0, family: 'ipv6', flowlabel: 0 }",
+    "keys": []
+   }
+  },
+  {
+   "args": [
+    {
+     "family": "IPV4"
+    }
+   ],
+   "error": {
+    "name": "Error",
+    "code": "ERR_INVALID_ADDRESS",
+    "message": "Invalid socket address",
+    "ctor": "Error"
+   }
+  },
+  {
+   "args": [
+    {
+     "family": "x"
+    }
+   ],
+   "error": {
+    "name": "TypeError",
+    "code": "ERR_INVALID_ARG_VALUE",
+    "message": "The property 'options.family' is invalid. Received 'x'",
+    "ctor": "TypeError"
+   }
+  },
+  {
+   "args": [
+    {
+     "family": 4
+    }
+   ],
+   "error": {
+    "name": "TypeError",
+    "code": "ERR_INVALID_ARG_VALUE",
+    "message": "The property 'options.family' is invalid. Received 4",
+    "ctor": "TypeError"
+   }
+  },
+  {
+   "args": [
+    {
+     "address": 1
+    }
+   ],
+   "error": {
+    "name": "TypeError",
+    "code": "ERR_INVALID_ARG_TYPE",
+    "message": "The \"options.address\" property must be of type string. Received type number (1)",
+    "ctor": "TypeError"
+   }
+  },
+  {
+   "args": [
+    {
+     "address": "bad"
+    }
+   ],
+   "error": {
+    "name": "Error",
+    "code": "ERR_INVALID_ADDRESS",
+    "message": "Invalid socket address",
+    "ctor": "Error"
+   }
+  },
+  {
+   "args": [
+    {
+     "port": -1
+    }
+   ],
+   "error": {
+    "name": "RangeError",
+    "code": "ERR_SOCKET_BAD_PORT",
+    "message": "options.port should be >= 0 and < 65536. Received type number (-1).",
+    "ctor": "RangeError"
+   }
+  },
+  {
+   "args": [
+    {
+     "port": 65536
+    }
+   ],
+   "error": {
+    "name": "RangeError",
+    "code": "ERR_SOCKET_BAD_PORT",
+    "message": "options.port should be >= 0 and < 65536. Received type number (65536).",
+    "ctor": "RangeError"
+   }
+  },
+  {
+   "args": [
+    {
+     "port": 1.5
+    }
+   ],
+   "error": {
+    "name": "RangeError",
+    "code": "ERR_SOCKET_BAD_PORT",
+    "message": "options.port should be >= 0 and < 65536. Received type number (1.5).",
+    "ctor": "RangeError"
+   }
+  },
+  {
+   "args": [
+    {
+     "port": "80"
+    }
+   ],
+   "value": {
+    "address": "127.0.0.1",
+    "port": 80,
+    "family": "ipv4",
+    "flowlabel": 0,
+    "json": {
+     "address": "127.0.0.1",
+     "port": 80,
+     "family": "ipv4",
+     "flowlabel": 0
+    },
+    "inspect": "SocketAddress { address: '127.0.0.1', port: 80, family: 'ipv4', flowlabel: 0 }",
+    "keys": []
+   }
+  },
+  {
+   "args": [
+    {
+     "flowlabel": -1
+    }
+   ],
+   "error": {
+    "name": "RangeError",
+    "code": "ERR_OUT_OF_RANGE",
+    "message": "The value of \"options.flowlabel\" is out of range. It must be >= 0 && <= 4294967295. Received -1",
+    "ctor": "RangeError"
+   }
+  },
+  {
+   "args": [
+    {
+     "flowlabel": 1048576
+    }
+   ],
+   "value": {
+    "address": "127.0.0.1",
+    "port": 0,
+    "family": "ipv4",
+    "flowlabel": 0,
+    "json": {
+     "address": "127.0.0.1",
+     "port": 0,
+     "family": "ipv4",
+     "flowlabel": 0
+    },
+    "inspect": "SocketAddress { address: '127.0.0.1', port: 0, family: 'ipv4', flowlabel: 0 }",
+    "keys": []
+   }
+  },
+  {
+   "args": [
+    {
+     "flowlabel": 2147483647
+    }
+   ],
+   "value": {
+    "address": "127.0.0.1",
+    "port": 0,
+    "family": "ipv4",
+    "flowlabel": 0,
+    "json": {
+     "address": "127.0.0.1",
+     "port": 0,
+     "family": "ipv4",
+     "flowlabel": 0
+    },
+    "inspect": "SocketAddress { address: '127.0.0.1', port: 0, family: 'ipv4', flowlabel: 0 }",
+    "keys": []
+   }
+  },
+  {
+   "args": [
+    {
+     "address": "::1",
+     "family": "ipv6",
+     "flowlabel": 1048575
+    }
+   ],
+   "value": {
+    "address": "::1",
+    "port": 0,
+    "family": "ipv6",
+    "flowlabel": 1048575,
+    "json": {
+     "address": "::1",
+     "port": 0,
+     "family": "ipv6",
+     "flowlabel": 1048575
+    },
+    "inspect": "SocketAddress { address: '::1', port: 0, family: 'ipv6', flowlabel: 1048575 }",
+    "keys": []
+   }
+  },
+  {
+   "args": [
+    {
+     "flowlabel": 4294967296
+    }
+   ],
+   "error": {
+    "name": "RangeError",
+    "code": "ERR_OUT_OF_RANGE",
+    "message": "The value of \"options.flowlabel\" is out of range. It must be >= 0 && <= 4294967295. Received 4294967296",
+    "ctor": "RangeError"
+   }
+  },
+  {
+   "args": [
+    {
+     "flowlabel": "1"
+    }
+   ],
+   "error": {
+    "name": "TypeError",
+    "code": "ERR_INVALID_ARG_TYPE",
+    "message": "The \"options.flowlabel\" property must be of type number. Received type string ('1')",
+    "ctor": "TypeError"
+   }
+  },
+  {
+   "args": [
+    null
+   ],
+   "error": {
+    "name": "TypeError",
+    "code": "ERR_INVALID_ARG_TYPE",
+    "message": "The \"options\" argument must be of type object. Received null",
+    "ctor": "TypeError"
+   }
+  },
+  {
+   "args": [
+    1
+   ],
+   "error": {
+    "name": "TypeError",
+    "code": "ERR_INVALID_ARG_TYPE",
+    "message": "The \"options\" argument must be of type object. Received type number (1)",
+    "ctor": "TypeError"
+   }
+  },
+  {
+   "args": [
+    "x"
+   ],
+   "error": {
+    "name": "TypeError",
+    "code": "ERR_INVALID_ARG_TYPE",
+    "message": "The \"options\" argument must be of type object. Received type string ('x')",
+    "ctor": "TypeError"
+   }
+  },
+  {
+   "args": [
+    {
+     "address": "0001.2.3.4"
+    }
+   ],
+   "error": {
+    "name": "Error",
+    "code": "ERR_INVALID_ADDRESS",
+    "message": "Invalid socket address",
+    "ctor": "Error"
+   }
+  },
+  {
+   "args": [
+    {
+     "address": "FE80::A",
+     "family": "ipv6"
+    }
+   ],
+   "value": {
+    "address": "fe80::a",
+    "port": 0,
+    "family": "ipv6",
+    "flowlabel": 0,
+    "json": {
+     "address": "fe80::a",
+     "port": 0,
+     "family": "ipv6",
+     "flowlabel": 0
+    },
+    "inspect": "SocketAddress { address: 'fe80::a', port: 0, family: 'ipv6', flowlabel: 0 }",
+    "keys": []
+   }
+  },
+  {
+   "args": [
+    {
+     "address": "::ffff:1.2.3.4",
+     "family": "ipv6"
+    }
+   ],
+   "value": {
+    "address": "::ffff:1.2.3.4",
+    "port": 0,
+    "family": "ipv6",
+    "flowlabel": 0,
+    "json": {
+     "address": "::ffff:1.2.3.4",
+     "port": 0,
+     "family": "ipv6",
+     "flowlabel": 0
+    },
+    "inspect": "SocketAddress { address: '::ffff:1.2.3.4', port: 0, family: 'ipv6', flowlabel: 0 }",
+    "keys": []
+   }
+  },
+  {
+   "args": [
+    {
+     "address": "fe80::1%lo",
+     "family": "ipv6"
+    }
+   ],
+   "value": {
+    "address": "fe80::1",
+    "port": 0,
+    "family": "ipv6",
+    "flowlabel": 0,
+    "json": {
+     "address": "fe80::1",
+     "port": 0,
+     "family": "ipv6",
+     "flowlabel": 0
+    },
+    "inspect": "SocketAddress { address: 'fe80::1', port: 0, family: 'ipv6', flowlabel: 0 }",
+    "keys": []
+   }
+  },
+  {
+   "args": [
+    {
+     "address": "1.2.3.4",
+     "flowlabel": 7
+    }
+   ],
+   "value": {
+    "address": "1.2.3.4",
+    "port": 0,
+    "family": "ipv4",
+    "flowlabel": 0,
+    "json": {
+     "address": "1.2.3.4",
+     "port": 0,
+     "family": "ipv4",
+     "flowlabel": 0
+    },
+    "inspect": "SocketAddress { address: '1.2.3.4', port: 0, family: 'ipv4', flowlabel: 0 }",
+    "keys": []
+   }
+  },
+  {
+   "args": [
+    []
+   ],
+   "error": {
+    "name": "TypeError",
+    "code": "ERR_INVALID_ARG_TYPE",
+    "message": "The \"options\" argument must be of type object. Received an instance of Array",
+    "ctor": "TypeError"
+   }
+  },
+  {
+   "args": [
+    {
+     "$": "fn"
+    }
+   ],
+   "error": {
+    "name": "TypeError",
+    "code": "ERR_INVALID_ARG_TYPE",
+    "message": "The \"options\" argument must be of type object. Received function fn",
+    "ctor": "TypeError"
+   }
+  }
+ ],
+ "parse": [
+  {
+   "arg": "1.2.3.4:80",
+   "value": {
+    "address": "1.2.3.4",
+    "port": 0,
+    "family": "ipv4",
+    "flowlabel": 0,
+    "json": {
+     "address": "1.2.3.4",
+     "port": 0,
+     "family": "ipv4",
+     "flowlabel": 0
+    },
+    "inspect": "SocketAddress { address: '1.2.3.4', port: 0, family: 'ipv4', flowlabel: 0 }",
+    "keys": []
+   }
+  },
+  {
+   "arg": "1.2.3.4",
+   "value": {
+    "address": "1.2.3.4",
+    "port": 0,
+    "family": "ipv4",
+    "flowlabel": 0,
+    "json": {
+     "address": "1.2.3.4",
+     "port": 0,
+     "family": "ipv4",
+     "flowlabel": 0
+    },
+    "inspect": "SocketAddress { address: '1.2.3.4', port: 0, family: 'ipv4', flowlabel: 0 }",
+    "keys": []
+   }
+  },
+  {
+   "arg": "[::1]:8080",
+   "value": {
+    "address": "::1",
+    "port": 8080,
+    "family": "ipv6",
+    "flowlabel": 0,
+    "json": {
+     "address": "::1",
+     "port": 8080,
+     "family": "ipv6",
+     "flowlabel": 0
+    },
+    "inspect": "SocketAddress { address: '::1', port: 8080, family: 'ipv6', flowlabel: 0 }",
+    "keys": []
+   }
+  },
+  {
+   "arg": "[::1]",
+   "value": {
+    "address": "::1",
+    "port": 0,
+    "family": "ipv6",
+    "flowlabel": 0,
+    "json": {
+     "address": "::1",
+     "port": 0,
+     "family": "ipv6",
+     "flowlabel": 0
+    },
+    "inspect": "SocketAddress { address: '::1', port: 0, family: 'ipv6', flowlabel: 0 }",
+    "keys": []
+   }
+  },
+  {
+   "arg": "::1",
+   "value": {
+    "$": "undefined"
+   }
+  },
+  {
+   "arg": "example.com:80",
+   "value": {
+    "$": "undefined"
+   }
+  },
+  {
+   "arg": "localhost",
+   "value": {
+    "$": "undefined"
+   }
+  },
+  {
+   "arg": "",
+   "value": {
+    "$": "undefined"
+   }
+  },
+  {
+   "arg": "1.2.3.4:99999",
+   "value": {
+    "$": "undefined"
+   }
+  },
+  {
+   "arg": "1.2.3.4:abc",
+   "value": {
+    "$": "undefined"
+   }
+  },
+  {
+   "arg": "http://1.2.3.4:80",
+   "value": {
+    "$": "undefined"
+   }
+  },
+  {
+   "arg": "[fe80::1%25eth0]:1",
+   "value": {
+    "$": "undefined"
+   }
+  },
+  {
+   "arg": "1.2.3.4:0",
+   "value": {
+    "address": "1.2.3.4",
+    "port": 0,
+    "family": "ipv4",
+    "flowlabel": 0,
+    "json": {
+     "address": "1.2.3.4",
+     "port": 0,
+     "family": "ipv4",
+     "flowlabel": 0
+    },
+    "inspect": "SocketAddress { address: '1.2.3.4', port: 0, family: 'ipv4', flowlabel: 0 }",
+    "keys": []
+   }
+  },
+  {
+   "arg": "256.1.1.1:5",
+   "value": {
+    "$": "undefined"
+   }
+  },
+  {
+   "arg": "0x7f.1:80",
+   "value": {
+    "address": "127.0.0.1",
+    "port": 0,
+    "family": "ipv4",
+    "flowlabel": 0,
+    "json": {
+     "address": "127.0.0.1",
+     "port": 0,
+     "family": "ipv4",
+     "flowlabel": 0
+    },
+    "inspect": "SocketAddress { address: '127.0.0.1', port: 0, family: 'ipv4', flowlabel: 0 }",
+    "keys": []
+   }
+  },
+  {
+   "arg": "1:80",
+   "value": {
+    "address": "0.0.0.1",
+    "port": 0,
+    "family": "ipv4",
+    "flowlabel": 0,
+    "json": {
+     "address": "0.0.0.1",
+     "port": 0,
+     "family": "ipv4",
+     "flowlabel": 0
+    },
+    "inspect": "SocketAddress { address: '0.0.0.1', port: 0, family: 'ipv4', flowlabel: 0 }",
+    "keys": []
+   }
+  },
+  {
+   "arg": "[::ffff:1.2.3.4]:443",
+   "value": {
+    "address": "::ffff:1.2.3.4",
+    "port": 443,
+    "family": "ipv6",
+    "flowlabel": 0,
+    "json": {
+     "address": "::ffff:1.2.3.4",
+     "port": 443,
+     "family": "ipv6",
+     "flowlabel": 0
+    },
+    "inspect": "SocketAddress { address: '::ffff:1.2.3.4', port: 443, family: 'ipv6', flowlabel: 0 }",
+    "keys": []
+   }
+  },
+  {
+   "arg": "user@1.2.3.4:80",
+   "value": {
+    "address": "1.2.3.4",
+    "port": 0,
+    "family": "ipv4",
+    "flowlabel": 0,
+    "json": {
+     "address": "1.2.3.4",
+     "port": 0,
+     "family": "ipv4",
+     "flowlabel": 0
+    },
+    "inspect": "SocketAddress { address: '1.2.3.4', port: 0, family: 'ipv4', flowlabel: 0 }",
+    "keys": []
+   }
+  },
+  {
+   "arg": "1.2.3.4:80/path",
+   "value": {
+    "address": "1.2.3.4",
+    "port": 0,
+    "family": "ipv4",
+    "flowlabel": 0,
+    "json": {
+     "address": "1.2.3.4",
+     "port": 0,
+     "family": "ipv4",
+     "flowlabel": 0
+    },
+    "inspect": "SocketAddress { address: '1.2.3.4', port: 0, family: 'ipv4', flowlabel: 0 }",
+    "keys": []
+   }
+  },
+  {
+   "arg": "1.2.3.4:80?x",
+   "value": {
+    "address": "1.2.3.4",
+    "port": 0,
+    "family": "ipv4",
+    "flowlabel": 0,
+    "json": {
+     "address": "1.2.3.4",
+     "port": 0,
+     "family": "ipv4",
+     "flowlabel": 0
+    },
+    "inspect": "SocketAddress { address: '1.2.3.4', port: 0, family: 'ipv4', flowlabel: 0 }",
+    "keys": []
+   }
+  },
+  {
+   "arg": " 1.2.3.4:80",
+   "value": {
+    "$": "undefined"
+   }
+  },
+  {
+   "arg": {
+    "$": "undefined"
+   },
+   "error": {
+    "name": "TypeError",
+    "code": "ERR_INVALID_ARG_TYPE",
+    "message": "The \"input\" argument must be of type string. Received undefined",
+    "ctor": "TypeError"
+   }
+  },
+  {
+   "arg": null,
+   "error": {
+    "name": "TypeError",
+    "code": "ERR_INVALID_ARG_TYPE",
+    "message": "The \"input\" argument must be of type string. Received null",
+    "ctor": "TypeError"
+   }
+  },
+  {
+   "arg": 1,
+   "error": {
+    "name": "TypeError",
+    "code": "ERR_INVALID_ARG_TYPE",
+    "message": "The \"input\" argument must be of type string. Received type number (1)",
+    "ctor": "TypeError"
+   }
+  },
+  {
+   "arg": {},
+   "error": {
+    "name": "TypeError",
+    "code": "ERR_INVALID_ARG_TYPE",
+    "message": "The \"input\" argument must be of type string. Received an instance of Object",
+    "ctor": "TypeError"
+   }
+  }
+ ],
+ "isSocketAddress": [
+  {
+   "i": 0,
+   "value": true
+  },
+  {
+   "i": 1,
+   "value": false
+  },
+  {
+   "i": 2,
+   "value": false
+  },
+  {
+   "i": 3,
+   "value": false
+  },
+  {
+   "i": 4,
+   "value": false
+  }
+ ],
+ "normalizeArgs": [
+  {
+   "args": [],
+   "value": {
+    "isArray": true,
+    "length": 2,
+    "options": {},
+    "sameOptions": false,
+    "cb": null,
+    "cbSame": null,
+    "symbols": [
+     [
+      "Symbol(normalizedArgs)",
+      true
+     ]
+    ],
+    "keys": [
+     "0",
+     "1"
+    ]
+   }
+  },
+  {
+   "args": [
+    80
+   ],
+   "value": {
+    "isArray": true,
+    "length": 2,
+    "options": {
+     "port": 80
+    },
+    "sameOptions": false,
+    "cb": null,
+    "cbSame": null,
+    "symbols": [
+     [
+      "Symbol(normalizedArgs)",
+      true
+     ]
+    ],
+    "keys": [
+     "0",
+     "1"
+    ]
+   }
+  },
+  {
+   "args": [
+    80,
+    "h"
+   ],
+   "value": {
+    "isArray": true,
+    "length": 2,
+    "options": {
+     "port": 80,
+     "host": "h"
+    },
+    "sameOptions": false,
+    "cb": null,
+    "cbSame": null,
+    "symbols": [
+     [
+      "Symbol(normalizedArgs)",
+      true
+     ]
+    ],
+    "keys": [
+     "0",
+     "1"
+    ]
+   }
+  },
+  {
+   "args": [
+    "/tmp/x"
+   ],
+   "value": {
+    "isArray": true,
+    "length": 2,
+    "options": {
+     "path": "/tmp/x"
+    },
+    "sameOptions": false,
+    "cb": null,
+    "cbSame": null,
+    "symbols": [
+     [
+      "Symbol(normalizedArgs)",
+      true
+     ]
+    ],
+    "keys": [
+     "0",
+     "1"
+    ]
+   }
+  },
+  {
+   "args": [
+    "80"
+   ],
+   "value": {
+    "isArray": true,
+    "length": 2,
+    "options": {
+     "port": "80"
+    },
+    "sameOptions": false,
+    "cb": null,
+    "cbSame": null,
+    "symbols": [
+     [
+      "Symbol(normalizedArgs)",
+      true
+     ]
+    ],
+    "keys": [
+     "0",
+     "1"
+    ]
+   }
+  },
+  {
+   "args": [
+    "80",
+    "h"
+   ],
+   "value": {
+    "isArray": true,
+    "length": 2,
+    "options": {
+     "port": "80",
+     "host": "h"
+    },
+    "sameOptions": false,
+    "cb": null,
+    "cbSame": null,
+    "symbols": [
+     [
+      "Symbol(normalizedArgs)",
+      true
+     ]
+    ],
+    "keys": [
+     "0",
+     "1"
+    ]
+   }
+  },
+  {
+   "args": [
+    {
+     "port": 1,
+     "host": "a"
+    },
+    {
+     "$": "fn"
+    }
+   ],
+   "value": {
+    "isArray": true,
+    "length": 2,
+    "options": {
+     "port": 1,
+     "host": "a"
+    },
+    "sameOptions": true,
+    "cb": "function",
+    "cbSame": true,
+    "symbols": [
+     [
+      "Symbol(normalizedArgs)",
+      true
+     ]
+    ],
+    "keys": [
+     "0",
+     "1"
+    ]
+   }
+  },
+  {
+   "args": [
+    80,
+    "h",
+    {
+     "$": "fn"
+    }
+   ],
+   "value": {
+    "isArray": true,
+    "length": 2,
+    "options": {
+     "port": 80,
+     "host": "h"
+    },
+    "sameOptions": false,
+    "cb": "function",
+    "cbSame": true,
+    "symbols": [
+     [
+      "Symbol(normalizedArgs)",
+      true
+     ]
+    ],
+    "keys": [
+     "0",
+     "1"
+    ]
+   }
+  },
+  {
+   "args": [
+    80,
+    {
+     "$": "fn"
+    }
+   ],
+   "value": {
+    "isArray": true,
+    "length": 2,
+    "options": {
+     "port": 80
+    },
+    "sameOptions": false,
+    "cb": "function",
+    "cbSame": true,
+    "symbols": [
+     [
+      "Symbol(normalizedArgs)",
+      true
+     ]
+    ],
+    "keys": [
+     "0",
+     "1"
+    ]
+   }
+  },
+  {
+   "args": [
+    {
+     "$": "fn"
+    }
+   ],
+   "value": {
+    "isArray": true,
+    "length": 2,
+    "options": {},
+    "sameOptions": false,
+    "cb": "function",
+    "cbSame": true,
+    "symbols": [
+     [
+      "Symbol(normalizedArgs)",
+      true
+     ]
+    ],
+    "keys": [
+     "0",
+     "1"
+    ]
+   }
+  },
+  {
+   "args": [
+    null
+   ],
+   "value": {
+    "isArray": true,
+    "length": 2,
+    "options": {
+     "port": null
+    },
+    "sameOptions": false,
+    "cb": null,
+    "cbSame": null,
+    "symbols": [
+     [
+      "Symbol(normalizedArgs)",
+      true
+     ]
+    ],
+    "keys": [
+     "0",
+     "1"
+    ]
+   }
+  },
+  {
+   "args": [
+    {
+     "$": "undefined"
+    }
+   ],
+   "value": {
+    "isArray": true,
+    "length": 2,
+    "options": {},
+    "sameOptions": false,
+    "cb": null,
+    "cbSame": null,
+    "symbols": [
+     [
+      "Symbol(normalizedArgs)",
+      true
+     ]
+    ],
+    "keys": [
+     "0",
+     "1"
+    ]
+   }
+  },
+  {
+   "args": [
+    80,
+    5
+   ],
+   "value": {
+    "isArray": true,
+    "length": 2,
+    "options": {
+     "port": 80
+    },
+    "sameOptions": false,
+    "cb": null,
+    "cbSame": null,
+    "symbols": [
+     [
+      "Symbol(normalizedArgs)",
+      true
+     ]
+    ],
+    "keys": [
+     "0",
+     "1"
+    ]
+   }
+  },
+  {
+   "args": [
+    80,
+    "h",
+    5
+   ],
+   "value": {
+    "isArray": true,
+    "length": 2,
+    "options": {
+     "port": 80,
+     "host": "h"
+    },
+    "sameOptions": false,
+    "cb": null,
+    "cbSame": null,
+    "symbols": [
+     [
+      "Symbol(normalizedArgs)",
+      true
+     ]
+    ],
+    "keys": [
+     "0",
+     "1"
+    ]
+   }
+  },
+  {
+   "args": [
+    "\\\\.\\pipe\\x"
+   ],
+   "value": {
+    "isArray": true,
+    "length": 2,
+    "options": {
+     "path": "\\\\.\\pipe\\x"
+    },
+    "sameOptions": false,
+    "cb": null,
+    "cbSame": null,
+    "symbols": [
+     [
+      "Symbol(normalizedArgs)",
+      true
+     ]
+    ],
+    "keys": [
+     "0",
+     "1"
+    ]
+   }
+  },
+  {
+   "args": [
+    0
+   ],
+   "value": {
+    "isArray": true,
+    "length": 2,
+    "options": {
+     "port": 0
+    },
+    "sameOptions": false,
+    "cb": null,
+    "cbSame": null,
+    "symbols": [
+     [
+      "Symbol(normalizedArgs)",
+      true
+     ]
+    ],
+    "keys": [
+     "0",
+     "1"
+    ]
+   }
+  },
+  {
+   "args": [
+    -1
+   ],
+   "value": {
+    "isArray": true,
+    "length": 2,
+    "options": {
+     "port": -1
+    },
+    "sameOptions": false,
+    "cb": null,
+    "cbSame": null,
+    "symbols": [
+     [
+      "Symbol(normalizedArgs)",
+      true
+     ]
+    ],
+    "keys": [
+     "0",
+     "1"
+    ]
+   }
+  },
+  {
+   "args": [
+    "0x50"
+   ],
+   "value": {
+    "isArray": true,
+    "length": 2,
+    "options": {
+     "port": "0x50"
+    },
+    "sameOptions": false,
+    "cb": null,
+    "cbSame": null,
+    "symbols": [
+     [
+      "Symbol(normalizedArgs)",
+      true
+     ]
+    ],
+    "keys": [
+     "0",
+     "1"
+    ]
+   }
+  },
+  {
+   "args": [
+    "1e3"
+   ],
+   "value": {
+    "isArray": true,
+    "length": 2,
+    "options": {
+     "port": "1e3"
+    },
+    "sameOptions": false,
+    "cb": null,
+    "cbSame": null,
+    "symbols": [
+     [
+      "Symbol(normalizedArgs)",
+      true
+     ]
+    ],
+    "keys": [
+     "0",
+     "1"
+    ]
+   }
+  },
+  {
+   "args": [
+    " 80"
+   ],
+   "value": {
+    "isArray": true,
+    "length": 2,
+    "options": {
+     "port": " 80"
+    },
+    "sameOptions": false,
+    "cb": null,
+    "cbSame": null,
+    "symbols": [
+     [
+      "Symbol(normalizedArgs)",
+      true
+     ]
+    ],
+    "keys": [
+     "0",
+     "1"
+    ]
+   }
+  },
+  {
+   "args": [
+    "80 "
+   ],
+   "value": {
+    "isArray": true,
+    "length": 2,
+    "options": {
+     "port": "80 "
+    },
+    "sameOptions": false,
+    "cb": null,
+    "cbSame": null,
+    "symbols": [
+     [
+      "Symbol(normalizedArgs)",
+      true
+     ]
+    ],
+    "keys": [
+     "0",
+     "1"
+    ]
+   }
+  },
+  {
+   "args": [
+    ""
+   ],
+   "value": {
+    "isArray": true,
+    "length": 2,
+    "options": {
+     "port": ""
+    },
+    "sameOptions": false,
+    "cb": null,
+    "cbSame": null,
+    "symbols": [
+     [
+      "Symbol(normalizedArgs)",
+      true
+     ]
+    ],
+    "keys": [
+     "0",
+     "1"
+    ]
+   }
+  },
+  {
+   "args": [
+    80.5
+   ],
+   "value": {
+    "isArray": true,
+    "length": 2,
+    "options": {
+     "port": 80.5
+    },
+    "sameOptions": false,
+    "cb": null,
+    "cbSame": null,
+    "symbols": [
+     [
+      "Symbol(normalizedArgs)",
+      true
+     ]
+    ],
+    "keys": [
+     "0",
+     "1"
+    ]
+   }
+  },
+  {
+   "args": [
+    true
+   ],
+   "value": {
+    "isArray": true,
+    "length": 2,
+    "options": {
+     "port": true
+    },
+    "sameOptions": false,
+    "cb": null,
+    "cbSame": null,
+    "symbols": [
+     [
+      "Symbol(normalizedArgs)",
+      true
+     ]
+    ],
+    "keys": [
+     "0",
+     "1"
+    ]
+   }
+  },
+  {
+   "args": [
+    {
+     "path": "/p"
+    },
+    "ignored"
+   ],
+   "value": {
+    "isArray": true,
+    "length": 2,
+    "options": {
+     "path": "/p"
+    },
+    "sameOptions": true,
+    "cb": null,
+    "cbSame": null,
+    "symbols": [
+     [
+      "Symbol(normalizedArgs)",
+      true
+     ]
+    ],
+    "keys": [
+     "0",
+     "1"
+    ]
+   }
+  },
+  {
+   "args": [
+    [
+     1,
+     2
+    ]
+   ],
+   "value": {
+    "isArray": true,
+    "length": 2,
+    "options": [
+     1,
+     2
+    ],
+    "sameOptions": true,
+    "cb": null,
+    "cbSame": null,
+    "symbols": [
+     [
+      "Symbol(normalizedArgs)",
+      true
+     ]
+    ],
+    "keys": [
+     "0",
+     "1"
+    ]
+   }
+  }
+ ],
+ "normalizeArgsLoose": [
+  {
+   "arg": {
+    "$": "undefined"
+   },
+   "error": {
+    "name": "TypeError",
+    "code": null,
+    "message": "Cannot read properties of undefined (reading 'length')",
+    "ctor": "TypeError"
+   }
+  },
+  {
+   "arg": null,
+   "error": {
+    "name": "TypeError",
+    "code": null,
+    "message": "Cannot read properties of null (reading 'length')",
+    "ctor": "TypeError"
+   }
+  },
+  {
+   "arg": 1,
+   "value": {
+    "options": {},
+    "cb": null
+   }
+  },
+  {
+   "arg": "ab",
+   "value": {
+    "options": {
+     "path": "a"
+    },
+    "cb": null
+   }
+  },
+  {
+   "arg": {
+    "length": 0
+   },
+   "value": {
+    "options": {},
+    "cb": null
+   }
+  },
+  {
+   "arg": {
+    "0": 80,
+    "length": 1
+   },
+   "value": {
+    "options": {
+     "port": 80
+    },
+    "cb": null
+   }
+  }
+ ],
+ "createServerHandle": {
+  "name": "createServerHandle",
+  "length": 5
+ },
+ "stream": {
+  "same": true
+ },
+ "auto": {
+  "get": true,
+  "timeout": 250
+ },
+ "recorder": "\"use strict\";\nconst net = require(\"net\"), util = require(\"util\");\nconst err = e => ({ name: e.name, code: e.code === undefined ? null : e.code, message: e.message, ctor: e.constructor.name });\nconst run = f => { try { return { value: f() }; } catch (e) { return { error: err(e) }; } };\nconst dec = v => v && typeof v === \"object\" && !Array.isArray(v) && \"$\" in v ? (v.$ === \"undefined\" ? undefined : v.$ === \"symbol\" ? Symbol(\"s\") : v.$ === \"fn\" ? function fn() {} : v.$ === \"NaN\" ? NaN : v.$ === \"sa\" ? new net.SocketAddress(v.v) : v) : v;\nconst U = { $: \"undefined\" };\nconst out = { node: { version: process.version, image: \"node:24.18.1-alpine\" } };\nconst desc = (o, k) => { const d = Object.getOwnPropertyDescriptor(o, k); return d ? { e: d.enumerable, w: d.writable ?? null, c: d.configurable, get: typeof d.get, set: typeof d.set, type: typeof (d.value ?? d.get) , length: (d.value ?? d.get).length, name: (d.value ?? d.get).name } : null; };\nout.surface = {\n  BlockList: { name: net.BlockList.name, length: net.BlockList.length, static: Object.getOwnPropertyNames(net.BlockList).sort(), proto: Object.getOwnPropertyNames(net.BlockList.prototype).map(k => [k, desc(net.BlockList.prototype, k)]), symbols: Object.getOwnPropertySymbols(net.BlockList.prototype).map(String), staticDesc: [\"isBlockList\"].map(k => [k, desc(net.BlockList, k)]) },\n  SocketAddress: { name: net.SocketAddress.name, length: net.SocketAddress.length, static: Object.getOwnPropertyNames(net.SocketAddress).sort(), proto: Object.getOwnPropertyNames(net.SocketAddress.prototype).map(k => [k, desc(net.SocketAddress.prototype, k)]), symbols: Object.getOwnPropertySymbols(net.SocketAddress.prototype).map(String), staticDesc: [\"isSocketAddress\", \"parse\"].map(k => [k, desc(net.SocketAddress, k)]) },\n  callWithoutNew: [run(() => net.BlockList()), run(() => net.SocketAddress())],\n  tags: [Object.prototype.toString.call(new net.BlockList()), Object.prototype.toString.call(new net.SocketAddress())],\n  ownKeys: [Reflect.ownKeys(new net.BlockList()).map(String), Reflect.ownKeys(new net.SocketAddress()).map(String)],\n};\n// one script: a list of steps applied to a fresh BlockList, then checks\nconst lists = {\n  basic: [[\"addAddress\", \"1.1.1.1\"], [\"addRange\", \"10.0.0.1\", \"10.0.0.10\"], [\"addSubnet\", \"8592:757c:efae:4e45::\", 64, \"ipv6\"], [\"addSubnet\", \"192.168.0.0\", 16], [\"addAddress\", \"::1\", \"ipv6\"], [\"addRange\", \"2001:db8::1\", \"2001:db8::ff\", \"ipv6\"]],\n  mapped: [[\"addAddress\", \"::ffff:1.2.3.4\", \"ipv6\"], [\"addSubnet\", \"172.16.0.0\", 12, \"ipv4\"], [\"addRange\", \"::ffff:10.0.0.0\", \"::ffff:10.0.0.255\", \"ipv6\"]],\n  v6only: [[\"addSubnet\", \"::\", 96, \"ipv6\"], [\"addAddress\", \"fe80::1\", \"ipv6\"]],\n  edges: [[\"addSubnet\", \"0.0.0.0\", 0], [\"addSubnet\", \"1.2.3.4\", 32], [\"addRange\", \"5.5.5.5\", \"5.5.5.5\"]],\n  objects: [[\"addAddress\", { $: \"sa\", v: { address: \"9.9.9.9\" } }], [\"addRange\", { $: \"sa\", v: { address: \"7.0.0.0\" } }, { $: \"sa\", v: { address: \"7.0.0.9\" } }], [\"addSubnet\", { $: \"sa\", v: { address: \"fd00::\", family: \"ipv6\" } }, 8]],\n};\nconst probes = [[\"1.1.1.1\"], [\"1.1.1.2\"], [\"10.0.0.1\"], [\"10.0.0.5\"], [\"10.0.0.10\"], [\"10.0.0.11\"], [\"10.0.0.0\"], [\"192.168.255.255\"], [\"192.169.0.0\"], [\"8592:757c:efae:4e45:1::\", \"ipv6\"], [\"8592:757c:efae:4e46::\", \"ipv6\"], [\"::1\", \"ipv6\"], [\"::1\"], [\"::2\", \"ipv6\"], [\"2001:db8::80\", \"ipv6\"], [\"2001:db8::100\", \"ipv6\"], [\"::ffff:1.1.1.1\", \"ipv6\"], [\"::ffff:101:101\", \"ipv6\"], [\"::ffff:10.0.0.5\", \"ipv6\"], [\"::ffff:1.2.3.4\", \"ipv6\"], [\"1.2.3.4\"], [\"1.2.3.4\", \"ipv4\"], [\"172.16.5.5\"], [\"::ffff:172.31.255.255\", \"ipv6\"], [\"172.32.0.0\"], [\"10.0.0.200\"], [\"::ffff:10.0.0.200\", \"ipv6\"], [\"::0.0.0.5\", \"ipv6\"], [\"0.0.0.5\"], [\"fe80::1\", \"ipv6\"], [\"FE80::1\", \"ipv6\"], [\"fe80::1%eth0\", \"ipv6\"], [\"5.5.5.5\"], [\"255.255.255.255\"], [\"9.9.9.9\"], [\"7.0.0.4\"], [\"fd12::1\", \"ipv6\"], [\"fe00::1\", \"ipv6\"], [\"1.1.1.1\", \"ipv6\"], [\"::1\", \"ipv4\"], [\"bad\"], [\"bad\", \"ipv6\"], [\"1.1.1.1\", \"IPv4\"], [\"1.1.1.1\", \"IPV4\"], [\"1.1.1.1\", \"x\"], [1], [U], [null], [{ $: \"sa\", v: { address: \"1.1.1.1\" } }], [{ $: \"sa\", v: { address: \"::ffff:1.1.1.1\", family: \"ipv6\" } }], [{ address: \"1.1.1.1\", family: \"ipv4\" }], [\"1.1.1.1\", 4], [\"1.1.1.1\", null]];\nout.lists = Object.fromEntries(Object.entries(lists).map(([name, steps]) => {\n  const list = new net.BlockList();\n  const applied = steps.map(s => run(() => list[s[0]](...s.slice(1).map(dec))));\n  return [name, { steps, applied, rules: list.rules, json: run(() => list.toJSON()), checks: probes.map(p => ({ args: p, ...run(() => list.check(...p.map(dec))) })), inspect: util.inspect(list) }];\n}));\nconst invalid = [[\"addAddress\"], [\"addAddress\", 1], [\"addAddress\", \"bad\"], [\"addAddress\", \"1.1.1.1\", \"ipv6\"], [\"addAddress\", \"::1\"], [\"addAddress\", \"1.1.1.1\", \"x\"], [\"addAddress\", \"1.1.1.1\", 4], [\"addAddress\", \"1.1.1.1\", null],\n  [\"addRange\", \"1.1.1.1\"], [\"addRange\", \"1.1.1.2\", \"1.1.1.1\"], [\"addRange\", \"1.1.1.1\", \"::1\"], [\"addRange\", \"1.1.1.1\", \"bad\"], [\"addRange\", \"bad\", \"1.1.1.1\"], [\"addRange\", 1, 2], [\"addRange\", \"::2\", \"::1\", \"ipv6\"], [\"addRange\", { $: \"sa\", v: { address: \"1.1.1.1\" } }, { $: \"sa\", v: { address: \"::1\", family: \"ipv6\" } }],\n  [\"addSubnet\", \"1.1.1.1\"], [\"addSubnet\", \"1.1.1.1\", 33], [\"addSubnet\", \"1.1.1.1\", -1], [\"addSubnet\", \"1.1.1.1\", 1.5], [\"addSubnet\", \"1.1.1.1\", \"8\"], [\"addSubnet\", \"::\", 129, \"ipv6\"], [\"addSubnet\", \"::\", 128, \"ipv6\"], [\"addSubnet\", \"bad\", 8], [\"addSubnet\", \"::\", 64], [\"addSubnet\", \"1.1.1.1\", 8, \"x\"], [\"addSubnet\", \"1.1.1.1\", { $: \"NaN\" }]];\nout.invalid = invalid.map(s => ({ step: s, ...run(() => { const l = new net.BlockList(); const r = l[s[0]](...s.slice(1).map(dec)); return { returned: r === undefined ? U : r, rules: l.rules }; }) }));\nout.isBlockList = [new net.BlockList(), {}, null, U, 1, { rules: [] }, net.BlockList.prototype].map((v, i) => ({ i, value: net.BlockList.isBlockList(i === 0 ? v : dec(v)) }));\nout.json = (() => {\n  const l = new net.BlockList(); l.addAddress(\"1.1.1.1\"); l.addRange(\"::1\", \"::9\", \"ipv6\"); l.addSubnet(\"10.0.0.0\", 8);\n  const j = l.toJSON(); const m = new net.BlockList();\n  const cases = [j, JSON.stringify(j), [\"Subnet: IPv4 9.0.0.0/8\", \"Address: IPv6 ::5\", \"Range: IPv4 3.3.3.1-3.3.3.9\"], [\"garbage\"], [\"Address: IPv4 bad\"], [\"Subnet: IPv4 9.0.0.0/99\"], \"not json\", \"{}\", 1, null, U, [1], [\"address: ipv4 4.4.4.4\"], [\"Address: IPv4 4.4.4.4 \"], [\"Range: IPv4 3.3.3.9-3.3.3.1\"], []];\n  return { toJSON: j, toJSONisRules: j === l.rules, stringify: JSON.stringify(l), from: cases.map(c => ({ input: c, ...run(() => { const b = new net.BlockList(); const r = b.fromJSON(dec(c)); return { returned: r === undefined ? U : r, rules: b.rules }; }) })), hasStatic: typeof net.BlockList.fromJSON, protoFrom: typeof m.fromJSON, lengths: [m.fromJSON.length, m.toJSON.length, m.check.length, m.addAddress.length, m.addRange.length, m.addSubnet.length] };\n})();\nconst saCases = [[], [U], [{}], [{ address: \"1.2.3.4\" }], [{ address: \"1.2.3.4\", port: 80 }], [{ address: \"::1\", family: \"ipv6\", port: 65535, flowlabel: 5 }], [{ address: \"::1\" }], [{ address: \"1.2.3.4\", family: \"ipv6\" }], [{ family: \"ipv6\" }], [{ family: \"IPv6\" }], [{ family: \"IPV4\" }], [{ family: \"x\" }], [{ family: 4 }], [{ address: 1 }], [{ address: \"bad\" }], [{ port: -1 }], [{ port: 65536 }], [{ port: 1.5 }], [{ port: \"80\" }], [{ flowlabel: -1 }], [{ flowlabel: 1048576 }], [{ flowlabel: 2147483647 }], [{ address: \"::1\", family: \"ipv6\", flowlabel: 1048575 }], [{ flowlabel: 4294967296 }], [{ flowlabel: \"1\" }], [null], [1], [\"x\"], [{ address: \"0001.2.3.4\" }], [{ address: \"FE80::A\", family: \"ipv6\" }], [{ address: \"::ffff:1.2.3.4\", family: \"ipv6\" }], [{ address: \"fe80::1%lo\", family: \"ipv6\" }], [{ address: \"1.2.3.4\", flowlabel: 7 }], [[]], [{ $: \"fn\" }]];\nconst saShow = a => ({ address: a.address, port: a.port, family: a.family, flowlabel: a.flowlabel, json: a.toJSON(), inspect: util.inspect(a), keys: Object.keys(a) });\nout.socketAddress = saCases.map(a => ({ args: a, ...run(() => saShow(new net.SocketAddress(...a.map(dec)))) }));\nconst parseCases = [\"1.2.3.4:80\", \"1.2.3.4\", \"[::1]:8080\", \"[::1]\", \"::1\", \"example.com:80\", \"localhost\", \"\", \"1.2.3.4:99999\", \"1.2.3.4:abc\", \"http://1.2.3.4:80\", \"[fe80::1%25eth0]:1\", \"1.2.3.4:0\", \"256.1.1.1:5\", \"0x7f.1:80\", \"1:80\", \"[::ffff:1.2.3.4]:443\", \"user@1.2.3.4:80\", \"1.2.3.4:80/path\", \"1.2.3.4:80?x\", \" 1.2.3.4:80\", U, null, 1, {}];\nout.parse = parseCases.map(a => ({ arg: a, ...run(() => { const r = net.SocketAddress.parse(dec(a)); return r === undefined ? U : saShow(r); }) }));\nout.isSocketAddress = [new net.SocketAddress(), {}, null, U, { address: \"1.1.1.1\", port: 0, family: \"ipv4\", flowlabel: 0 }].map((v, i) => ({ i, value: net.SocketAddress.isSocketAddress(i === 0 ? v : dec(v)) }));\nconst sym = a => Object.getOwnPropertySymbols(a).map(s => [String(s), a[s]]);\nconst na = [[], [80], [80, \"h\"], [\"/tmp/x\"], [\"80\"], [\"80\", \"h\"], [{ port: 1, host: \"a\" }, { $: \"fn\" }], [80, \"h\", { $: \"fn\" }], [80, { $: \"fn\" }], [{ $: \"fn\" }], [null], [U], [80, 5], [80, \"h\", 5], [\"\\\\\\\\.\\\\pipe\\\\x\"], [0], [-1], [\"0x50\"], [\"1e3\"], [\" 80\"], [\"80 \"], [\"\"], [80.5], [true], [{ path: \"/p\" }, \"ignored\"], [[1, 2]]];\nout.normalizeArgs = na.map(a => ({ args: a, ...run(() => { const input = a.map(dec); const r = net._normalizeArgs(input); return { isArray: Array.isArray(r), length: r.length, options: r[0], sameOptions: r[0] === input[0], cb: r[1] === null ? null : typeof r[1], cbSame: typeof r[1] === \"function\" ? input.includes(r[1]) : null, symbols: sym(r), keys: Object.keys(r) }; }) }));\nout.normalizeArgsLoose = [U, null, 1, \"ab\", { length: 0 }, { length: 1, 0: 80 }].map(a => ({ arg: a, ...run(() => { const r = net._normalizeArgs(dec(a)); return { options: r[0], cb: r[1] }; }) }));\nout.createServerHandle = { name: net._createServerHandle.name, length: net._createServerHandle.length };\nout.stream = { same: net.Stream === net.Socket };\nout.auto = { get: net.getDefaultAutoSelectFamily(), timeout: net.getDefaultAutoSelectFamilyAttemptTimeout() };\nout.recorder = require(\"fs\").readFileSync(__filename, \"utf8\");\n// blockList on connect: asynchronous, written last\nconst bl = new net.BlockList(); bl.addAddress(\"127.0.0.1\"); bl.addAddress(\"::1\", \"ipv6\");\nconst order = [];\nconst attempt = (label, make) => new Promise(resolve => { let s; const seen = { label, events: [] }; try { s = make(); } catch (e) { seen.thrown = err(e); resolve(seen); return; }\n  seen.sync = { connecting: s.connecting, destroyed: s.destroyed };\n  s.on(\"error\", e => { seen.events.push([\"error\", err(e), Object.keys(e)]); }); s.on(\"close\", h => { seen.events.push([\"close\", h]); resolve(seen); }); s.on(\"connect\", () => { seen.events.push([\"connect\"]); s.destroy(); });\n  process.nextTick(() => order.push(label + \":tick\")); s.once(\"error\", () => order.push(label + \":error\")); });\n(async () => {\n  out.blockListConnect = [];\n  out.blockListConnect.push(await attempt(\"ip\", () => net.connect({ host: \"127.0.0.1\", port: 9, blockList: bl })));\n  out.blockListConnect.push(await attempt(\"ip6\", () => net.connect({ host: \"::1\", port: 9, blockList: bl })));\n  out.blockListConnect.push(await attempt(\"invalid\", () => net.connect({ host: \"127.0.0.1\", port: 9, blockList: {} })));\n  out.blockListConnect.push(await attempt(\"ctor\", () => new net.Socket({ blockList: {} })));\n  out.blockListConnect.push(await attempt(\"ctor-ok\", () => new net.Socket({ blockList: bl }).connect(9, \"127.0.0.1\")));\n  out.blockListConnect.push(await attempt(\"lookup\", () => net.connect({ host: \"x.invalid\", port: 9, blockList: bl, lookup: (h, o, cb) => cb(null, o.all ? [{ address: \"127.0.0.1\", family: 4 }] : \"127.0.0.1\", 4) })));\n  out.blockListOrder = order;\n  process.stdout.write(JSON.stringify(out, null, 1));\n})();\n",
+ "blockListConnect": [
+  {
+   "label": "ip",
+   "events": [
+    [
+     "error",
+     {
+      "name": "Error",
+      "code": "ERR_IP_BLOCKED",
+      "message": "IP(127.0.0.1) is blocked by net.BlockList",
+      "ctor": "Error"
+     },
+     [
+      "code"
+     ]
+    ],
+    [
+     "close",
+     true
+    ]
+   ],
+   "sync": {
+    "connecting": true,
+    "destroyed": false
+   }
+  },
+  {
+   "label": "ip6",
+   "events": [
+    [
+     "error",
+     {
+      "name": "Error",
+      "code": "ERR_IP_BLOCKED",
+      "message": "IP(::1) is blocked by net.BlockList",
+      "ctor": "Error"
+     },
+     [
+      "code"
+     ]
+    ],
+    [
+     "close",
+     true
+    ]
+   ],
+   "sync": {
+    "connecting": true,
+    "destroyed": false
+   }
+  },
+  {
+   "label": "invalid",
+   "events": [],
+   "thrown": {
+    "name": "TypeError",
+    "code": "ERR_INVALID_ARG_TYPE",
+    "message": "The \"options.blockList\" property must be an net.BlockList. Received an instance of Object",
+    "ctor": "TypeError"
+   }
+  },
+  {
+   "label": "ctor",
+   "events": [],
+   "thrown": {
+    "name": "TypeError",
+    "code": "ERR_INVALID_ARG_TYPE",
+    "message": "The \"options.blockList\" property must be an net.BlockList. Received an instance of Object",
+    "ctor": "TypeError"
+   }
+  },
+  {
+   "label": "ctor-ok",
+   "events": [
+    [
+     "error",
+     {
+      "name": "Error",
+      "code": "ERR_IP_BLOCKED",
+      "message": "IP(127.0.0.1) is blocked by net.BlockList",
+      "ctor": "Error"
+     },
+     [
+      "code"
+     ]
+    ],
+    [
+     "close",
+     true
+    ]
+   ],
+   "sync": {
+    "connecting": true,
+    "destroyed": false
+   }
+  },
+  {
+   "label": "lookup",
+   "events": [
+    [
+     "error",
+     {
+      "name": "Error",
+      "code": "ERR_IP_BLOCKED",
+      "message": "IP(127.0.0.1) is blocked by net.BlockList",
+      "ctor": "Error"
+     },
+     [
+      "code"
+     ]
+    ],
+    [
+     "close",
+     true
+    ]
+   ],
+   "sync": {
+    "connecting": false,
+    "destroyed": true
+   }
+  }
+ ],
+ "blockListOrder": [
+  "ip:tick",
+  "ip:error",
+  "ip6:tick",
+  "ip6:error",
+  "ctor-ok:tick",
+  "ctor-ok:error",
+  "lookup:error",
+  "lookup:tick"
+ ]
+}

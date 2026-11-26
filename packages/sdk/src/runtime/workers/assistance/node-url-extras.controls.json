@@ -1,0 +1,1839 @@
+{
+ "node": {
+  "version": "v24.18.1",
+  "image": "node:24.18.1-alpine"
+ },
+ "functions": [
+  [
+   "domainToASCII",
+   "domainToASCII",
+   1
+  ],
+  [
+   "domainToUnicode",
+   "domainToUnicode",
+   1
+  ],
+  [
+   "urlToHttpOptions",
+   "urlToHttpOptions",
+   1
+  ],
+  [
+   "fileURLToPathBuffer",
+   "fileURLToPathBuffer",
+   1
+  ]
+ ],
+ "urlPattern": {
+  "same": true,
+  "type": "function",
+  "name": "URLPattern"
+ },
+ "domains": [
+  {
+   "input": "example.com",
+   "ascii": "example.com",
+   "unicode": "example.com",
+   "viaUrl": "example.com"
+  },
+  {
+   "input": "EXAMPLE.Com",
+   "ascii": "example.com",
+   "unicode": "example.com",
+   "viaUrl": "example.com"
+  },
+  {
+   "input": "español.com",
+   "ascii": "xn--espaol-zwa.com",
+   "unicode": "español.com",
+   "viaUrl": "xn--espaol-zwa.com"
+  },
+  {
+   "input": "straße.de",
+   "ascii": "xn--strae-oqa.de",
+   "unicode": "straße.de",
+   "viaUrl": "xn--strae-oqa.de"
+  },
+  {
+   "input": "faß.de",
+   "ascii": "xn--fa-hia.de",
+   "unicode": "faß.de",
+   "viaUrl": "xn--fa-hia.de"
+  },
+  {
+   "input": "bücher.example",
+   "ascii": "xn--bcher-kva.example",
+   "unicode": "bücher.example",
+   "viaUrl": "xn--bcher-kva.example"
+  },
+  {
+   "input": "Bücher.Example",
+   "ascii": "xn--bcher-kva.example",
+   "unicode": "bücher.example",
+   "viaUrl": "xn--bcher-kva.example"
+  },
+  {
+   "input": "中文.com",
+   "ascii": "xn--fiq228c.com",
+   "unicode": "中文.com",
+   "viaUrl": "xn--fiq228c.com"
+  },
+  {
+   "input": "日本語.jp",
+   "ascii": "xn--wgv71a119e.jp",
+   "unicode": "日本語.jp",
+   "viaUrl": "xn--wgv71a119e.jp"
+  },
+  {
+   "input": "💩.la",
+   "ascii": "xn--ls8h.la",
+   "unicode": "💩.la",
+   "viaUrl": "xn--ls8h.la"
+  },
+  {
+   "input": "xn--bcher-kva.example",
+   "ascii": "xn--bcher-kva.example",
+   "unicode": "bücher.example",
+   "viaUrl": "xn--bcher-kva.example"
+  },
+  {
+   "input": "XN--BCHER-KVA.example",
+   "ascii": "xn--bcher-kva.example",
+   "unicode": "bücher.example",
+   "viaUrl": "xn--bcher-kva.example"
+  },
+  {
+   "input": "xn--maana-pta.com",
+   "ascii": "xn--maana-pta.com",
+   "unicode": "mañana.com",
+   "viaUrl": "xn--maana-pta.com"
+  },
+  {
+   "input": "xn--",
+   "ascii": "",
+   "unicode": "",
+   "viaUrl": null
+  },
+  {
+   "input": "xn--a",
+   "ascii": "",
+   "unicode": "",
+   "viaUrl": null
+  },
+  {
+   "input": "xn--a.com",
+   "ascii": "",
+   "unicode": "",
+   "viaUrl": null
+  },
+  {
+   "input": "xn--zzzzzz",
+   "ascii": "",
+   "unicode": "",
+   "viaUrl": null
+  },
+  {
+   "input": "xn--ls8h.la",
+   "ascii": "xn--ls8h.la",
+   "unicode": "💩.la",
+   "viaUrl": "xn--ls8h.la"
+  },
+  {
+   "input": "xn--fa-hia.de",
+   "ascii": "xn--fa-hia.de",
+   "unicode": "faß.de",
+   "viaUrl": "xn--fa-hia.de"
+  },
+  {
+   "input": "xn--strae-oqa.de",
+   "ascii": "xn--strae-oqa.de",
+   "unicode": "straße.de",
+   "viaUrl": "xn--strae-oqa.de"
+  },
+  {
+   "input": "a.xn--nxasmq6b",
+   "ascii": "a.xn--nxasmq6b",
+   "unicode": "a.βόλοσ",
+   "viaUrl": "a.xn--nxasmq6b"
+  },
+  {
+   "input": "1",
+   "ascii": "0.0.0.1",
+   "unicode": "0.0.0.1",
+   "viaUrl": "0.0.0.1"
+  },
+  {
+   "input": "1.2.3.4",
+   "ascii": "1.2.3.4",
+   "unicode": "1.2.3.4",
+   "viaUrl": "1.2.3.4"
+  },
+  {
+   "input": "0x7f.1",
+   "ascii": "127.0.0.1",
+   "unicode": "127.0.0.1",
+   "viaUrl": "127.0.0.1"
+  },
+  {
+   "input": "127.1",
+   "ascii": "127.0.0.1",
+   "unicode": "127.0.0.1",
+   "viaUrl": "127.0.0.1"
+  },
+  {
+   "input": "1.2.3.4.5",
+   "ascii": "",
+   "unicode": "",
+   "viaUrl": null
+  },
+  {
+   "input": "256.256.256.256",
+   "ascii": "",
+   "unicode": "",
+   "viaUrl": null
+  },
+  {
+   "input": "0x100000000",
+   "ascii": "",
+   "unicode": "",
+   "viaUrl": null
+  },
+  {
+   "input": "example.com.",
+   "ascii": "example.com.",
+   "unicode": "example.com.",
+   "viaUrl": "example.com."
+  },
+  {
+   "input": "example.com..",
+   "ascii": "example.com..",
+   "unicode": "example.com..",
+   "viaUrl": "example.com.."
+  },
+  {
+   "input": "a..b",
+   "ascii": "a..b",
+   "unicode": "a..b",
+   "viaUrl": "a..b"
+  },
+  {
+   "input": ".",
+   "ascii": ".",
+   "unicode": ".",
+   "viaUrl": "."
+  },
+  {
+   "input": "..",
+   "ascii": "..",
+   "unicode": "..",
+   "viaUrl": ".."
+  },
+  {
+   "input": "",
+   "ascii": "",
+   "unicode": "",
+   "viaUrl": null
+  },
+  {
+   "input": " ",
+   "ascii": "",
+   "unicode": "",
+   "viaUrl": null
+  },
+  {
+   "input": "a b.com",
+   "ascii": "",
+   "unicode": "",
+   "viaUrl": null
+  },
+  {
+   "input": "a%2Eb",
+   "ascii": "a.b",
+   "unicode": "a.b",
+   "viaUrl": "a.b"
+  },
+  {
+   "input": "a%41.com",
+   "ascii": "aa.com",
+   "unicode": "aa.com",
+   "viaUrl": "aa.com"
+  },
+  {
+   "input": "ex ample",
+   "ascii": "",
+   "unicode": "",
+   "viaUrl": null
+  },
+  {
+   "input": "a<b",
+   "ascii": "",
+   "unicode": "",
+   "viaUrl": null
+  },
+  {
+   "input": "a>b",
+   "ascii": "",
+   "unicode": "",
+   "viaUrl": null
+  },
+  {
+   "input": "a^b",
+   "ascii": "",
+   "unicode": "",
+   "viaUrl": null
+  },
+  {
+   "input": "a|b",
+   "ascii": "",
+   "unicode": "",
+   "viaUrl": null
+  },
+  {
+   "input": "a#b",
+   "ascii": "a",
+   "unicode": "a",
+   "viaUrl": "a"
+  },
+  {
+   "input": "a/b",
+   "ascii": "a",
+   "unicode": "a",
+   "viaUrl": "a"
+  },
+  {
+   "input": "a?b",
+   "ascii": "a",
+   "unicode": "a",
+   "viaUrl": "a"
+  },
+  {
+   "input": "a@b",
+   "ascii": "",
+   "unicode": "",
+   "viaUrl": "b"
+  },
+  {
+   "input": "a:80",
+   "ascii": "",
+   "unicode": "",
+   "viaUrl": "a"
+  },
+  {
+   "input": "a:b",
+   "ascii": "",
+   "unicode": "",
+   "viaUrl": null
+  },
+  {
+   "input": "[::1]",
+   "ascii": "[::1]",
+   "unicode": "[::1]",
+   "viaUrl": "[::1]"
+  },
+  {
+   "input": "[::1",
+   "ascii": "",
+   "unicode": "",
+   "viaUrl": null
+  },
+  {
+   "input": "::1",
+   "ascii": "",
+   "unicode": "",
+   "viaUrl": null
+  },
+  {
+   "input": "a\\b",
+   "ascii": "a",
+   "unicode": "a",
+   "viaUrl": "a"
+  },
+  {
+   "input": "a\u0000b",
+   "ascii": "",
+   "unicode": "",
+   "viaUrl": null
+  },
+  {
+   "input": "a\tb",
+   "ascii": "ab",
+   "unicode": "ab",
+   "viaUrl": "ab"
+  },
+  {
+   "input": "a\nb",
+   "ascii": "ab",
+   "unicode": "ab",
+   "viaUrl": "ab"
+  },
+  {
+   "input": "ａｂｃ.com",
+   "ascii": "abc.com",
+   "unicode": "abc.com",
+   "viaUrl": "abc.com"
+  },
+  {
+   "input": "a­b.com",
+   "ascii": "ab.com",
+   "unicode": "ab.com",
+   "viaUrl": "ab.com"
+  },
+  {
+   "input": "a‍b.com",
+   "ascii": "",
+   "unicode": "",
+   "viaUrl": null
+  },
+  {
+   "input": "a‌b.com",
+   "ascii": "",
+   "unicode": "",
+   "viaUrl": null
+  },
+  {
+   "input": "́a.com",
+   "ascii": "",
+   "unicode": "",
+   "viaUrl": null
+  },
+  {
+   "input": "-a.com",
+   "ascii": "-a.com",
+   "unicode": "-a.com",
+   "viaUrl": "-a.com"
+  },
+  {
+   "input": "a-.com",
+   "ascii": "a-.com",
+   "unicode": "a-.com",
+   "viaUrl": "a-.com"
+  },
+  {
+   "input": "ab--c.com",
+   "ascii": "ab--c.com",
+   "unicode": "ab--c.com",
+   "viaUrl": "ab--c.com"
+  },
+  {
+   "input": "xn--a-ecp.ru",
+   "ascii": "",
+   "unicode": "",
+   "viaUrl": null
+  },
+  {
+   "input": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa.com",
+   "ascii": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa.com",
+   "unicode": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa.com",
+   "viaUrl": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa.com"
+  },
+  {
+   "input": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa.com",
+   "ascii": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa.com",
+   "unicode": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa.com",
+   "viaUrl": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa.com"
+  },
+  {
+   "input": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa.aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa.aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa.aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa.com",
+   "ascii": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa.aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa.aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa.aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa.com",
+   "unicode": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa.aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa.aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa.aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa.com",
+   "viaUrl": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa.aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa.aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa.aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa.com"
+  },
+  {
+   "input": "üüüüüüüüüüüüüüüüüüüüüüüüüüüüüüüüüüüüüüüüüüüüüüüüüüüüüüüüüüüü.com",
+   "ascii": "xn--tdaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa.com",
+   "unicode": "üüüüüüüüüüüüüüüüüüüüüüüüüüüüüüüüüüüüüüüüüüüüüüüüüüüüüüüüüüüü.com",
+   "viaUrl": "xn--tdaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa.com"
+  },
+  {
+   "input": "üüüüüüüüüüüüüüüüüüüüüüüüüüüüüüüüüüüüüüüüüüüüüüüüüüüüüüüüüüüüüüüüüüüüüüüüüüüüüüüüüüüüüüüüüüüüüüüüüüüüüüüüüüüüüüüüüüüüüüüüüüüüüüüüüüüüüüüüüüüüüüüüüüüüüüüüüüüüüüüüüüüüüüüüüüüüüüüüüüüüüüüüüüüüüüüüüüüüüüüüüüüüüüüüüüüüüüüüüüüüüüüüüüüüüüüüüüüüüüüüüüüüüüüüüüüüüüüüüüüüüüüüüüüüüüüüüüüüüüüüüüüüüüüüüüüüüüüüüüüü.com",
+   "ascii": "xn--tdaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa.com",
+   "unicode": "üüüüüüüüüüüüüüüüüüüüüüüüüüüüüüüüüüüüüüüüüüüüüüüüüüüüüüüüüüüüüüüüüüüüüüüüüüüüüüüüüüüüüüüüüüüüüüüüüüüüüüüüüüüüüüüüüüüüüüüüüüüüüüüüüüüüüüüüüüüüüüüüüüüüüüüüüüüüüüüüüüüüüüüüüüüüüüüüüüüüüüüüüüüüüüüüüüüüüüüüüüüüüüüüüüüüüüüüüüüüüüüüüüüüüüüüüüüüüüüüüüüüüüüüüüüüüüüüüüüüüüüüüüüüüüüüüüüüüüüüüüüüüüüüüüüüüüüüüüüü.com",
+   "viaUrl": "xn--tdaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa.com"
+  },
+  {
+   "input": "σς.gr",
+   "ascii": "xn--3xab.gr",
+   "unicode": "σς.gr",
+   "viaUrl": "xn--3xab.gr"
+  },
+  {
+   "input": "ΣΑΣ.gr",
+   "ascii": "xn--mxa9ab.gr",
+   "unicode": "σασ.gr",
+   "viaUrl": "xn--mxa9ab.gr"
+  },
+  {
+   "input": "İstanbul.tr",
+   "ascii": "xn--istanbul-o0e.tr",
+   "unicode": "i̇stanbul.tr",
+   "viaUrl": "xn--istanbul-o0e.tr"
+  },
+  {
+   "input": "a。b．c｡d",
+   "ascii": "a.b.c.d",
+   "unicode": "a.b.c.d",
+   "viaUrl": "a.b.c.d"
+  },
+  {
+   "input": "a_b.com",
+   "ascii": "a_b.com",
+   "unicode": "a_b.com",
+   "viaUrl": "a_b.com"
+  },
+  {
+   "input": "_dmarc.example.com",
+   "ascii": "_dmarc.example.com",
+   "unicode": "_dmarc.example.com",
+   "viaUrl": "_dmarc.example.com"
+  },
+  {
+   "input": "*.example.com",
+   "ascii": "*.example.com",
+   "unicode": "*.example.com",
+   "viaUrl": "*.example.com"
+  },
+  {
+   "input": "xn--ü.com",
+   "ascii": "",
+   "unicode": "",
+   "viaUrl": null
+  },
+  {
+   "input": "xn--80ak6aa92e.com",
+   "ascii": "xn--80ak6aa92e.com",
+   "unicode": "аррӏе.com",
+   "viaUrl": "xn--80ak6aa92e.com"
+  },
+  {
+   "input": "العربية.com",
+   "ascii": "xn--mgbcd4a2b0d2b.com",
+   "unicode": "العربية.com",
+   "viaUrl": "xn--mgbcd4a2b0d2b.com"
+  },
+  {
+   "input": "aא.com",
+   "ascii": "xn--a-0hc.com",
+   "unicode": "aא.com",
+   "viaUrl": "xn--a-0hc.com"
+  },
+  {
+   "input": "0.0.0.0x",
+   "ascii": "0.0.0.0",
+   "unicode": "0.0.0.0",
+   "viaUrl": "0.0.0.0"
+  },
+  {
+   "input": "09.1",
+   "ascii": "",
+   "unicode": "",
+   "viaUrl": null
+  },
+  {
+   "input": "1e3.com",
+   "ascii": "1e3.com",
+   "unicode": "1e3.com",
+   "viaUrl": "1e3.com"
+  },
+  {
+   "input": "LOCALHOST",
+   "ascii": "localhost",
+   "unicode": "localhost",
+   "viaUrl": "localhost"
+  },
+  {
+   "input": "xn--u-ccb.com",
+   "ascii": "",
+   "unicode": "",
+   "viaUrl": null
+  },
+  {
+   "input": "xn--1ch.com",
+   "ascii": "xn--1ch.com",
+   "unicode": "≠.com",
+   "viaUrl": "xn--1ch.com"
+  },
+  {
+   "input": "≠.com",
+   "ascii": "xn--1ch.com",
+   "unicode": "≠.com",
+   "viaUrl": "xn--1ch.com"
+  },
+  {
+   "input": "xn--xn--a.com",
+   "ascii": "",
+   "unicode": "",
+   "viaUrl": null
+  },
+  {
+   "input": "é.com",
+   "ascii": "xn--9ca.com",
+   "unicode": "é.com",
+   "viaUrl": "xn--9ca.com"
+  },
+  {
+   "input": "é.com",
+   "ascii": "xn--9ca.com",
+   "unicode": "é.com",
+   "viaUrl": "xn--9ca.com"
+  }
+ ],
+ "domainLoose": [
+  {
+   "arg": {
+    "$": "undefined"
+   },
+   "ascii": {
+    "value": "undefined"
+   },
+   "unicode": {
+    "value": "undefined"
+   }
+  },
+  {
+   "arg": null,
+   "ascii": {
+    "value": "null"
+   },
+   "unicode": {
+    "value": "null"
+   }
+  },
+  {
+   "arg": 1,
+   "ascii": {
+    "value": "0.0.0.1"
+   },
+   "unicode": {
+    "value": "0.0.0.1"
+   }
+  },
+  {
+   "arg": true,
+   "ascii": {
+    "value": "true"
+   },
+   "unicode": {
+    "value": "true"
+   }
+  },
+  {
+   "arg": {},
+   "ascii": {
+    "value": ""
+   },
+   "unicode": {
+    "value": ""
+   }
+  },
+  {
+   "arg": [],
+   "ascii": {
+    "value": ""
+   },
+   "unicode": {
+    "value": ""
+   }
+  },
+  {
+   "arg": [
+    "a.com"
+   ],
+   "ascii": {
+    "value": "a.com"
+   },
+   "unicode": {
+    "value": "a.com"
+   }
+  },
+  {
+   "arg": {
+    "$": "symbol"
+   },
+   "ascii": {
+    "error": {
+     "name": "TypeError",
+     "code": null,
+     "message": "Cannot convert a Symbol value to a string",
+     "ctor": "TypeError"
+    }
+   },
+   "unicode": {
+    "error": {
+     "name": "TypeError",
+     "code": null,
+     "message": "Cannot convert a Symbol value to a string",
+     "ctor": "TypeError"
+    }
+   }
+  }
+ ],
+ "domainNoArg": {
+  "ascii": {
+   "error": {
+    "name": "TypeError",
+    "code": "ERR_MISSING_ARGS",
+    "message": "The \"domain\" argument must be specified",
+    "ctor": "TypeError"
+   }
+  },
+  "unicode": {
+   "error": {
+    "name": "TypeError",
+    "code": "ERR_MISSING_ARGS",
+    "message": "The \"domain\" argument must be specified",
+    "ctor": "TypeError"
+   }
+  }
+ },
+ "httpOptions": [
+  {
+   "url": "http://user:pa%20ss@example.com:8080/a/b?x=1#h",
+   "value": {
+    "proto": null,
+    "keys": [
+     "protocol",
+     "hostname",
+     "hash",
+     "search",
+     "pathname",
+     "path",
+     "href",
+     "port",
+     "auth"
+    ],
+    "value": {
+     "protocol": "http:",
+     "hostname": "example.com",
+     "hash": "#h",
+     "search": "?x=1",
+     "pathname": "/a/b",
+     "path": "/a/b?x=1",
+     "href": "http://user:pa%20ss@example.com:8080/a/b?x=1#h",
+     "port": 8080,
+     "auth": "user:pa ss"
+    }
+   }
+  },
+  {
+   "url": "https://example.com/",
+   "value": {
+    "proto": null,
+    "keys": [
+     "protocol",
+     "hostname",
+     "hash",
+     "search",
+     "pathname",
+     "path",
+     "href"
+    ],
+    "value": {
+     "protocol": "https:",
+     "hostname": "example.com",
+     "hash": "",
+     "search": "",
+     "pathname": "/",
+     "path": "/",
+     "href": "https://example.com/"
+    }
+   }
+  },
+  {
+   "url": "http://[::1]:3000/p?q",
+   "value": {
+    "proto": null,
+    "keys": [
+     "protocol",
+     "hostname",
+     "hash",
+     "search",
+     "pathname",
+     "path",
+     "href",
+     "port"
+    ],
+    "value": {
+     "protocol": "http:",
+     "hostname": "::1",
+     "hash": "",
+     "search": "?q",
+     "pathname": "/p",
+     "path": "/p?q",
+     "href": "http://[::1]:3000/p?q",
+     "port": 3000
+    }
+   }
+  },
+  {
+   "url": "http://[2001:db8::1]/",
+   "value": {
+    "proto": null,
+    "keys": [
+     "protocol",
+     "hostname",
+     "hash",
+     "search",
+     "pathname",
+     "path",
+     "href"
+    ],
+    "value": {
+     "protocol": "http:",
+     "hostname": "2001:db8::1",
+     "hash": "",
+     "search": "",
+     "pathname": "/",
+     "path": "/",
+     "href": "http://[2001:db8::1]/"
+    }
+   }
+  },
+  {
+   "url": "http://%E4%BD%A0:%F0%9F%98%80@host/",
+   "value": {
+    "proto": null,
+    "keys": [
+     "protocol",
+     "hostname",
+     "hash",
+     "search",
+     "pathname",
+     "path",
+     "href",
+     "auth"
+    ],
+    "value": {
+     "protocol": "http:",
+     "hostname": "host",
+     "hash": "",
+     "search": "",
+     "pathname": "/",
+     "path": "/",
+     "href": "http://%E4%BD%A0:%F0%9F%98%80@host/",
+     "auth": "你:😀"
+    }
+   }
+  },
+  {
+   "url": "http://u@host/",
+   "value": {
+    "proto": null,
+    "keys": [
+     "protocol",
+     "hostname",
+     "hash",
+     "search",
+     "pathname",
+     "path",
+     "href",
+     "auth"
+    ],
+    "value": {
+     "protocol": "http:",
+     "hostname": "host",
+     "hash": "",
+     "search": "",
+     "pathname": "/",
+     "path": "/",
+     "href": "http://u@host/",
+     "auth": "u:"
+    }
+   }
+  },
+  {
+   "url": "http://:p@host/",
+   "value": {
+    "proto": null,
+    "keys": [
+     "protocol",
+     "hostname",
+     "hash",
+     "search",
+     "pathname",
+     "path",
+     "href",
+     "auth"
+    ],
+    "value": {
+     "protocol": "http:",
+     "hostname": "host",
+     "hash": "",
+     "search": "",
+     "pathname": "/",
+     "path": "/",
+     "href": "http://:p@host/",
+     "auth": ":p"
+    }
+   }
+  },
+  {
+   "url": "http://host",
+   "value": {
+    "proto": null,
+    "keys": [
+     "protocol",
+     "hostname",
+     "hash",
+     "search",
+     "pathname",
+     "path",
+     "href"
+    ],
+    "value": {
+     "protocol": "http:",
+     "hostname": "host",
+     "hash": "",
+     "search": "",
+     "pathname": "/",
+     "path": "/",
+     "href": "http://host/"
+    }
+   }
+  },
+  {
+   "url": "file:///a/b",
+   "value": {
+    "proto": null,
+    "keys": [
+     "protocol",
+     "hostname",
+     "hash",
+     "search",
+     "pathname",
+     "path",
+     "href"
+    ],
+    "value": {
+     "protocol": "file:",
+     "hostname": "",
+     "hash": "",
+     "search": "",
+     "pathname": "/a/b",
+     "path": "/a/b",
+     "href": "file:///a/b"
+    }
+   }
+  },
+  {
+   "url": "ws://h:80/x",
+   "value": {
+    "proto": null,
+    "keys": [
+     "protocol",
+     "hostname",
+     "hash",
+     "search",
+     "pathname",
+     "path",
+     "href"
+    ],
+    "value": {
+     "protocol": "ws:",
+     "hostname": "h",
+     "hash": "",
+     "search": "",
+     "pathname": "/x",
+     "path": "/x",
+     "href": "ws://h/x"
+    }
+   }
+  },
+  {
+   "url": "http://h:80/x",
+   "value": {
+    "proto": null,
+    "keys": [
+     "protocol",
+     "hostname",
+     "hash",
+     "search",
+     "pathname",
+     "path",
+     "href"
+    ],
+    "value": {
+     "protocol": "http:",
+     "hostname": "h",
+     "hash": "",
+     "search": "",
+     "pathname": "/x",
+     "path": "/x",
+     "href": "http://h/x"
+    }
+   }
+  },
+  {
+   "url": "data:text/plain,hi",
+   "value": {
+    "proto": null,
+    "keys": [
+     "protocol",
+     "hostname",
+     "hash",
+     "search",
+     "pathname",
+     "path",
+     "href"
+    ],
+    "value": {
+     "protocol": "data:",
+     "hostname": "",
+     "hash": "",
+     "search": "",
+     "pathname": "text/plain,hi",
+     "path": "text/plain,hi",
+     "href": "data:text/plain,hi"
+    }
+   }
+  },
+  {
+   "url": "http://user%3A:p%40ss@h/",
+   "value": {
+    "proto": null,
+    "keys": [
+     "protocol",
+     "hostname",
+     "hash",
+     "search",
+     "pathname",
+     "path",
+     "href",
+     "auth"
+    ],
+    "value": {
+     "protocol": "http:",
+     "hostname": "h",
+     "hash": "",
+     "search": "",
+     "pathname": "/",
+     "path": "/",
+     "href": "http://user%3A:p%40ss@h/",
+     "auth": "user::p@ss"
+    }
+   }
+  },
+  {
+   "url": "http://h/?",
+   "value": {
+    "proto": null,
+    "keys": [
+     "protocol",
+     "hostname",
+     "hash",
+     "search",
+     "pathname",
+     "path",
+     "href"
+    ],
+    "value": {
+     "protocol": "http:",
+     "hostname": "h",
+     "hash": "",
+     "search": "",
+     "pathname": "/",
+     "path": "/",
+     "href": "http://h/?"
+    }
+   }
+  },
+  {
+   "url": "http://h/#",
+   "value": {
+    "proto": null,
+    "keys": [
+     "protocol",
+     "hostname",
+     "hash",
+     "search",
+     "pathname",
+     "path",
+     "href"
+    ],
+    "value": {
+     "protocol": "http:",
+     "hostname": "h",
+     "hash": "",
+     "search": "",
+     "pathname": "/",
+     "path": "/",
+     "href": "http://h/#"
+    }
+   }
+  },
+  {
+   "url": "http://xn--bcher-kva.example/ü",
+   "value": {
+    "proto": null,
+    "keys": [
+     "protocol",
+     "hostname",
+     "hash",
+     "search",
+     "pathname",
+     "path",
+     "href"
+    ],
+    "value": {
+     "protocol": "http:",
+     "hostname": "xn--bcher-kva.example",
+     "hash": "",
+     "search": "",
+     "pathname": "/%C3%BC",
+     "path": "/%C3%BC",
+     "href": "http://xn--bcher-kva.example/%C3%BC"
+    }
+   }
+  }
+ ],
+ "httpOptionsExtended": {
+  "value": {
+   "proto": null,
+   "keys": [
+    "custom",
+    "headers",
+    "port2",
+    "protocol",
+    "hostname",
+    "hash",
+    "search",
+    "pathname",
+    "path",
+    "href",
+    "port"
+   ],
+   "value": {
+    "custom": 1,
+    "headers": {
+     "x": "y"
+    },
+    "port2": "z",
+    "protocol": "http:",
+    "hostname": "a.b",
+    "hash": "#e",
+    "search": "?d",
+    "pathname": "/c",
+    "path": "/c?d",
+    "href": "http://a.b:81/c?d#e",
+    "port": 81
+   }
+  }
+ },
+ "httpOptionsPlain": [
+  {
+   "input": {
+    "hostname": "[::1]",
+    "pathname": "/p",
+    "search": "?s",
+    "port": "8",
+    "username": "a%20b",
+    "password": "",
+    "protocol": "x:",
+    "hash": "#h",
+    "href": "H",
+    "extra": true
+   },
+   "value": {
+    "proto": null,
+    "keys": [
+     "hostname",
+     "pathname",
+     "search",
+     "port",
+     "username",
+     "password",
+     "protocol",
+     "hash",
+     "href",
+     "extra",
+     "path",
+     "auth"
+    ],
+    "value": {
+     "hostname": "::1",
+     "pathname": "/p",
+     "search": "?s",
+     "port": 8,
+     "username": "a%20b",
+     "password": "",
+     "protocol": "x:",
+     "hash": "#h",
+     "href": "H",
+     "extra": true,
+     "path": "/p?s",
+     "auth": "a b:"
+    }
+   }
+  },
+  {
+   "input": {
+    "port": ""
+   },
+   "value": {
+    "proto": null,
+    "keys": [
+     "port",
+     "protocol",
+     "hostname",
+     "hash",
+     "search",
+     "pathname",
+     "path",
+     "href"
+    ],
+    "value": {
+     "port": "",
+     "path": ""
+    }
+   }
+  },
+  {
+   "input": {
+    "hostname": "",
+    "port": "0",
+    "username": "",
+    "password": "p"
+   },
+   "value": {
+    "proto": null,
+    "keys": [
+     "hostname",
+     "port",
+     "username",
+     "password",
+     "protocol",
+     "hash",
+     "search",
+     "pathname",
+     "path",
+     "href",
+     "auth"
+    ],
+    "value": {
+     "hostname": "",
+     "port": 0,
+     "username": "",
+     "password": "p",
+     "path": "",
+     "auth": ":p"
+    }
+   }
+  },
+  {
+   "input": {
+    "username": "%zz"
+   },
+   "error": {
+    "name": "URIError",
+    "code": null,
+    "message": "URI malformed",
+    "ctor": "URIError"
+   }
+  },
+  {
+   "input": [],
+   "value": {
+    "proto": null,
+    "keys": [
+     "protocol",
+     "hostname",
+     "hash",
+     "search",
+     "pathname",
+     "path",
+     "href",
+     "port"
+    ],
+    "value": {
+     "path": "",
+     "port": null
+    }
+   }
+  }
+ ],
+ "httpOptionsFunction": {
+  "value": {
+   "proto": null,
+   "keys": [
+    "pathname",
+    "protocol",
+    "hostname",
+    "hash",
+    "search",
+    "path",
+    "href",
+    "port"
+   ],
+   "value": {
+    "pathname": "/x",
+    "path": "/x",
+    "port": null
+   }
+  }
+ },
+ "httpOptionsLoose": [
+  {
+   "arg": {
+    "$": "undefined"
+   },
+   "error": {
+    "name": "TypeError",
+    "code": "ERR_INVALID_ARG_TYPE",
+    "message": "The \"url\" argument must be of type object. Received undefined",
+    "ctor": "TypeError"
+   }
+  },
+  {
+   "arg": null,
+   "error": {
+    "name": "TypeError",
+    "code": "ERR_INVALID_ARG_TYPE",
+    "message": "The \"url\" argument must be of type object. Received null",
+    "ctor": "TypeError"
+   }
+  },
+  {
+   "arg": 1,
+   "error": {
+    "name": "TypeError",
+    "code": "ERR_INVALID_ARG_TYPE",
+    "message": "The \"url\" argument must be of type object. Received type number (1)",
+    "ctor": "TypeError"
+   }
+  },
+  {
+   "arg": "http://a/",
+   "error": {
+    "name": "TypeError",
+    "code": "ERR_INVALID_ARG_TYPE",
+    "message": "The \"url\" argument must be of type object. Received type string ('http://a/')",
+    "ctor": "TypeError"
+   }
+  },
+  {
+   "arg": true,
+   "error": {
+    "name": "TypeError",
+    "code": "ERR_INVALID_ARG_TYPE",
+    "message": "The \"url\" argument must be of type object. Received type boolean (true)",
+    "ctor": "TypeError"
+   }
+  }
+ ],
+ "fileBuffer": [
+  {
+   "input": "file:///a/b",
+   "string": {
+    "value": {
+     "isBuffer": true,
+     "hex": "2f612f62"
+    }
+   },
+   "object": {
+    "value": {
+     "isBuffer": true,
+     "hex": "2f612f62"
+    }
+   }
+  },
+  {
+   "input": "file:///a%20b",
+   "string": {
+    "value": {
+     "isBuffer": true,
+     "hex": "2f612062"
+    }
+   },
+   "object": {
+    "value": {
+     "isBuffer": true,
+     "hex": "2f612062"
+    }
+   }
+  },
+  {
+   "input": "file:///%ff%fe/x",
+   "string": {
+    "value": {
+     "isBuffer": true,
+     "hex": "2ffffe2f78"
+    }
+   },
+   "object": {
+    "value": {
+     "isBuffer": true,
+     "hex": "2ffffe2f78"
+    }
+   }
+  },
+  {
+   "input": "file:///%E4%BD%A0",
+   "string": {
+    "value": {
+     "isBuffer": true,
+     "hex": "2fe4bda0"
+    }
+   },
+   "object": {
+    "value": {
+     "isBuffer": true,
+     "hex": "2fe4bda0"
+    }
+   }
+  },
+  {
+   "input": "file:///a%2Fb",
+   "string": {
+    "value": {
+     "isBuffer": true,
+     "hex": "2f612f62"
+    }
+   },
+   "object": {
+    "value": {
+     "isBuffer": true,
+     "hex": "2f612f62"
+    }
+   }
+  },
+  {
+   "input": "file:///a%2fb",
+   "string": {
+    "value": {
+     "isBuffer": true,
+     "hex": "2f612f62"
+    }
+   },
+   "object": {
+    "value": {
+     "isBuffer": true,
+     "hex": "2f612f62"
+    }
+   }
+  },
+  {
+   "input": "file:///%00",
+   "string": {
+    "value": {
+     "isBuffer": true,
+     "hex": "2f00"
+    }
+   },
+   "object": {
+    "value": {
+     "isBuffer": true,
+     "hex": "2f00"
+    }
+   }
+  },
+  {
+   "input": "file:///a%5Cb",
+   "string": {
+    "value": {
+     "isBuffer": true,
+     "hex": "2f615c62"
+    }
+   },
+   "object": {
+    "value": {
+     "isBuffer": true,
+     "hex": "2f615c62"
+    }
+   }
+  },
+  {
+   "input": "file:///a?q#h",
+   "string": {
+    "value": {
+     "isBuffer": true,
+     "hex": "2f61"
+    }
+   },
+   "object": {
+    "value": {
+     "isBuffer": true,
+     "hex": "2f61"
+    }
+   }
+  },
+  {
+   "input": "file://localhost/a",
+   "string": {
+    "value": {
+     "isBuffer": true,
+     "hex": "2f61"
+    }
+   },
+   "object": {
+    "value": {
+     "isBuffer": true,
+     "hex": "2f61"
+    }
+   }
+  },
+  {
+   "input": "file://remote/a",
+   "string": {
+    "error": {
+     "name": "TypeError",
+     "code": "ERR_INVALID_FILE_URL_HOST",
+     "message": "File URL host must be \"localhost\" or empty on linux",
+     "ctor": "TypeError"
+    }
+   },
+   "object": {
+    "error": {
+     "name": "TypeError",
+     "code": "ERR_INVALID_FILE_URL_HOST",
+     "message": "File URL host must be \"localhost\" or empty on linux",
+     "ctor": "TypeError"
+    }
+   }
+  },
+  {
+   "input": "file:///",
+   "string": {
+    "value": {
+     "isBuffer": true,
+     "hex": "2f"
+    }
+   },
+   "object": {
+    "value": {
+     "isBuffer": true,
+     "hex": "2f"
+    }
+   }
+  },
+  {
+   "input": "file:///%zz",
+   "string": {
+    "value": {
+     "isBuffer": true,
+     "hex": "2f257a7a"
+    }
+   },
+   "object": {
+    "value": {
+     "isBuffer": true,
+     "hex": "2f257a7a"
+    }
+   }
+  },
+  {
+   "input": "file:///%",
+   "string": {
+    "value": {
+     "isBuffer": true,
+     "hex": "2f25"
+    }
+   },
+   "object": {
+    "value": {
+     "isBuffer": true,
+     "hex": "2f25"
+    }
+   }
+  },
+  {
+   "input": "file:///%4",
+   "string": {
+    "value": {
+     "isBuffer": true,
+     "hex": "2f2534"
+    }
+   },
+   "object": {
+    "value": {
+     "isBuffer": true,
+     "hex": "2f2534"
+    }
+   }
+  },
+  {
+   "input": "file:///a%41%61",
+   "string": {
+    "value": {
+     "isBuffer": true,
+     "hex": "2f614161"
+    }
+   },
+   "object": {
+    "value": {
+     "isBuffer": true,
+     "hex": "2f614161"
+    }
+   }
+  },
+  {
+   "input": "file:///%C3%28",
+   "string": {
+    "value": {
+     "isBuffer": true,
+     "hex": "2fc328"
+    }
+   },
+   "object": {
+    "value": {
+     "isBuffer": true,
+     "hex": "2fc328"
+    }
+   }
+  },
+  {
+   "input": "file:///ü/😀",
+   "string": {
+    "value": {
+     "isBuffer": true,
+     "hex": "2fc3bc2ff09f9880"
+    }
+   },
+   "object": {
+    "value": {
+     "isBuffer": true,
+     "hex": "2fc3bc2ff09f9880"
+    }
+   }
+  },
+  {
+   "input": "https://a/b",
+   "string": {
+    "error": {
+     "name": "TypeError",
+     "code": "ERR_INVALID_URL_SCHEME",
+     "message": "The URL must be of scheme file",
+     "ctor": "TypeError"
+    }
+   },
+   "object": {
+    "error": {
+     "name": "TypeError",
+     "code": "ERR_INVALID_URL_SCHEME",
+     "message": "The URL must be of scheme file",
+     "ctor": "TypeError"
+    }
+   }
+  },
+  {
+   "input": "invalid",
+   "string": {
+    "error": {
+     "name": "TypeError",
+     "code": "ERR_INVALID_URL",
+     "message": "Invalid URL",
+     "ctor": "TypeError",
+     "input": "invalid"
+    }
+   },
+   "object": {
+    "error": {
+     "name": "TypeError",
+     "code": "ERR_INVALID_URL",
+     "message": "Invalid URL",
+     "ctor": "TypeError",
+     "input": "invalid"
+    }
+   }
+  },
+  {
+   "input": "",
+   "string": {
+    "error": {
+     "name": "TypeError",
+     "code": "ERR_INVALID_URL",
+     "message": "Invalid URL",
+     "ctor": "TypeError",
+     "input": ""
+    }
+   },
+   "object": {
+    "error": {
+     "name": "TypeError",
+     "code": "ERR_INVALID_URL",
+     "message": "Invalid URL",
+     "ctor": "TypeError",
+     "input": ""
+    }
+   }
+  },
+  {
+   "input": "file:///C:/x",
+   "string": {
+    "value": {
+     "isBuffer": true,
+     "hex": "2f433a2f78"
+    }
+   },
+   "object": {
+    "value": {
+     "isBuffer": true,
+     "hex": "2f433a2f78"
+    }
+   }
+  },
+  {
+   "input": "file:///a/./b/../c",
+   "string": {
+    "value": {
+     "isBuffer": true,
+     "hex": "2f612f63"
+    }
+   },
+   "object": {
+    "value": {
+     "isBuffer": true,
+     "hex": "2f612f63"
+    }
+   }
+  },
+  {
+   "input": "file:///a%2e%2E/b",
+   "string": {
+    "value": {
+     "isBuffer": true,
+     "hex": "2f612e2e2f62"
+    }
+   },
+   "object": {
+    "value": {
+     "isBuffer": true,
+     "hex": "2f612e2e2f62"
+    }
+   }
+  },
+  {
+   "input": "file:",
+   "string": {
+    "value": {
+     "isBuffer": true,
+     "hex": "2f"
+    }
+   },
+   "object": {
+    "value": {
+     "isBuffer": true,
+     "hex": "2f"
+    }
+   }
+  }
+ ],
+ "fileBufferLoose": [
+  {
+   "args": [
+    {
+     "$": "undefined"
+    }
+   ],
+   "error": {
+    "name": "TypeError",
+    "code": "ERR_INVALID_ARG_TYPE",
+    "message": "The \"path\" argument must be of type string or an instance of URL. Received undefined",
+    "ctor": "TypeError"
+   }
+  },
+  {
+   "args": [
+    null
+   ],
+   "error": {
+    "name": "TypeError",
+    "code": "ERR_INVALID_ARG_TYPE",
+    "message": "The \"path\" argument must be of type string or an instance of URL. Received null",
+    "ctor": "TypeError"
+   }
+  },
+  {
+   "args": [
+    1
+   ],
+   "error": {
+    "name": "TypeError",
+    "code": "ERR_INVALID_ARG_TYPE",
+    "message": "The \"path\" argument must be of type string or an instance of URL. Received type number (1)",
+    "ctor": "TypeError"
+   }
+  },
+  {
+   "args": [
+    {}
+   ],
+   "error": {
+    "name": "TypeError",
+    "code": "ERR_INVALID_ARG_TYPE",
+    "message": "The \"path\" argument must be of type string or an instance of URL. Received an instance of Object",
+    "ctor": "TypeError"
+   }
+  },
+  {
+   "args": [
+    {
+     "href": "file:///a",
+     "protocol": "file:",
+     "pathname": "/a",
+     "hostname": ""
+    }
+   ],
+   "value": {
+    "isBuffer": true,
+    "hex": "2f61"
+   }
+  },
+  {
+   "args": [
+    "file:///a",
+    null
+   ],
+   "value": {
+    "isBuffer": true,
+    "hex": "2f61"
+   }
+  },
+  {
+   "args": [
+    "file:///a",
+    1
+   ],
+   "value": {
+    "isBuffer": true,
+    "hex": "2f61"
+   }
+  },
+  {
+   "args": [
+    "file:///a",
+    {
+     "windows": false
+    }
+   ],
+   "value": {
+    "isBuffer": true,
+    "hex": "2f61"
+   }
+  },
+  {
+   "args": [
+    "file:///a",
+    {
+     "windows": 0
+    }
+   ],
+   "value": {
+    "isBuffer": true,
+    "hex": "2f61"
+   }
+  },
+  {
+   "args": [
+    "file:///a",
+    {
+     "windows": null
+    }
+   ],
+   "value": {
+    "isBuffer": true,
+    "hex": "2f61"
+   }
+  }
+ ],
+ "recorder": "\"use strict\";\nconst url = require(\"url\");\nconst err = e => ({ name: e.name, code: e.code === undefined ? null : e.code, message: e.message, ctor: e.constructor.name, ...(e.input === undefined ? {} : { input: e.input }) });\nconst run = f => { try { return { value: f() }; } catch (e) { return { error: err(e) }; } };\nconst U = { $: \"undefined\" }, dec = v => v && typeof v === \"object\" && v.$ === \"undefined\" ? undefined : v && typeof v === \"object\" && v.$ === \"symbol\" ? Symbol(\"s\") : v;\nconst domains = [\"example.com\", \"EXAMPLE.Com\", \"español.com\", \"straße.de\", \"faß.de\", \"bücher.example\", \"Bücher.Example\", \"中文.com\", \"日本語.jp\", \"💩.la\", \"xn--bcher-kva.example\", \"XN--BCHER-KVA.example\", \"xn--maana-pta.com\", \"xn--\", \"xn--a\", \"xn--a.com\", \"xn--zzzzzz\", \"xn--ls8h.la\", \"xn--fa-hia.de\", \"xn--strae-oqa.de\", \"a.xn--nxasmq6b\", \"1\", \"1.2.3.4\", \"0x7f.1\", \"127.1\", \"1.2.3.4.5\", \"256.256.256.256\", \"0x100000000\", \"example.com.\", \"example.com..\", \"a..b\", \".\", \"..\", \"\", \" \", \"a b.com\", \"a%2Eb\", \"a%41.com\", \"ex ample\", \"a<b\", \"a>b\", \"a^b\", \"a|b\", \"a#b\", \"a/b\", \"a?b\", \"a@b\", \"a:80\", \"a:b\", \"[::1]\", \"[::1\", \"::1\", \"a\\\\b\", \"a\\u0000b\", \"a\\tb\", \"a\\nb\", \"ａｂｃ.com\", \"a\\u00adb.com\", \"a\\u200db.com\", \"a\\u200cb.com\", \"\\u0301a.com\", \"-a.com\", \"a-.com\", \"ab--c.com\", \"xn--a-ecp.ru\", \"a\".repeat(63) + \".com\", \"a\".repeat(64) + \".com\", (\"a\".repeat(63) + \".\").repeat(4) + \"com\", \"ü\".repeat(60) + \".com\", \"ü\".repeat(300) + \".com\", \"σς.gr\", \"ΣΑΣ.gr\", \"İstanbul.tr\", \"a。b．c｡d\", \"a_b.com\", \"_dmarc.example.com\", \"*.example.com\", \"xn--\\u00fc.com\", \"xn--80ak6aa92e.com\", \"\\u0627\\u0644\\u0639\\u0631\\u0628\\u064a\\u0629.com\", \"a\\u05d0.com\", \"0.0.0.0x\", \"09.1\", \"1e3.com\", \"LOCALHOST\", \"xn--u-ccb.com\", \"xn--1ch.com\", \"≠.com\", \"xn--xn--a.com\", \"é.com\", \"e\\u0301.com\"];\nconst loose = [U, null, 1, true, {}, [], [\"a.com\"], { $: \"symbol\" }];\nconst out = { node: { version: process.version, image: \"node:24.18.1-alpine\" } };\nout.functions = [\"domainToASCII\", \"domainToUnicode\", \"urlToHttpOptions\", \"fileURLToPathBuffer\"].map(n => [n, url[n].name, url[n].length]);\nout.urlPattern = { same: url.URLPattern === globalThis.URLPattern, type: typeof url.URLPattern, name: url.URLPattern.name };\nout.domains = domains.map(d => ({ input: d, ascii: url.domainToASCII(d), unicode: url.domainToUnicode(d), viaUrl: (() => { try { return new URL(\"http://\" + d).hostname; } catch { return null; } })() }));\nout.domainLoose = loose.map(a => ({ arg: a, ascii: run(() => url.domainToASCII(dec(a))), unicode: run(() => url.domainToUnicode(dec(a))) }));\nout.domainNoArg = { ascii: run(() => url.domainToASCII()), unicode: run(() => url.domainToUnicode()) };\nconst show = o => ({ proto: Object.getPrototypeOf(o) === null ? null : \"object\", keys: Reflect.ownKeys(o).map(String), value: o });\nconst urls = [\"http://user:pa%20ss@example.com:8080/a/b?x=1#h\", \"https://example.com/\", \"http://[::1]:3000/p?q\", \"http://[2001:db8::1]/\", \"http://%E4%BD%A0:%F0%9F%98%80@host/\", \"http://u@host/\", \"http://:p@host/\", \"http://host\", \"file:///a/b\", \"ws://h:80/x\", \"http://h:80/x\", \"data:text/plain,hi\", \"http://user%3A:p%40ss@h/\", \"http://h/?\", \"http://h/#\", \"http://xn--bcher-kva.example/ü\"];\nout.httpOptions = urls.map(u => ({ url: u, ...run(() => show(url.urlToHttpOptions(new URL(u)))) }));\nout.httpOptionsExtended = (() => { const u = new URL(\"http://a.b:81/c?d#e\"); u.custom = 1; u.headers = { x: \"y\" }; u.port2 = \"z\"; Object.defineProperty(u, \"hidden\", { value: 1, enumerable: false }); return run(() => show(url.urlToHttpOptions(u))); })();\nout.httpOptionsPlain = [{ hostname: \"[::1]\", pathname: \"/p\", search: \"?s\", port: \"8\", username: \"a%20b\", password: \"\", protocol: \"x:\", hash: \"#h\", href: \"H\", extra: true }, { port: \"\" }, { hostname: \"\", port: \"0\" , username: \"\", password: \"p\" }, { username: \"%zz\" }, []].map(o => ({ input: o, ...run(() => show(url.urlToHttpOptions(o))) }));\nout.httpOptionsFunction = run(() => show(url.urlToHttpOptions(Object.assign(function f() {}, { pathname: \"/x\" }))));\nout.httpOptionsLoose = [U, null, 1, \"http://a/\", true].map(a => ({ arg: a, ...run(() => url.urlToHttpOptions(dec(a))) }));\nconst hex = b => ({ isBuffer: Buffer.isBuffer(b), hex: b.toString(\"hex\") });\nconst files = [\"file:///a/b\", \"file:///a%20b\", \"file:///%ff%fe/x\", \"file:///%E4%BD%A0\", \"file:///a%2Fb\", \"file:///a%2fb\", \"file:///%00\", \"file:///a%5Cb\", \"file:///a?q#h\", \"file://localhost/a\", \"file://remote/a\", \"file:///\", \"file:///%zz\", \"file:///%\", \"file:///%4\", \"file:///a%41%61\", \"file:///%C3%28\", \"file:///ü/😀\", \"https://a/b\", \"invalid\", \"\", \"file:///C:/x\", \"file:///a/./b/../c\", \"file:///a%2e%2E/b\", \"file:\"];\nout.fileBuffer = files.map(f => ({ input: f, string: run(() => hex(url.fileURLToPathBuffer(f))), object: run(() => hex(url.fileURLToPathBuffer(new URL(f)))) }));\nout.fileBufferLoose = [[U], [null], [1], [{}], [{ href: \"file:///a\", protocol: \"file:\", pathname: \"/a\", hostname: \"\" }], [\"file:///a\", null], [\"file:///a\", 1], [\"file:///a\", { windows: false }], [\"file:///a\", { windows: 0 }], [\"file:///a\", { windows: null }]].map(a => ({ args: a, ...run(() => hex(url.fileURLToPathBuffer(...a.map(dec)))) }));\nout.recorder = require(\"fs\").readFileSync(__filename, \"utf8\");\nprocess.stdout.write(JSON.stringify(out, null, 1));\n"
+}

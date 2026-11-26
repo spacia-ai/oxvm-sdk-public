@@ -1,0 +1,256 @@
+{
+ "//": "Recorded from Node.js v24.18.1 (node:24.18.1-alpine); the command is the first line of `recorder`. `tree` holds the scenario program (entry.cjs) the test runs unchanged.",
+ "recorder": "// docker run --rm -v \"$PWD/rec-patch.js:/rec.js:ro\" -v \"$PWD/patch-entry.cjs:/entry.cjs:ro\" node:24.18.1-alpine node /rec.js\n// The scenarios are the program /entry.cjs (kept in \"tree\"): the test runs the same text in the fast path's loader.\nconst fs = require(\"fs\"), path = require(\"path\");\nconst P = \"/workspace/p\";\nconst tree = { files: {\n  [P + \"/package.json\"]: '{\"name\":\"p\"}', [P + \"/a.js\"]: \"module.exports = 'a';\", [P + \"/b.js\"]: \"module.exports = 'b:' + require('./a.js');\",\n  [P + \"/c.js\"]: \"module.exports = [require('./a.js'), require('mocked')];\", [P + \"/d.js\"]: \"module.exports = 'd:' + require('./a.js');\",\n  [P + \"/node_modules/dep/package.json\"]: '{\"name\":\"dep\",\"main\":\"m.js\"}', [P + \"/node_modules/dep/m.js\"]: \"module.exports = 'dep';\",\n  [P + \"/elsewhere/elsewhere-pkg/index.js\"]: \"module.exports = 'elsewhere';\", [P + \"/note.txt\"]: \"not JavaScript\", [P + \"/counter.js\"]: \"globalThis.__count = (globalThis.__count || 0) + 1; module.exports = globalThis.__count;\",\n  [P + \"/second.js\"]: \"globalThis.__runs.push(['second', module.id, require.main === module, module.parent === null, module.loaded]);\",\n  [P + \"/relative-main.js\"]: \"globalThis.__runs.push(['relative', module.id, module.filename]);\", [P + \"/esm-main.mjs\"]: \"globalThis.__runs.push(['esm', import.meta.url]);\",\n  [P + \"/sync.mjs\"]: \"import path, { basename } from 'node:path'; export const read = () => [basename === path.basename, basename.name];\",\n  [P + \"/named.mjs\"]: \"import * as all from 'node:module'; import { registerHooks, register, findPackageJSON, stripTypeScriptTypes, constants, enableCompileCache, flushCompileCache, getCompileCacheDir, syncBuiltinESMExports, runMain, _findPath, _resolveLookupPaths, _initPaths, _preloadModules, _pathCache, globalPaths, createRequire, isBuiltin } from 'node:module';\\nexport const kinds = Object.fromEntries(Object.entries({ registerHooks, register, findPackageJSON, stripTypeScriptTypes, constants, enableCompileCache, flushCompileCache, getCompileCacheDir, syncBuiltinESMExports, runMain, _findPath, _resolveLookupPaths, _initPaths, _preloadModules, _pathCache, globalPaths, createRequire, isBuiltin }).map(([name, value]) => [name, [typeof value, value === all.default[name]]]));\",\n} };\ntree.files[P + \"/entry.cjs\"] = fs.readFileSync(\"/entry.cjs\", \"utf8\");\nfor (const [file, text] of Object.entries(tree.files)) { fs.mkdirSync(path.dirname(file), { recursive: true }); fs.writeFileSync(file, text); }\nprocess.chdir(P);\nrequire(P + \"/entry.cjs\").then(out => process.stdout.write(JSON.stringify({ tree, results: out }, null, 1)));\n",
+ "tree": {
+  "files": {
+   "/workspace/p/package.json": "{\"name\":\"p\"}",
+   "/workspace/p/a.js": "module.exports = 'a';",
+   "/workspace/p/b.js": "module.exports = 'b:' + require('./a.js');",
+   "/workspace/p/c.js": "module.exports = [require('./a.js'), require('mocked')];",
+   "/workspace/p/d.js": "module.exports = 'd:' + require('./a.js');",
+   "/workspace/p/node_modules/dep/package.json": "{\"name\":\"dep\",\"main\":\"m.js\"}",
+   "/workspace/p/node_modules/dep/m.js": "module.exports = 'dep';",
+   "/workspace/p/elsewhere/elsewhere-pkg/index.js": "module.exports = 'elsewhere';",
+   "/workspace/p/note.txt": "not JavaScript",
+   "/workspace/p/counter.js": "globalThis.__count = (globalThis.__count || 0) + 1; module.exports = globalThis.__count;",
+   "/workspace/p/second.js": "globalThis.__runs.push(['second', module.id, require.main === module, module.parent === null, module.loaded]);",
+   "/workspace/p/relative-main.js": "globalThis.__runs.push(['relative', module.id, module.filename]);",
+   "/workspace/p/esm-main.mjs": "globalThis.__runs.push(['esm', import.meta.url]);",
+   "/workspace/p/sync.mjs": "import path, { basename } from 'node:path'; export const read = () => [basename === path.basename, basename.name];",
+   "/workspace/p/named.mjs": "import * as all from 'node:module'; import { registerHooks, register, findPackageJSON, stripTypeScriptTypes, constants, enableCompileCache, flushCompileCache, getCompileCacheDir, syncBuiltinESMExports, runMain, _findPath, _resolveLookupPaths, _initPaths, _preloadModules, _pathCache, globalPaths, createRequire, isBuiltin } from 'node:module';\nexport const kinds = Object.fromEntries(Object.entries({ registerHooks, register, findPackageJSON, stripTypeScriptTypes, constants, enableCompileCache, flushCompileCache, getCompileCacheDir, syncBuiltinESMExports, runMain, _findPath, _resolveLookupPaths, _initPaths, _preloadModules, _pathCache, globalPaths, createRequire, isBuiltin }).map(([name, value]) => [name, [typeof value, value === all.default[name]]]));",
+   "/workspace/p/entry.cjs": "const Module = require(\"module\");\nconst out = {}, calls = [];\nconst who = parent => parent === module ? \"entry\" : parent && parent.filename;\nconst attempt = f => { try { return { value: f() }; } catch (e) { return { error: { name: e.constructor.name, code: e.code === undefined ? null : e.code } }; } };\nmodule.exports = (async () => {\n  // 1. A replaced Module._resolveFilename answers require, nested require and require.resolve.\n  const resolveFilename = Module._resolveFilename;\n  Module._resolveFilename = function (request, parent, isMain, options) {\n    calls.push([request, who(parent)]);\n    return request === \"aliased\" ? resolveFilename.call(this, \"./a.js\", parent, isMain, options) : resolveFilename.apply(this, arguments);\n  };\n  out.resolveFilename = { aliased: require(\"aliased\"), resolved: require.resolve(\"aliased\"), nested: require(\"./b.js\"), calls: calls.splice(0) };\n  Module._resolveFilename = resolveFilename;\n  // 2. A replaced Module._load answers require and nested require.\n  const load = Module._load;\n  Module._load = function (request, parent, isMain) {\n    calls.push([request, who(parent)]);\n    return request === \"mocked\" ? { mocked: true } : load.apply(this, arguments);\n  };\n  out.load = { mocked: require(\"mocked\"), nested: require(\"./c.js\"), calls: calls.splice(0) };\n  Module._load = load;\n  out.load.restored = attempt(() => require(\"mocked\"));\n  // 3. A replaced Module._findPath is what resolution asks.\n  const findPath = Module._findPath;\n  Module._findPath = function (request, paths, isMain) {\n    calls.push([request, Array.isArray(paths) ? paths[0] : paths]);\n    return request === \"./ghost\" ? findPath.call(this, \"./a.js\", paths, isMain) : findPath.apply(this, arguments);\n  };\n  out.findPath = { ghost: require(\"./ghost\"), resolved: require.resolve(\"./ghost\"), dep: require(\"dep\"), calls: calls.splice(0) };\n  Module._findPath = findPath;\n  // 4. A replaced Module._resolveLookupPaths adds a search directory.\n  const lookupPaths = Module._resolveLookupPaths;\n  Module._resolveLookupPaths = function (request, parent) {\n    const paths = lookupPaths.apply(this, arguments);\n    return request === \"elsewhere-pkg\" ? [\"/workspace/p/elsewhere\"].concat(paths) : paths;\n  };\n  out.lookupPaths = { found: require(\"elsewhere-pkg\"), resolved: require.resolve(\"elsewhere-pkg\") };\n  Module._resolveLookupPaths = lookupPaths;\n  out.lookupPaths.restored = attempt(() => require.resolve(\"elsewhere-pkg\"));\n  // 5. Extension handlers, Module.prototype.require and the cache.\n  Module._extensions[\".txt\"] = function (loaded, filename) { loaded._compile(\"module.exports = 'compiled ' + __filename;\", filename); };\n  out.extension = { exact: require(\"./note.txt\"), same: require.extensions === Module._extensions };\n  const prototypeRequire = Module.prototype.require;\n  Module.prototype.require = function (request) { calls.push([request, who(this)]); return prototypeRequire.apply(this, arguments); };\n  out.prototypeRequire = { nested: require(\"./d.js\"), calls: calls.splice(0) };\n  Module.prototype.require = prototypeRequire;\n  const cached = require.resolve(\"./counter.js\");\n  out.cache = { first: require(\"./counter.js\"), second: require(\"./counter.js\"), afterDelete: (delete Module._cache[cached], require(\"./counter.js\")), keys: Object.keys(Module._cache).includes(cached) };\n  // 6. runMain inside a running program.\n  globalThis.__runs = [];\n  out.runMain = { result: attempt(() => Module.runMain(\"/workspace/p/second.js\")).value === undefined ? \"<undefined>\" : \"other\", cachedId: Module._cache[\"/workspace/p/second.js\"].id };\n  Module.runMain(\"/workspace/p/second.js\"); out.runMain.afterSecondCall = globalThis.__runs.length;\n  Module.runMain(\"./relative-main\"); out.runMain.relative = globalThis.__runs.length;\n  Module.runMain(\"/workspace/p/esm-main.mjs\"); out.runMain.esmBefore = globalThis.__runs.length;\n  await new Promise(resolve => setTimeout(resolve, 20));\n  out.runMain.runs = globalThis.__runs; out.runMain.missing = attempt(() => Module.runMain(\"/workspace/p/nope.js\"));\n  // 7. syncBuiltinESMExports and the built-in's named ES exports.\n  const namespace = await import(\"/workspace/p/sync.mjs\"), path = require(\"path\"), basename = path.basename;\n  path.basename = function patched() { return \"patched\"; };\n  out.sync = { before: namespace.read(), result: Module.syncBuiltinESMExports() === undefined ? \"<undefined>\" : \"other\", after: namespace.read() };\n  path.basename = basename; Module.syncBuiltinESMExports(); out.sync.restored = namespace.read();\n  out.named = (await import(\"/workspace/p/named.mjs\")).kinds;\n  return out;\n})();\n"
+  }
+ },
+ "results": {
+  "resolveFilename": {
+   "aliased": "a",
+   "resolved": "/workspace/p/a.js",
+   "nested": "b:a",
+   "calls": [
+    [
+     "aliased",
+     "entry"
+    ],
+    [
+     "aliased",
+     "entry"
+    ],
+    [
+     "./b.js",
+     "entry"
+    ],
+    [
+     "./a.js",
+     "/workspace/p/b.js"
+    ]
+   ]
+  },
+  "load": {
+   "mocked": {
+    "mocked": true
+   },
+   "nested": [
+    "a",
+    {
+     "mocked": true
+    }
+   ],
+   "calls": [
+    [
+     "mocked",
+     "entry"
+    ],
+    [
+     "./c.js",
+     "entry"
+    ],
+    [
+     "./a.js",
+     "/workspace/p/c.js"
+    ],
+    [
+     "mocked",
+     "/workspace/p/c.js"
+    ]
+   ],
+   "restored": {
+    "error": {
+     "name": "Error",
+     "code": "MODULE_NOT_FOUND"
+    }
+   }
+  },
+  "findPath": {
+   "ghost": "a",
+   "resolved": "/workspace/p/a.js",
+   "dep": "dep",
+   "calls": [
+    [
+     "./ghost",
+     "/workspace/p"
+    ],
+    [
+     "./ghost",
+     "/workspace/p"
+    ],
+    [
+     "dep",
+     "/workspace/p/node_modules"
+    ]
+   ]
+  },
+  "lookupPaths": {
+   "found": "elsewhere",
+   "resolved": "/workspace/p/elsewhere/elsewhere-pkg/index.js",
+   "restored": {
+    "error": {
+     "name": "Error",
+     "code": "MODULE_NOT_FOUND"
+    }
+   }
+  },
+  "extension": {
+   "exact": "compiled /workspace/p/note.txt",
+   "same": true
+  },
+  "prototypeRequire": {
+   "nested": "d:a",
+   "calls": [
+    [
+     "./d.js",
+     "entry"
+    ],
+    [
+     "./a.js",
+     "/workspace/p/d.js"
+    ]
+   ]
+  },
+  "cache": {
+   "first": 1,
+   "second": 1,
+   "afterDelete": 2,
+   "keys": true
+  },
+  "runMain": {
+   "result": "<undefined>",
+   "cachedId": ".",
+   "afterSecondCall": 1,
+   "relative": 2,
+   "esmBefore": 2,
+   "runs": [
+    [
+     "second",
+     ".",
+     true,
+     true,
+     false
+    ],
+    [
+     "relative",
+     ".",
+     "/workspace/p/relative-main.js"
+    ],
+    [
+     "esm",
+     "file:///workspace/p/esm-main.mjs"
+    ]
+   ],
+   "missing": {
+    "error": {
+     "name": "Error",
+     "code": "MODULE_NOT_FOUND"
+    }
+   }
+  },
+  "sync": {
+   "before": [
+    false,
+    "basename"
+   ],
+   "result": "<undefined>",
+   "after": [
+    true,
+    "patched"
+   ],
+   "restored": [
+    true,
+    "basename"
+   ]
+  },
+  "named": {
+   "registerHooks": [
+    "function",
+    true
+   ],
+   "register": [
+    "function",
+    true
+   ],
+   "findPackageJSON": [
+    "function",
+    true
+   ],
+   "stripTypeScriptTypes": [
+    "function",
+    true
+   ],
+   "constants": [
+    "object",
+    true
+   ],
+   "enableCompileCache": [
+    "function",
+    true
+   ],
+   "flushCompileCache": [
+    "function",
+    true
+   ],
+   "getCompileCacheDir": [
+    "function",
+    true
+   ],
+   "syncBuiltinESMExports": [
+    "function",
+    true
+   ],
+   "runMain": [
+    "function",
+    true
+   ],
+   "_findPath": [
+    "function",
+    true
+   ],
+   "_resolveLookupPaths": [
+    "function",
+    true
+   ],
+   "_initPaths": [
+    "function",
+    true
+   ],
+   "_preloadModules": [
+    "function",
+    true
+   ],
+   "_pathCache": [
+    "object",
+    true
+   ],
+   "globalPaths": [
+    "object",
+    true
+   ],
+   "createRequire": [
+    "function",
+    true
+   ],
+   "isBuiltin": [
+    "function",
+    true
+   ]
+  }
+ }
+}

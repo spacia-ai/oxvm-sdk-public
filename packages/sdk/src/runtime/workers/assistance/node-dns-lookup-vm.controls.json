@@ -1,0 +1,3264 @@
+{
+ "recorder": {
+  "how": "A relay-connected Userspace VM (engine release 236743e9…, Chromium, image from base-rootfs.tar: Node 24.18.1 on musl) ran this script under the guest's own Node (OXIDEVM_ACCELERATION=off, placement linux/placement-override). The VM's resolver (192.0.2.1, UDP 53) was the relay test peer answering from `zone`; TCP port 53 is refused by the relay policy. Harness: /home/deploy/Work/oxidevm-sdk/.cache/spike-dns (run.sh, probe.cjs section `lookup`, overlay/tests/browser/relay-test-dns.ts). `udpConnect` is the local address a datagram socket reported after connecting to each destination (probe section `sources`).",
+  "variants": "cb: dns.lookup(name, cb) → [address, family]; all: promises.lookup(name, {all:true}); f4/f6: {family}; f4all/f6all: {family, all:true}; v4first/v6first: {all:true, order}; addrconfig: {all:true, hints: ADDRCONFIG}; f6mapped: {all:true, family:6, hints: V4MAPPED}; f6mappedall: {all:true, family:6, hints: V4MAPPED|ALL}",
+  "script": "// DNS probe: the same script runs on the fast path and under the guest's real Node (OXIDEVM_ACCELERATION=off).\n// usage: node probe.cjs <section> [...]   sections: lookup lookup-mini timing resolve resolver parallel alive-resolver alive-lookup exit-fast\nconst dns = require(\"dns\");\nconst dnsp = dns.promises;\nconst started = performance.now();\nconst out = { node: process.version, env: { fast: process.env.OXIDEVM_FAST_DNS_LOOKUP ?? null, acceleration: process.env.OXIDEVM_ACCELERATION ?? null }, sections: process.argv.slice(2), results: {}, timings: {} };\nfunction shape(e) {\n  if (!(e instanceof Error)) return { thrown: String(e) };\n  const o = { error: e.name, ctor: e.constructor && e.constructor.name, message: e.message, keys: Object.keys(e).sort() };\n  for (const k of [\"code\", \"errno\", \"syscall\", \"hostname\", \"address\", \"port\"]) if (k in e) o[k] = e[k];\n  return o;\n}\nconst CAP = Number(process.env.PROBE_CAP_MS ?? \"90000\");\nasync function t(label, fn) {\n  const s = performance.now(); let r;\n  let timer;\n  try {\n    const value = await Promise.race([fn(), new Promise((_, reject) => { timer = setTimeout(() => reject(new Error(\"probe-cap\")), CAP); })]);\n    r = { ok: value };\n  } catch (e) { r = { err: shape(e) }; }\n  clearTimeout(timer);\n  r.ms = Math.round((performance.now() - s) * 10) / 10;\n  out.results[label] = r;\n  if (process.env.PROBE_PROGRESS === \"1\") process.stderr.write(label + \" \" + r.ms + \"\\n\");\n  return r;\n}\nconst cb = (fn, ...args) => new Promise((resolve, reject) => { fn(...args, (err, ...values) => err ? reject(err) : resolve(values.length === 1 ? values[0] : values)); });\nconst median = list => { const s = [...list].sort((a, b) => a - b); return s.length === 0 ? null : s[Math.floor(s.length / 2)]; };\n\nconst sections = {\n  async \"lookup\"() {\n    const names = [\"one.test\", \"multi.test\", \"dual.test\", \"v6only.test\", \"alias.test\", \"localhost\", \"oxidevm\", \"127.0.0.1\", \"::1\", \"missing.test\", \"dangling.test\", \"servfail.test\",\n      \"big.test\", \"ONE.TEST\", \"one.test.\", \"search\", \"127.1\", \"txt.test\", \"trunc.test\", \"a..b\", \"m\\u00fcnchen.test\", \"halffail.test\", \"refused.test\", \"mixed.test\", \"slow.test\"];\n    const variants = {\n      \"cb\": name => cb(dns.lookup, name),\n      \"all\": name => dnsp.lookup(name, { all: true }),\n      \"f4\": name => dnsp.lookup(name, { family: 4 }),\n      \"f6\": name => dnsp.lookup(name, { family: 6 }),\n      \"f4all\": name => dnsp.lookup(name, { family: 4, all: true }),\n      \"f6all\": name => dnsp.lookup(name, { family: 6, all: true }),\n      \"v4first\": name => dnsp.lookup(name, { all: true, order: \"ipv4first\" }),\n      \"v6first\": name => dnsp.lookup(name, { all: true, order: \"ipv6first\" }),\n      \"addrconfig\": name => dnsp.lookup(name, { all: true, hints: dns.ADDRCONFIG }),\n      \"f6mapped\": name => dnsp.lookup(name, { all: true, family: 6, hints: dns.V4MAPPED }),\n      \"f6mappedall\": name => dnsp.lookup(name, { all: true, family: 6, hints: dns.V4MAPPED | dns.ALL }),\n    };\n    for (const name of names) for (const [variant, fn] of Object.entries(variants)) await t(`lookup ${variant} ${name}`, () => fn(name));\n    await t(\"lookup cb empty\", () => cb(dns.lookup, \"\"));\n    await t(\"lookup default order\", async () => dns.getDefaultResultOrder());\n  },\n"
+ },
+ "hosts": "127.0.0.1 localhost oxidevm\n::1 localhost oxidevm\n",
+ "resolvConf": "# OxideVM virtual DNS endpoint.\nnameserver 192.0.2.1\n",
+ "udpConnect": {
+  "udp4 203.0.113.21": "0.0.0.0",
+  "udp4 10.1.2.3": "0.0.0.0",
+  "udp4 127.0.0.1": "127.0.0.1",
+  "udp4 192.0.2.1": "0.0.0.0",
+  "udp4 8.8.8.8": "0.0.0.0",
+  "udp6 2001:db8::21": "::",
+  "udp6 ::1": "::1",
+  "udp6 fe80::1": "::",
+  "udp6 fd00::1": "::",
+  "udp6 2606:4700::1111": "::",
+  "udp6 ::ffff:203.0.113.21": "::"
+ },
+ "zone": {
+  "one.test": {
+   "A": [
+    "203.0.113.10"
+   ]
+  },
+  "multi.test": {
+   "A": [
+    "203.0.113.21",
+    "203.0.113.22"
+   ],
+   "AAAA": [
+    "2001:db8::21"
+   ]
+  },
+  "dual.test": {
+   "A": [
+    "203.0.113.31",
+    "203.0.113.32"
+   ],
+   "AAAA": [
+    "2001:db8::31",
+    "2001:db8::32"
+   ]
+  },
+  "v6only.test": {
+   "AAAA": [
+    "2001:db8::66"
+   ]
+  },
+  "alias.test": {
+   "CNAME": "chain.test"
+  },
+  "chain.test": {
+   "CNAME": "one.test"
+  },
+  "dangling.test": {
+   "CNAME": "nowhere.test"
+  },
+  "txt.test": {},
+  "big.test": {
+   "A": "truncated"
+  },
+  "trunc.test": {
+   "A": "truncated",
+   "AAAA": "truncated"
+  },
+  "slow.test": {
+   "A": "silent",
+   "AAAA": "silent"
+  },
+  "servfail.test": {
+   "A": "servfail",
+   "AAAA": "servfail"
+  },
+  "refused.test": {
+   "A": "refused",
+   "AAAA": "refused"
+  },
+  "halffail.test": {
+   "A": [
+    "203.0.113.60"
+   ],
+   "AAAA": "servfail"
+  },
+  "mixed.test": {
+   "A": [
+    "10.1.2.3",
+    "203.0.113.70",
+    "100.64.0.9"
+   ],
+   "AAAA": [
+    "fd00::70",
+    "2001:db8::70",
+    "2002:cb00:7146::1",
+    "2001:0:1::1",
+    "fe80::70"
+   ]
+  }
+ },
+ "cases": {
+  "lookup cb one.test": {
+   "variant": "cb",
+   "name": "one.test",
+   "result": [
+    "203.0.113.10",
+    4
+   ]
+  },
+  "lookup all one.test": {
+   "variant": "all",
+   "name": "one.test",
+   "result": [
+    {
+     "address": "203.0.113.10",
+     "family": 4
+    }
+   ]
+  },
+  "lookup f4 one.test": {
+   "variant": "f4",
+   "name": "one.test",
+   "result": {
+    "address": "203.0.113.10",
+    "family": 4
+   }
+  },
+  "lookup f6 one.test": {
+   "variant": "f6",
+   "name": "one.test",
+   "error": {
+    "message": "getaddrinfo ENOTFOUND one.test",
+    "code": "ENOTFOUND",
+    "errno": -3007,
+    "syscall": "getaddrinfo",
+    "hostname": "one.test"
+   }
+  },
+  "lookup f4all one.test": {
+   "variant": "f4all",
+   "name": "one.test",
+   "result": [
+    {
+     "address": "203.0.113.10",
+     "family": 4
+    }
+   ]
+  },
+  "lookup f6all one.test": {
+   "variant": "f6all",
+   "name": "one.test",
+   "error": {
+    "message": "getaddrinfo ENOTFOUND one.test",
+    "code": "ENOTFOUND",
+    "errno": -3007,
+    "syscall": "getaddrinfo",
+    "hostname": "one.test"
+   }
+  },
+  "lookup v4first one.test": {
+   "variant": "v4first",
+   "name": "one.test",
+   "result": [
+    {
+     "address": "203.0.113.10",
+     "family": 4
+    }
+   ]
+  },
+  "lookup v6first one.test": {
+   "variant": "v6first",
+   "name": "one.test",
+   "result": [
+    {
+     "address": "203.0.113.10",
+     "family": 4
+    }
+   ]
+  },
+  "lookup addrconfig one.test": {
+   "variant": "addrconfig",
+   "name": "one.test",
+   "result": [
+    {
+     "address": "203.0.113.10",
+     "family": 4
+    }
+   ]
+  },
+  "lookup f6mapped one.test": {
+   "variant": "f6mapped",
+   "name": "one.test",
+   "result": [
+    {
+     "address": "::ffff:203.0.113.10",
+     "family": 6
+    }
+   ]
+  },
+  "lookup f6mappedall one.test": {
+   "variant": "f6mappedall",
+   "name": "one.test",
+   "result": [
+    {
+     "address": "::ffff:203.0.113.10",
+     "family": 6
+    }
+   ]
+  },
+  "lookup cb multi.test": {
+   "variant": "cb",
+   "name": "multi.test",
+   "result": [
+    "2001:db8::21",
+    6
+   ]
+  },
+  "lookup all multi.test": {
+   "variant": "all",
+   "name": "multi.test",
+   "result": [
+    {
+     "address": "2001:db8::21",
+     "family": 6
+    },
+    {
+     "address": "203.0.113.21",
+     "family": 4
+    },
+    {
+     "address": "203.0.113.22",
+     "family": 4
+    }
+   ]
+  },
+  "lookup f4 multi.test": {
+   "variant": "f4",
+   "name": "multi.test",
+   "result": {
+    "address": "203.0.113.21",
+    "family": 4
+   }
+  },
+  "lookup f6 multi.test": {
+   "variant": "f6",
+   "name": "multi.test",
+   "result": {
+    "address": "2001:db8::21",
+    "family": 6
+   }
+  },
+  "lookup f4all multi.test": {
+   "variant": "f4all",
+   "name": "multi.test",
+   "result": [
+    {
+     "address": "203.0.113.21",
+     "family": 4
+    },
+    {
+     "address": "203.0.113.22",
+     "family": 4
+    }
+   ]
+  },
+  "lookup f6all multi.test": {
+   "variant": "f6all",
+   "name": "multi.test",
+   "result": [
+    {
+     "address": "2001:db8::21",
+     "family": 6
+    }
+   ]
+  },
+  "lookup v4first multi.test": {
+   "variant": "v4first",
+   "name": "multi.test",
+   "result": [
+    {
+     "address": "203.0.113.21",
+     "family": 4
+    },
+    {
+     "address": "203.0.113.22",
+     "family": 4
+    },
+    {
+     "address": "2001:db8::21",
+     "family": 6
+    }
+   ]
+  },
+  "lookup v6first multi.test": {
+   "variant": "v6first",
+   "name": "multi.test",
+   "result": [
+    {
+     "address": "2001:db8::21",
+     "family": 6
+    },
+    {
+     "address": "203.0.113.21",
+     "family": 4
+    },
+    {
+     "address": "203.0.113.22",
+     "family": 4
+    }
+   ]
+  },
+  "lookup addrconfig multi.test": {
+   "variant": "addrconfig",
+   "name": "multi.test",
+   "result": [
+    {
+     "address": "2001:db8::21",
+     "family": 6
+    },
+    {
+     "address": "203.0.113.21",
+     "family": 4
+    },
+    {
+     "address": "203.0.113.22",
+     "family": 4
+    }
+   ]
+  },
+  "lookup f6mapped multi.test": {
+   "variant": "f6mapped",
+   "name": "multi.test",
+   "result": [
+    {
+     "address": "2001:db8::21",
+     "family": 6
+    }
+   ]
+  },
+  "lookup f6mappedall multi.test": {
+   "variant": "f6mappedall",
+   "name": "multi.test",
+   "result": [
+    {
+     "address": "2001:db8::21",
+     "family": 6
+    },
+    {
+     "address": "::ffff:203.0.113.21",
+     "family": 6
+    },
+    {
+     "address": "::ffff:203.0.113.22",
+     "family": 6
+    }
+   ]
+  },
+  "lookup cb dual.test": {
+   "variant": "cb",
+   "name": "dual.test",
+   "result": [
+    "2001:db8::31",
+    6
+   ]
+  },
+  "lookup all dual.test": {
+   "variant": "all",
+   "name": "dual.test",
+   "result": [
+    {
+     "address": "2001:db8::31",
+     "family": 6
+    },
+    {
+     "address": "2001:db8::32",
+     "family": 6
+    },
+    {
+     "address": "203.0.113.31",
+     "family": 4
+    },
+    {
+     "address": "203.0.113.32",
+     "family": 4
+    }
+   ]
+  },
+  "lookup f4 dual.test": {
+   "variant": "f4",
+   "name": "dual.test",
+   "result": {
+    "address": "203.0.113.31",
+    "family": 4
+   }
+  },
+  "lookup f6 dual.test": {
+   "variant": "f6",
+   "name": "dual.test",
+   "result": {
+    "address": "2001:db8::31",
+    "family": 6
+   }
+  },
+  "lookup f4all dual.test": {
+   "variant": "f4all",
+   "name": "dual.test",
+   "result": [
+    {
+     "address": "203.0.113.31",
+     "family": 4
+    },
+    {
+     "address": "203.0.113.32",
+     "family": 4
+    }
+   ]
+  },
+  "lookup f6all dual.test": {
+   "variant": "f6all",
+   "name": "dual.test",
+   "result": [
+    {
+     "address": "2001:db8::31",
+     "family": 6
+    },
+    {
+     "address": "2001:db8::32",
+     "family": 6
+    }
+   ]
+  },
+  "lookup v4first dual.test": {
+   "variant": "v4first",
+   "name": "dual.test",
+   "result": [
+    {
+     "address": "203.0.113.31",
+     "family": 4
+    },
+    {
+     "address": "203.0.113.32",
+     "family": 4
+    },
+    {
+     "address": "2001:db8::31",
+     "family": 6
+    },
+    {
+     "address": "2001:db8::32",
+     "family": 6
+    }
+   ]
+  },
+  "lookup v6first dual.test": {
+   "variant": "v6first",
+   "name": "dual.test",
+   "result": [
+    {
+     "address": "2001:db8::31",
+     "family": 6
+    },
+    {
+     "address": "2001:db8::32",
+     "family": 6
+    },
+    {
+     "address": "203.0.113.31",
+     "family": 4
+    },
+    {
+     "address": "203.0.113.32",
+     "family": 4
+    }
+   ]
+  },
+  "lookup addrconfig dual.test": {
+   "variant": "addrconfig",
+   "name": "dual.test",
+   "result": [
+    {
+     "address": "2001:db8::31",
+     "family": 6
+    },
+    {
+     "address": "2001:db8::32",
+     "family": 6
+    },
+    {
+     "address": "203.0.113.31",
+     "family": 4
+    },
+    {
+     "address": "203.0.113.32",
+     "family": 4
+    }
+   ]
+  },
+  "lookup f6mapped dual.test": {
+   "variant": "f6mapped",
+   "name": "dual.test",
+   "result": [
+    {
+     "address": "2001:db8::31",
+     "family": 6
+    },
+    {
+     "address": "2001:db8::32",
+     "family": 6
+    }
+   ]
+  },
+  "lookup f6mappedall dual.test": {
+   "variant": "f6mappedall",
+   "name": "dual.test",
+   "result": [
+    {
+     "address": "2001:db8::31",
+     "family": 6
+    },
+    {
+     "address": "2001:db8::32",
+     "family": 6
+    },
+    {
+     "address": "::ffff:203.0.113.31",
+     "family": 6
+    },
+    {
+     "address": "::ffff:203.0.113.32",
+     "family": 6
+    }
+   ]
+  },
+  "lookup cb v6only.test": {
+   "variant": "cb",
+   "name": "v6only.test",
+   "result": [
+    "2001:db8::66",
+    6
+   ]
+  },
+  "lookup all v6only.test": {
+   "variant": "all",
+   "name": "v6only.test",
+   "result": [
+    {
+     "address": "2001:db8::66",
+     "family": 6
+    }
+   ]
+  },
+  "lookup f4 v6only.test": {
+   "variant": "f4",
+   "name": "v6only.test",
+   "error": {
+    "message": "getaddrinfo ENOTFOUND v6only.test",
+    "code": "ENOTFOUND",
+    "errno": -3007,
+    "syscall": "getaddrinfo",
+    "hostname": "v6only.test"
+   }
+  },
+  "lookup f6 v6only.test": {
+   "variant": "f6",
+   "name": "v6only.test",
+   "result": {
+    "address": "2001:db8::66",
+    "family": 6
+   }
+  },
+  "lookup f4all v6only.test": {
+   "variant": "f4all",
+   "name": "v6only.test",
+   "error": {
+    "message": "getaddrinfo ENOTFOUND v6only.test",
+    "code": "ENOTFOUND",
+    "errno": -3007,
+    "syscall": "getaddrinfo",
+    "hostname": "v6only.test"
+   }
+  },
+  "lookup f6all v6only.test": {
+   "variant": "f6all",
+   "name": "v6only.test",
+   "result": [
+    {
+     "address": "2001:db8::66",
+     "family": 6
+    }
+   ]
+  },
+  "lookup v4first v6only.test": {
+   "variant": "v4first",
+   "name": "v6only.test",
+   "result": [
+    {
+     "address": "2001:db8::66",
+     "family": 6
+    }
+   ]
+  },
+  "lookup v6first v6only.test": {
+   "variant": "v6first",
+   "name": "v6only.test",
+   "result": [
+    {
+     "address": "2001:db8::66",
+     "family": 6
+    }
+   ]
+  },
+  "lookup addrconfig v6only.test": {
+   "variant": "addrconfig",
+   "name": "v6only.test",
+   "result": [
+    {
+     "address": "2001:db8::66",
+     "family": 6
+    }
+   ]
+  },
+  "lookup f6mapped v6only.test": {
+   "variant": "f6mapped",
+   "name": "v6only.test",
+   "result": [
+    {
+     "address": "2001:db8::66",
+     "family": 6
+    }
+   ]
+  },
+  "lookup f6mappedall v6only.test": {
+   "variant": "f6mappedall",
+   "name": "v6only.test",
+   "result": [
+    {
+     "address": "2001:db8::66",
+     "family": 6
+    }
+   ]
+  },
+  "lookup cb alias.test": {
+   "variant": "cb",
+   "name": "alias.test",
+   "result": [
+    "203.0.113.10",
+    4
+   ]
+  },
+  "lookup all alias.test": {
+   "variant": "all",
+   "name": "alias.test",
+   "result": [
+    {
+     "address": "203.0.113.10",
+     "family": 4
+    }
+   ]
+  },
+  "lookup f4 alias.test": {
+   "variant": "f4",
+   "name": "alias.test",
+   "result": {
+    "address": "203.0.113.10",
+    "family": 4
+   }
+  },
+  "lookup f6 alias.test": {
+   "variant": "f6",
+   "name": "alias.test",
+   "error": {
+    "message": "getaddrinfo ENOTFOUND alias.test",
+    "code": "ENOTFOUND",
+    "errno": -3007,
+    "syscall": "getaddrinfo",
+    "hostname": "alias.test"
+   }
+  },
+  "lookup f4all alias.test": {
+   "variant": "f4all",
+   "name": "alias.test",
+   "result": [
+    {
+     "address": "203.0.113.10",
+     "family": 4
+    }
+   ]
+  },
+  "lookup f6all alias.test": {
+   "variant": "f6all",
+   "name": "alias.test",
+   "error": {
+    "message": "getaddrinfo ENOTFOUND alias.test",
+    "code": "ENOTFOUND",
+    "errno": -3007,
+    "syscall": "getaddrinfo",
+    "hostname": "alias.test"
+   }
+  },
+  "lookup v4first alias.test": {
+   "variant": "v4first",
+   "name": "alias.test",
+   "result": [
+    {
+     "address": "203.0.113.10",
+     "family": 4
+    }
+   ]
+  },
+  "lookup v6first alias.test": {
+   "variant": "v6first",
+   "name": "alias.test",
+   "result": [
+    {
+     "address": "203.0.113.10",
+     "family": 4
+    }
+   ]
+  },
+  "lookup addrconfig alias.test": {
+   "variant": "addrconfig",
+   "name": "alias.test",
+   "result": [
+    {
+     "address": "203.0.113.10",
+     "family": 4
+    }
+   ]
+  },
+  "lookup f6mapped alias.test": {
+   "variant": "f6mapped",
+   "name": "alias.test",
+   "result": [
+    {
+     "address": "::ffff:203.0.113.10",
+     "family": 6
+    }
+   ]
+  },
+  "lookup f6mappedall alias.test": {
+   "variant": "f6mappedall",
+   "name": "alias.test",
+   "result": [
+    {
+     "address": "::ffff:203.0.113.10",
+     "family": 6
+    }
+   ]
+  },
+  "lookup cb localhost": {
+   "variant": "cb",
+   "name": "localhost",
+   "result": [
+    "::1",
+    6
+   ]
+  },
+  "lookup all localhost": {
+   "variant": "all",
+   "name": "localhost",
+   "result": [
+    {
+     "address": "::1",
+     "family": 6
+    },
+    {
+     "address": "127.0.0.1",
+     "family": 4
+    }
+   ]
+  },
+  "lookup f4 localhost": {
+   "variant": "f4",
+   "name": "localhost",
+   "result": {
+    "address": "127.0.0.1",
+    "family": 4
+   }
+  },
+  "lookup f6 localhost": {
+   "variant": "f6",
+   "name": "localhost",
+   "result": {
+    "address": "::1",
+    "family": 6
+   }
+  },
+  "lookup f4all localhost": {
+   "variant": "f4all",
+   "name": "localhost",
+   "result": [
+    {
+     "address": "127.0.0.1",
+     "family": 4
+    }
+   ]
+  },
+  "lookup f6all localhost": {
+   "variant": "f6all",
+   "name": "localhost",
+   "result": [
+    {
+     "address": "::1",
+     "family": 6
+    }
+   ]
+  },
+  "lookup v4first localhost": {
+   "variant": "v4first",
+   "name": "localhost",
+   "result": [
+    {
+     "address": "127.0.0.1",
+     "family": 4
+    },
+    {
+     "address": "::1",
+     "family": 6
+    }
+   ]
+  },
+  "lookup v6first localhost": {
+   "variant": "v6first",
+   "name": "localhost",
+   "result": [
+    {
+     "address": "::1",
+     "family": 6
+    },
+    {
+     "address": "127.0.0.1",
+     "family": 4
+    }
+   ]
+  },
+  "lookup addrconfig localhost": {
+   "variant": "addrconfig",
+   "name": "localhost",
+   "result": [
+    {
+     "address": "::1",
+     "family": 6
+    },
+    {
+     "address": "127.0.0.1",
+     "family": 4
+    }
+   ]
+  },
+  "lookup f6mapped localhost": {
+   "variant": "f6mapped",
+   "name": "localhost",
+   "result": [
+    {
+     "address": "::1",
+     "family": 6
+    }
+   ]
+  },
+  "lookup f6mappedall localhost": {
+   "variant": "f6mappedall",
+   "name": "localhost",
+   "result": [
+    {
+     "address": "::1",
+     "family": 6
+    },
+    {
+     "address": "::ffff:127.0.0.1",
+     "family": 6
+    }
+   ]
+  },
+  "lookup cb oxidevm": {
+   "variant": "cb",
+   "name": "oxidevm",
+   "result": [
+    "::1",
+    6
+   ]
+  },
+  "lookup all oxidevm": {
+   "variant": "all",
+   "name": "oxidevm",
+   "result": [
+    {
+     "address": "::1",
+     "family": 6
+    },
+    {
+     "address": "127.0.0.1",
+     "family": 4
+    }
+   ]
+  },
+  "lookup f4 oxidevm": {
+   "variant": "f4",
+   "name": "oxidevm",
+   "result": {
+    "address": "127.0.0.1",
+    "family": 4
+   }
+  },
+  "lookup f6 oxidevm": {
+   "variant": "f6",
+   "name": "oxidevm",
+   "result": {
+    "address": "::1",
+    "family": 6
+   }
+  },
+  "lookup f4all oxidevm": {
+   "variant": "f4all",
+   "name": "oxidevm",
+   "result": [
+    {
+     "address": "127.0.0.1",
+     "family": 4
+    }
+   ]
+  },
+  "lookup f6all oxidevm": {
+   "variant": "f6all",
+   "name": "oxidevm",
+   "result": [
+    {
+     "address": "::1",
+     "family": 6
+    }
+   ]
+  },
+  "lookup v4first oxidevm": {
+   "variant": "v4first",
+   "name": "oxidevm",
+   "result": [
+    {
+     "address": "127.0.0.1",
+     "family": 4
+    },
+    {
+     "address": "::1",
+     "family": 6
+    }
+   ]
+  },
+  "lookup v6first oxidevm": {
+   "variant": "v6first",
+   "name": "oxidevm",
+   "result": [
+    {
+     "address": "::1",
+     "family": 6
+    },
+    {
+     "address": "127.0.0.1",
+     "family": 4
+    }
+   ]
+  },
+  "lookup addrconfig oxidevm": {
+   "variant": "addrconfig",
+   "name": "oxidevm",
+   "result": [
+    {
+     "address": "::1",
+     "family": 6
+    },
+    {
+     "address": "127.0.0.1",
+     "family": 4
+    }
+   ]
+  },
+  "lookup f6mapped oxidevm": {
+   "variant": "f6mapped",
+   "name": "oxidevm",
+   "result": [
+    {
+     "address": "::1",
+     "family": 6
+    }
+   ]
+  },
+  "lookup f6mappedall oxidevm": {
+   "variant": "f6mappedall",
+   "name": "oxidevm",
+   "result": [
+    {
+     "address": "::1",
+     "family": 6
+    },
+    {
+     "address": "::ffff:127.0.0.1",
+     "family": 6
+    }
+   ]
+  },
+  "lookup cb 127.0.0.1": {
+   "variant": "cb",
+   "name": "127.0.0.1",
+   "result": [
+    "127.0.0.1",
+    4
+   ]
+  },
+  "lookup all 127.0.0.1": {
+   "variant": "all",
+   "name": "127.0.0.1",
+   "result": [
+    {
+     "address": "127.0.0.1",
+     "family": 4
+    }
+   ]
+  },
+  "lookup f4 127.0.0.1": {
+   "variant": "f4",
+   "name": "127.0.0.1",
+   "result": {
+    "address": "127.0.0.1",
+    "family": 4
+   }
+  },
+  "lookup f6 127.0.0.1": {
+   "variant": "f6",
+   "name": "127.0.0.1",
+   "result": {
+    "address": "127.0.0.1",
+    "family": 4
+   }
+  },
+  "lookup f4all 127.0.0.1": {
+   "variant": "f4all",
+   "name": "127.0.0.1",
+   "result": [
+    {
+     "address": "127.0.0.1",
+     "family": 4
+    }
+   ]
+  },
+  "lookup f6all 127.0.0.1": {
+   "variant": "f6all",
+   "name": "127.0.0.1",
+   "result": [
+    {
+     "address": "127.0.0.1",
+     "family": 4
+    }
+   ]
+  },
+  "lookup v4first 127.0.0.1": {
+   "variant": "v4first",
+   "name": "127.0.0.1",
+   "result": [
+    {
+     "address": "127.0.0.1",
+     "family": 4
+    }
+   ]
+  },
+  "lookup v6first 127.0.0.1": {
+   "variant": "v6first",
+   "name": "127.0.0.1",
+   "result": [
+    {
+     "address": "127.0.0.1",
+     "family": 4
+    }
+   ]
+  },
+  "lookup addrconfig 127.0.0.1": {
+   "variant": "addrconfig",
+   "name": "127.0.0.1",
+   "result": [
+    {
+     "address": "127.0.0.1",
+     "family": 4
+    }
+   ]
+  },
+  "lookup f6mapped 127.0.0.1": {
+   "variant": "f6mapped",
+   "name": "127.0.0.1",
+   "result": [
+    {
+     "address": "127.0.0.1",
+     "family": 4
+    }
+   ]
+  },
+  "lookup f6mappedall 127.0.0.1": {
+   "variant": "f6mappedall",
+   "name": "127.0.0.1",
+   "result": [
+    {
+     "address": "127.0.0.1",
+     "family": 4
+    }
+   ]
+  },
+  "lookup cb ::1": {
+   "variant": "cb",
+   "name": "::1",
+   "result": [
+    "::1",
+    6
+   ]
+  },
+  "lookup all ::1": {
+   "variant": "all",
+   "name": "::1",
+   "result": [
+    {
+     "address": "::1",
+     "family": 6
+    }
+   ]
+  },
+  "lookup f4 ::1": {
+   "variant": "f4",
+   "name": "::1",
+   "result": {
+    "address": "::1",
+    "family": 6
+   }
+  },
+  "lookup f6 ::1": {
+   "variant": "f6",
+   "name": "::1",
+   "result": {
+    "address": "::1",
+    "family": 6
+   }
+  },
+  "lookup f4all ::1": {
+   "variant": "f4all",
+   "name": "::1",
+   "result": [
+    {
+     "address": "::1",
+     "family": 6
+    }
+   ]
+  },
+  "lookup f6all ::1": {
+   "variant": "f6all",
+   "name": "::1",
+   "result": [
+    {
+     "address": "::1",
+     "family": 6
+    }
+   ]
+  },
+  "lookup v4first ::1": {
+   "variant": "v4first",
+   "name": "::1",
+   "result": [
+    {
+     "address": "::1",
+     "family": 6
+    }
+   ]
+  },
+  "lookup v6first ::1": {
+   "variant": "v6first",
+   "name": "::1",
+   "result": [
+    {
+     "address": "::1",
+     "family": 6
+    }
+   ]
+  },
+  "lookup addrconfig ::1": {
+   "variant": "addrconfig",
+   "name": "::1",
+   "result": [
+    {
+     "address": "::1",
+     "family": 6
+    }
+   ]
+  },
+  "lookup f6mapped ::1": {
+   "variant": "f6mapped",
+   "name": "::1",
+   "result": [
+    {
+     "address": "::1",
+     "family": 6
+    }
+   ]
+  },
+  "lookup f6mappedall ::1": {
+   "variant": "f6mappedall",
+   "name": "::1",
+   "result": [
+    {
+     "address": "::1",
+     "family": 6
+    }
+   ]
+  },
+  "lookup cb missing.test": {
+   "variant": "cb",
+   "name": "missing.test",
+   "error": {
+    "message": "getaddrinfo ENOTFOUND missing.test",
+    "code": "ENOTFOUND",
+    "errno": -3008,
+    "syscall": "getaddrinfo",
+    "hostname": "missing.test"
+   }
+  },
+  "lookup all missing.test": {
+   "variant": "all",
+   "name": "missing.test",
+   "error": {
+    "message": "getaddrinfo ENOTFOUND missing.test",
+    "code": "ENOTFOUND",
+    "errno": -3008,
+    "syscall": "getaddrinfo",
+    "hostname": "missing.test"
+   }
+  },
+  "lookup f4 missing.test": {
+   "variant": "f4",
+   "name": "missing.test",
+   "error": {
+    "message": "getaddrinfo ENOTFOUND missing.test",
+    "code": "ENOTFOUND",
+    "errno": -3008,
+    "syscall": "getaddrinfo",
+    "hostname": "missing.test"
+   }
+  },
+  "lookup f6 missing.test": {
+   "variant": "f6",
+   "name": "missing.test",
+   "error": {
+    "message": "getaddrinfo ENOTFOUND missing.test",
+    "code": "ENOTFOUND",
+    "errno": -3008,
+    "syscall": "getaddrinfo",
+    "hostname": "missing.test"
+   }
+  },
+  "lookup f4all missing.test": {
+   "variant": "f4all",
+   "name": "missing.test",
+   "error": {
+    "message": "getaddrinfo ENOTFOUND missing.test",
+    "code": "ENOTFOUND",
+    "errno": -3008,
+    "syscall": "getaddrinfo",
+    "hostname": "missing.test"
+   }
+  },
+  "lookup f6all missing.test": {
+   "variant": "f6all",
+   "name": "missing.test",
+   "error": {
+    "message": "getaddrinfo ENOTFOUND missing.test",
+    "code": "ENOTFOUND",
+    "errno": -3008,
+    "syscall": "getaddrinfo",
+    "hostname": "missing.test"
+   }
+  },
+  "lookup v4first missing.test": {
+   "variant": "v4first",
+   "name": "missing.test",
+   "error": {
+    "message": "getaddrinfo ENOTFOUND missing.test",
+    "code": "ENOTFOUND",
+    "errno": -3008,
+    "syscall": "getaddrinfo",
+    "hostname": "missing.test"
+   }
+  },
+  "lookup v6first missing.test": {
+   "variant": "v6first",
+   "name": "missing.test",
+   "error": {
+    "message": "getaddrinfo ENOTFOUND missing.test",
+    "code": "ENOTFOUND",
+    "errno": -3008,
+    "syscall": "getaddrinfo",
+    "hostname": "missing.test"
+   }
+  },
+  "lookup addrconfig missing.test": {
+   "variant": "addrconfig",
+   "name": "missing.test",
+   "error": {
+    "message": "getaddrinfo ENOTFOUND missing.test",
+    "code": "ENOTFOUND",
+    "errno": -3008,
+    "syscall": "getaddrinfo",
+    "hostname": "missing.test"
+   }
+  },
+  "lookup f6mapped missing.test": {
+   "variant": "f6mapped",
+   "name": "missing.test",
+   "error": {
+    "message": "getaddrinfo ENOTFOUND missing.test",
+    "code": "ENOTFOUND",
+    "errno": -3008,
+    "syscall": "getaddrinfo",
+    "hostname": "missing.test"
+   }
+  },
+  "lookup f6mappedall missing.test": {
+   "variant": "f6mappedall",
+   "name": "missing.test",
+   "error": {
+    "message": "getaddrinfo ENOTFOUND missing.test",
+    "code": "ENOTFOUND",
+    "errno": -3008,
+    "syscall": "getaddrinfo",
+    "hostname": "missing.test"
+   }
+  },
+  "lookup cb dangling.test": {
+   "variant": "cb",
+   "name": "dangling.test",
+   "error": {
+    "message": "getaddrinfo ENOTFOUND dangling.test",
+    "code": "ENOTFOUND",
+    "errno": -3008,
+    "syscall": "getaddrinfo",
+    "hostname": "dangling.test"
+   }
+  },
+  "lookup all dangling.test": {
+   "variant": "all",
+   "name": "dangling.test",
+   "error": {
+    "message": "getaddrinfo ENOTFOUND dangling.test",
+    "code": "ENOTFOUND",
+    "errno": -3008,
+    "syscall": "getaddrinfo",
+    "hostname": "dangling.test"
+   }
+  },
+  "lookup f4 dangling.test": {
+   "variant": "f4",
+   "name": "dangling.test",
+   "error": {
+    "message": "getaddrinfo ENOTFOUND dangling.test",
+    "code": "ENOTFOUND",
+    "errno": -3008,
+    "syscall": "getaddrinfo",
+    "hostname": "dangling.test"
+   }
+  },
+  "lookup f6 dangling.test": {
+   "variant": "f6",
+   "name": "dangling.test",
+   "error": {
+    "message": "getaddrinfo ENOTFOUND dangling.test",
+    "code": "ENOTFOUND",
+    "errno": -3008,
+    "syscall": "getaddrinfo",
+    "hostname": "dangling.test"
+   }
+  },
+  "lookup f4all dangling.test": {
+   "variant": "f4all",
+   "name": "dangling.test",
+   "error": {
+    "message": "getaddrinfo ENOTFOUND dangling.test",
+    "code": "ENOTFOUND",
+    "errno": -3008,
+    "syscall": "getaddrinfo",
+    "hostname": "dangling.test"
+   }
+  },
+  "lookup f6all dangling.test": {
+   "variant": "f6all",
+   "name": "dangling.test",
+   "error": {
+    "message": "getaddrinfo ENOTFOUND dangling.test",
+    "code": "ENOTFOUND",
+    "errno": -3008,
+    "syscall": "getaddrinfo",
+    "hostname": "dangling.test"
+   }
+  },
+  "lookup v4first dangling.test": {
+   "variant": "v4first",
+   "name": "dangling.test",
+   "error": {
+    "message": "getaddrinfo ENOTFOUND dangling.test",
+    "code": "ENOTFOUND",
+    "errno": -3008,
+    "syscall": "getaddrinfo",
+    "hostname": "dangling.test"
+   }
+  },
+  "lookup v6first dangling.test": {
+   "variant": "v6first",
+   "name": "dangling.test",
+   "error": {
+    "message": "getaddrinfo ENOTFOUND dangling.test",
+    "code": "ENOTFOUND",
+    "errno": -3008,
+    "syscall": "getaddrinfo",
+    "hostname": "dangling.test"
+   }
+  },
+  "lookup addrconfig dangling.test": {
+   "variant": "addrconfig",
+   "name": "dangling.test",
+   "error": {
+    "message": "getaddrinfo ENOTFOUND dangling.test",
+    "code": "ENOTFOUND",
+    "errno": -3008,
+    "syscall": "getaddrinfo",
+    "hostname": "dangling.test"
+   }
+  },
+  "lookup f6mapped dangling.test": {
+   "variant": "f6mapped",
+   "name": "dangling.test",
+   "error": {
+    "message": "getaddrinfo ENOTFOUND dangling.test",
+    "code": "ENOTFOUND",
+    "errno": -3008,
+    "syscall": "getaddrinfo",
+    "hostname": "dangling.test"
+   }
+  },
+  "lookup f6mappedall dangling.test": {
+   "variant": "f6mappedall",
+   "name": "dangling.test",
+   "error": {
+    "message": "getaddrinfo ENOTFOUND dangling.test",
+    "code": "ENOTFOUND",
+    "errno": -3008,
+    "syscall": "getaddrinfo",
+    "hostname": "dangling.test"
+   }
+  },
+  "lookup cb servfail.test": {
+   "variant": "cb",
+   "name": "servfail.test",
+   "error": {
+    "message": "getaddrinfo EAI_AGAIN servfail.test",
+    "code": "EAI_AGAIN",
+    "errno": -3001,
+    "syscall": "getaddrinfo",
+    "hostname": "servfail.test"
+   }
+  },
+  "lookup all servfail.test": {
+   "variant": "all",
+   "name": "servfail.test",
+   "error": {
+    "message": "getaddrinfo EAI_AGAIN servfail.test",
+    "code": "EAI_AGAIN",
+    "errno": -3001,
+    "syscall": "getaddrinfo",
+    "hostname": "servfail.test"
+   }
+  },
+  "lookup f4 servfail.test": {
+   "variant": "f4",
+   "name": "servfail.test",
+   "error": {
+    "message": "getaddrinfo EAI_AGAIN servfail.test",
+    "code": "EAI_AGAIN",
+    "errno": -3001,
+    "syscall": "getaddrinfo",
+    "hostname": "servfail.test"
+   }
+  },
+  "lookup f6 servfail.test": {
+   "variant": "f6",
+   "name": "servfail.test",
+   "error": {
+    "message": "getaddrinfo EAI_AGAIN servfail.test",
+    "code": "EAI_AGAIN",
+    "errno": -3001,
+    "syscall": "getaddrinfo",
+    "hostname": "servfail.test"
+   }
+  },
+  "lookup f4all servfail.test": {
+   "variant": "f4all",
+   "name": "servfail.test",
+   "error": {
+    "message": "getaddrinfo EAI_AGAIN servfail.test",
+    "code": "EAI_AGAIN",
+    "errno": -3001,
+    "syscall": "getaddrinfo",
+    "hostname": "servfail.test"
+   }
+  },
+  "lookup f6all servfail.test": {
+   "variant": "f6all",
+   "name": "servfail.test",
+   "error": {
+    "message": "getaddrinfo EAI_AGAIN servfail.test",
+    "code": "EAI_AGAIN",
+    "errno": -3001,
+    "syscall": "getaddrinfo",
+    "hostname": "servfail.test"
+   }
+  },
+  "lookup v4first servfail.test": {
+   "variant": "v4first",
+   "name": "servfail.test",
+   "error": {
+    "message": "getaddrinfo EAI_AGAIN servfail.test",
+    "code": "EAI_AGAIN",
+    "errno": -3001,
+    "syscall": "getaddrinfo",
+    "hostname": "servfail.test"
+   }
+  },
+  "lookup v6first servfail.test": {
+   "variant": "v6first",
+   "name": "servfail.test",
+   "error": {
+    "message": "getaddrinfo EAI_AGAIN servfail.test",
+    "code": "EAI_AGAIN",
+    "errno": -3001,
+    "syscall": "getaddrinfo",
+    "hostname": "servfail.test"
+   }
+  },
+  "lookup addrconfig servfail.test": {
+   "variant": "addrconfig",
+   "name": "servfail.test",
+   "error": {
+    "message": "getaddrinfo EAI_AGAIN servfail.test",
+    "code": "EAI_AGAIN",
+    "errno": -3001,
+    "syscall": "getaddrinfo",
+    "hostname": "servfail.test"
+   }
+  },
+  "lookup f6mapped servfail.test": {
+   "variant": "f6mapped",
+   "name": "servfail.test",
+   "error": {
+    "message": "getaddrinfo EAI_AGAIN servfail.test",
+    "code": "EAI_AGAIN",
+    "errno": -3001,
+    "syscall": "getaddrinfo",
+    "hostname": "servfail.test"
+   }
+  },
+  "lookup f6mappedall servfail.test": {
+   "variant": "f6mappedall",
+   "name": "servfail.test",
+   "error": {
+    "message": "getaddrinfo EAI_AGAIN servfail.test",
+    "code": "EAI_AGAIN",
+    "errno": -3001,
+    "syscall": "getaddrinfo",
+    "hostname": "servfail.test"
+   }
+  },
+  "lookup cb big.test": {
+   "variant": "cb",
+   "name": "big.test",
+   "error": {
+    "message": "getaddrinfo EAI_AGAIN big.test",
+    "code": "EAI_AGAIN",
+    "errno": -3001,
+    "syscall": "getaddrinfo",
+    "hostname": "big.test"
+   }
+  },
+  "lookup all big.test": {
+   "variant": "all",
+   "name": "big.test",
+   "error": {
+    "message": "getaddrinfo EAI_AGAIN big.test",
+    "code": "EAI_AGAIN",
+    "errno": -3001,
+    "syscall": "getaddrinfo",
+    "hostname": "big.test"
+   }
+  },
+  "lookup f4 big.test": {
+   "variant": "f4",
+   "name": "big.test",
+   "error": {
+    "message": "getaddrinfo EAI_AGAIN big.test",
+    "code": "EAI_AGAIN",
+    "errno": -3001,
+    "syscall": "getaddrinfo",
+    "hostname": "big.test"
+   }
+  },
+  "lookup f6 big.test": {
+   "variant": "f6",
+   "name": "big.test",
+   "error": {
+    "message": "getaddrinfo ENOTFOUND big.test",
+    "code": "ENOTFOUND",
+    "errno": -3007,
+    "syscall": "getaddrinfo",
+    "hostname": "big.test"
+   }
+  },
+  "lookup f4all big.test": {
+   "variant": "f4all",
+   "name": "big.test",
+   "error": {
+    "message": "getaddrinfo EAI_AGAIN big.test",
+    "code": "EAI_AGAIN",
+    "errno": -3001,
+    "syscall": "getaddrinfo",
+    "hostname": "big.test"
+   }
+  },
+  "lookup f6all big.test": {
+   "variant": "f6all",
+   "name": "big.test",
+   "error": {
+    "message": "getaddrinfo ENOTFOUND big.test",
+    "code": "ENOTFOUND",
+    "errno": -3007,
+    "syscall": "getaddrinfo",
+    "hostname": "big.test"
+   }
+  },
+  "lookup v4first big.test": {
+   "variant": "v4first",
+   "name": "big.test",
+   "error": {
+    "message": "getaddrinfo EAI_AGAIN big.test",
+    "code": "EAI_AGAIN",
+    "errno": -3001,
+    "syscall": "getaddrinfo",
+    "hostname": "big.test"
+   }
+  },
+  "lookup v6first big.test": {
+   "variant": "v6first",
+   "name": "big.test",
+   "error": {
+    "message": "getaddrinfo EAI_AGAIN big.test",
+    "code": "EAI_AGAIN",
+    "errno": -3001,
+    "syscall": "getaddrinfo",
+    "hostname": "big.test"
+   }
+  },
+  "lookup addrconfig big.test": {
+   "variant": "addrconfig",
+   "name": "big.test",
+   "error": {
+    "message": "getaddrinfo EAI_AGAIN big.test",
+    "code": "EAI_AGAIN",
+    "errno": -3001,
+    "syscall": "getaddrinfo",
+    "hostname": "big.test"
+   }
+  },
+  "lookup f6mapped big.test": {
+   "variant": "f6mapped",
+   "name": "big.test",
+   "error": {
+    "message": "getaddrinfo EAI_AGAIN big.test",
+    "code": "EAI_AGAIN",
+    "errno": -3001,
+    "syscall": "getaddrinfo",
+    "hostname": "big.test"
+   }
+  },
+  "lookup f6mappedall big.test": {
+   "variant": "f6mappedall",
+   "name": "big.test",
+   "error": {
+    "message": "getaddrinfo EAI_AGAIN big.test",
+    "code": "EAI_AGAIN",
+    "errno": -3001,
+    "syscall": "getaddrinfo",
+    "hostname": "big.test"
+   }
+  },
+  "lookup cb ONE.TEST": {
+   "variant": "cb",
+   "name": "ONE.TEST",
+   "result": [
+    "203.0.113.10",
+    4
+   ]
+  },
+  "lookup all ONE.TEST": {
+   "variant": "all",
+   "name": "ONE.TEST",
+   "result": [
+    {
+     "address": "203.0.113.10",
+     "family": 4
+    }
+   ]
+  },
+  "lookup f4 ONE.TEST": {
+   "variant": "f4",
+   "name": "ONE.TEST",
+   "result": {
+    "address": "203.0.113.10",
+    "family": 4
+   }
+  },
+  "lookup f6 ONE.TEST": {
+   "variant": "f6",
+   "name": "ONE.TEST",
+   "error": {
+    "message": "getaddrinfo ENOTFOUND ONE.TEST",
+    "code": "ENOTFOUND",
+    "errno": -3007,
+    "syscall": "getaddrinfo",
+    "hostname": "ONE.TEST"
+   }
+  },
+  "lookup f4all ONE.TEST": {
+   "variant": "f4all",
+   "name": "ONE.TEST",
+   "result": [
+    {
+     "address": "203.0.113.10",
+     "family": 4
+    }
+   ]
+  },
+  "lookup f6all ONE.TEST": {
+   "variant": "f6all",
+   "name": "ONE.TEST",
+   "error": {
+    "message": "getaddrinfo ENOTFOUND ONE.TEST",
+    "code": "ENOTFOUND",
+    "errno": -3007,
+    "syscall": "getaddrinfo",
+    "hostname": "ONE.TEST"
+   }
+  },
+  "lookup v4first ONE.TEST": {
+   "variant": "v4first",
+   "name": "ONE.TEST",
+   "result": [
+    {
+     "address": "203.0.113.10",
+     "family": 4
+    }
+   ]
+  },
+  "lookup v6first ONE.TEST": {
+   "variant": "v6first",
+   "name": "ONE.TEST",
+   "result": [
+    {
+     "address": "203.0.113.10",
+     "family": 4
+    }
+   ]
+  },
+  "lookup addrconfig ONE.TEST": {
+   "variant": "addrconfig",
+   "name": "ONE.TEST",
+   "result": [
+    {
+     "address": "203.0.113.10",
+     "family": 4
+    }
+   ]
+  },
+  "lookup f6mapped ONE.TEST": {
+   "variant": "f6mapped",
+   "name": "ONE.TEST",
+   "result": [
+    {
+     "address": "::ffff:203.0.113.10",
+     "family": 6
+    }
+   ]
+  },
+  "lookup f6mappedall ONE.TEST": {
+   "variant": "f6mappedall",
+   "name": "ONE.TEST",
+   "result": [
+    {
+     "address": "::ffff:203.0.113.10",
+     "family": 6
+    }
+   ]
+  },
+  "lookup cb one.test.": {
+   "variant": "cb",
+   "name": "one.test.",
+   "result": [
+    "203.0.113.10",
+    4
+   ]
+  },
+  "lookup all one.test.": {
+   "variant": "all",
+   "name": "one.test.",
+   "result": [
+    {
+     "address": "203.0.113.10",
+     "family": 4
+    }
+   ]
+  },
+  "lookup f4 one.test.": {
+   "variant": "f4",
+   "name": "one.test.",
+   "result": {
+    "address": "203.0.113.10",
+    "family": 4
+   }
+  },
+  "lookup f6 one.test.": {
+   "variant": "f6",
+   "name": "one.test.",
+   "error": {
+    "message": "getaddrinfo ENOTFOUND one.test.",
+    "code": "ENOTFOUND",
+    "errno": -3007,
+    "syscall": "getaddrinfo",
+    "hostname": "one.test."
+   }
+  },
+  "lookup f4all one.test.": {
+   "variant": "f4all",
+   "name": "one.test.",
+   "result": [
+    {
+     "address": "203.0.113.10",
+     "family": 4
+    }
+   ]
+  },
+  "lookup f6all one.test.": {
+   "variant": "f6all",
+   "name": "one.test.",
+   "error": {
+    "message": "getaddrinfo ENOTFOUND one.test.",
+    "code": "ENOTFOUND",
+    "errno": -3007,
+    "syscall": "getaddrinfo",
+    "hostname": "one.test."
+   }
+  },
+  "lookup v4first one.test.": {
+   "variant": "v4first",
+   "name": "one.test.",
+   "result": [
+    {
+     "address": "203.0.113.10",
+     "family": 4
+    }
+   ]
+  },
+  "lookup v6first one.test.": {
+   "variant": "v6first",
+   "name": "one.test.",
+   "result": [
+    {
+     "address": "203.0.113.10",
+     "family": 4
+    }
+   ]
+  },
+  "lookup addrconfig one.test.": {
+   "variant": "addrconfig",
+   "name": "one.test.",
+   "result": [
+    {
+     "address": "203.0.113.10",
+     "family": 4
+    }
+   ]
+  },
+  "lookup f6mapped one.test.": {
+   "variant": "f6mapped",
+   "name": "one.test.",
+   "result": [
+    {
+     "address": "::ffff:203.0.113.10",
+     "family": 6
+    }
+   ]
+  },
+  "lookup f6mappedall one.test.": {
+   "variant": "f6mappedall",
+   "name": "one.test.",
+   "result": [
+    {
+     "address": "::ffff:203.0.113.10",
+     "family": 6
+    }
+   ]
+  },
+  "lookup cb search": {
+   "variant": "cb",
+   "name": "search",
+   "error": {
+    "message": "getaddrinfo ENOTFOUND search",
+    "code": "ENOTFOUND",
+    "errno": -3008,
+    "syscall": "getaddrinfo",
+    "hostname": "search"
+   }
+  },
+  "lookup all search": {
+   "variant": "all",
+   "name": "search",
+   "error": {
+    "message": "getaddrinfo ENOTFOUND search",
+    "code": "ENOTFOUND",
+    "errno": -3008,
+    "syscall": "getaddrinfo",
+    "hostname": "search"
+   }
+  },
+  "lookup f4 search": {
+   "variant": "f4",
+   "name": "search",
+   "error": {
+    "message": "getaddrinfo ENOTFOUND search",
+    "code": "ENOTFOUND",
+    "errno": -3008,
+    "syscall": "getaddrinfo",
+    "hostname": "search"
+   }
+  },
+  "lookup f6 search": {
+   "variant": "f6",
+   "name": "search",
+   "error": {
+    "message": "getaddrinfo ENOTFOUND search",
+    "code": "ENOTFOUND",
+    "errno": -3008,
+    "syscall": "getaddrinfo",
+    "hostname": "search"
+   }
+  },
+  "lookup f4all search": {
+   "variant": "f4all",
+   "name": "search",
+   "error": {
+    "message": "getaddrinfo ENOTFOUND search",
+    "code": "ENOTFOUND",
+    "errno": -3008,
+    "syscall": "getaddrinfo",
+    "hostname": "search"
+   }
+  },
+  "lookup f6all search": {
+   "variant": "f6all",
+   "name": "search",
+   "error": {
+    "message": "getaddrinfo ENOTFOUND search",
+    "code": "ENOTFOUND",
+    "errno": -3008,
+    "syscall": "getaddrinfo",
+    "hostname": "search"
+   }
+  },
+  "lookup v4first search": {
+   "variant": "v4first",
+   "name": "search",
+   "error": {
+    "message": "getaddrinfo ENOTFOUND search",
+    "code": "ENOTFOUND",
+    "errno": -3008,
+    "syscall": "getaddrinfo",
+    "hostname": "search"
+   }
+  },
+  "lookup v6first search": {
+   "variant": "v6first",
+   "name": "search",
+   "error": {
+    "message": "getaddrinfo ENOTFOUND search",
+    "code": "ENOTFOUND",
+    "errno": -3008,
+    "syscall": "getaddrinfo",
+    "hostname": "search"
+   }
+  },
+  "lookup addrconfig search": {
+   "variant": "addrconfig",
+   "name": "search",
+   "error": {
+    "message": "getaddrinfo ENOTFOUND search",
+    "code": "ENOTFOUND",
+    "errno": -3008,
+    "syscall": "getaddrinfo",
+    "hostname": "search"
+   }
+  },
+  "lookup f6mapped search": {
+   "variant": "f6mapped",
+   "name": "search",
+   "error": {
+    "message": "getaddrinfo ENOTFOUND search",
+    "code": "ENOTFOUND",
+    "errno": -3008,
+    "syscall": "getaddrinfo",
+    "hostname": "search"
+   }
+  },
+  "lookup f6mappedall search": {
+   "variant": "f6mappedall",
+   "name": "search",
+   "error": {
+    "message": "getaddrinfo ENOTFOUND search",
+    "code": "ENOTFOUND",
+    "errno": -3008,
+    "syscall": "getaddrinfo",
+    "hostname": "search"
+   }
+  },
+  "lookup cb 127.1": {
+   "variant": "cb",
+   "name": "127.1",
+   "result": [
+    "127.0.0.1",
+    4
+   ]
+  },
+  "lookup all 127.1": {
+   "variant": "all",
+   "name": "127.1",
+   "result": [
+    {
+     "address": "127.0.0.1",
+     "family": 4
+    }
+   ]
+  },
+  "lookup f4 127.1": {
+   "variant": "f4",
+   "name": "127.1",
+   "result": {
+    "address": "127.0.0.1",
+    "family": 4
+   }
+  },
+  "lookup f6 127.1": {
+   "variant": "f6",
+   "name": "127.1",
+   "error": {
+    "message": "getaddrinfo ENOTFOUND 127.1",
+    "code": "ENOTFOUND",
+    "errno": -3007,
+    "syscall": "getaddrinfo",
+    "hostname": "127.1"
+   }
+  },
+  "lookup f4all 127.1": {
+   "variant": "f4all",
+   "name": "127.1",
+   "result": [
+    {
+     "address": "127.0.0.1",
+     "family": 4
+    }
+   ]
+  },
+  "lookup f6all 127.1": {
+   "variant": "f6all",
+   "name": "127.1",
+   "error": {
+    "message": "getaddrinfo ENOTFOUND 127.1",
+    "code": "ENOTFOUND",
+    "errno": -3007,
+    "syscall": "getaddrinfo",
+    "hostname": "127.1"
+   }
+  },
+  "lookup v4first 127.1": {
+   "variant": "v4first",
+   "name": "127.1",
+   "result": [
+    {
+     "address": "127.0.0.1",
+     "family": 4
+    }
+   ]
+  },
+  "lookup v6first 127.1": {
+   "variant": "v6first",
+   "name": "127.1",
+   "result": [
+    {
+     "address": "127.0.0.1",
+     "family": 4
+    }
+   ]
+  },
+  "lookup addrconfig 127.1": {
+   "variant": "addrconfig",
+   "name": "127.1",
+   "result": [
+    {
+     "address": "127.0.0.1",
+     "family": 4
+    }
+   ]
+  },
+  "lookup f6mapped 127.1": {
+   "variant": "f6mapped",
+   "name": "127.1",
+   "result": [
+    {
+     "address": "::ffff:127.0.0.1",
+     "family": 6
+    }
+   ]
+  },
+  "lookup f6mappedall 127.1": {
+   "variant": "f6mappedall",
+   "name": "127.1",
+   "result": [
+    {
+     "address": "::ffff:127.0.0.1",
+     "family": 6
+    }
+   ]
+  },
+  "lookup cb txt.test": {
+   "variant": "cb",
+   "name": "txt.test",
+   "error": {
+    "message": "getaddrinfo ENOTFOUND txt.test",
+    "code": "ENOTFOUND",
+    "errno": -3007,
+    "syscall": "getaddrinfo",
+    "hostname": "txt.test"
+   }
+  },
+  "lookup all txt.test": {
+   "variant": "all",
+   "name": "txt.test",
+   "error": {
+    "message": "getaddrinfo ENOTFOUND txt.test",
+    "code": "ENOTFOUND",
+    "errno": -3007,
+    "syscall": "getaddrinfo",
+    "hostname": "txt.test"
+   }
+  },
+  "lookup f4 txt.test": {
+   "variant": "f4",
+   "name": "txt.test",
+   "error": {
+    "message": "getaddrinfo ENOTFOUND txt.test",
+    "code": "ENOTFOUND",
+    "errno": -3007,
+    "syscall": "getaddrinfo",
+    "hostname": "txt.test"
+   }
+  },
+  "lookup f6 txt.test": {
+   "variant": "f6",
+   "name": "txt.test",
+   "error": {
+    "message": "getaddrinfo ENOTFOUND txt.test",
+    "code": "ENOTFOUND",
+    "errno": -3007,
+    "syscall": "getaddrinfo",
+    "hostname": "txt.test"
+   }
+  },
+  "lookup f4all txt.test": {
+   "variant": "f4all",
+   "name": "txt.test",
+   "error": {
+    "message": "getaddrinfo ENOTFOUND txt.test",
+    "code": "ENOTFOUND",
+    "errno": -3007,
+    "syscall": "getaddrinfo",
+    "hostname": "txt.test"
+   }
+  },
+  "lookup f6all txt.test": {
+   "variant": "f6all",
+   "name": "txt.test",
+   "error": {
+    "message": "getaddrinfo ENOTFOUND txt.test",
+    "code": "ENOTFOUND",
+    "errno": -3007,
+    "syscall": "getaddrinfo",
+    "hostname": "txt.test"
+   }
+  },
+  "lookup v4first txt.test": {
+   "variant": "v4first",
+   "name": "txt.test",
+   "error": {
+    "message": "getaddrinfo ENOTFOUND txt.test",
+    "code": "ENOTFOUND",
+    "errno": -3007,
+    "syscall": "getaddrinfo",
+    "hostname": "txt.test"
+   }
+  },
+  "lookup v6first txt.test": {
+   "variant": "v6first",
+   "name": "txt.test",
+   "error": {
+    "message": "getaddrinfo ENOTFOUND txt.test",
+    "code": "ENOTFOUND",
+    "errno": -3007,
+    "syscall": "getaddrinfo",
+    "hostname": "txt.test"
+   }
+  },
+  "lookup addrconfig txt.test": {
+   "variant": "addrconfig",
+   "name": "txt.test",
+   "error": {
+    "message": "getaddrinfo ENOTFOUND txt.test",
+    "code": "ENOTFOUND",
+    "errno": -3007,
+    "syscall": "getaddrinfo",
+    "hostname": "txt.test"
+   }
+  },
+  "lookup f6mapped txt.test": {
+   "variant": "f6mapped",
+   "name": "txt.test",
+   "error": {
+    "message": "getaddrinfo ENOTFOUND txt.test",
+    "code": "ENOTFOUND",
+    "errno": -3007,
+    "syscall": "getaddrinfo",
+    "hostname": "txt.test"
+   }
+  },
+  "lookup f6mappedall txt.test": {
+   "variant": "f6mappedall",
+   "name": "txt.test",
+   "error": {
+    "message": "getaddrinfo ENOTFOUND txt.test",
+    "code": "ENOTFOUND",
+    "errno": -3007,
+    "syscall": "getaddrinfo",
+    "hostname": "txt.test"
+   }
+  },
+  "lookup cb trunc.test": {
+   "variant": "cb",
+   "name": "trunc.test",
+   "error": {
+    "message": "getaddrinfo EAI_AGAIN trunc.test",
+    "code": "EAI_AGAIN",
+    "errno": -3001,
+    "syscall": "getaddrinfo",
+    "hostname": "trunc.test"
+   }
+  },
+  "lookup all trunc.test": {
+   "variant": "all",
+   "name": "trunc.test",
+   "error": {
+    "message": "getaddrinfo EAI_AGAIN trunc.test",
+    "code": "EAI_AGAIN",
+    "errno": -3001,
+    "syscall": "getaddrinfo",
+    "hostname": "trunc.test"
+   }
+  },
+  "lookup f4 trunc.test": {
+   "variant": "f4",
+   "name": "trunc.test",
+   "error": {
+    "message": "getaddrinfo EAI_AGAIN trunc.test",
+    "code": "EAI_AGAIN",
+    "errno": -3001,
+    "syscall": "getaddrinfo",
+    "hostname": "trunc.test"
+   }
+  },
+  "lookup f6 trunc.test": {
+   "variant": "f6",
+   "name": "trunc.test",
+   "error": {
+    "message": "getaddrinfo EAI_AGAIN trunc.test",
+    "code": "EAI_AGAIN",
+    "errno": -3001,
+    "syscall": "getaddrinfo",
+    "hostname": "trunc.test"
+   }
+  },
+  "lookup f4all trunc.test": {
+   "variant": "f4all",
+   "name": "trunc.test",
+   "error": {
+    "message": "getaddrinfo EAI_AGAIN trunc.test",
+    "code": "EAI_AGAIN",
+    "errno": -3001,
+    "syscall": "getaddrinfo",
+    "hostname": "trunc.test"
+   }
+  },
+  "lookup f6all trunc.test": {
+   "variant": "f6all",
+   "name": "trunc.test",
+   "error": {
+    "message": "getaddrinfo EAI_AGAIN trunc.test",
+    "code": "EAI_AGAIN",
+    "errno": -3001,
+    "syscall": "getaddrinfo",
+    "hostname": "trunc.test"
+   }
+  },
+  "lookup v4first trunc.test": {
+   "variant": "v4first",
+   "name": "trunc.test",
+   "error": {
+    "message": "getaddrinfo EAI_AGAIN trunc.test",
+    "code": "EAI_AGAIN",
+    "errno": -3001,
+    "syscall": "getaddrinfo",
+    "hostname": "trunc.test"
+   }
+  },
+  "lookup v6first trunc.test": {
+   "variant": "v6first",
+   "name": "trunc.test",
+   "error": {
+    "message": "getaddrinfo EAI_AGAIN trunc.test",
+    "code": "EAI_AGAIN",
+    "errno": -3001,
+    "syscall": "getaddrinfo",
+    "hostname": "trunc.test"
+   }
+  },
+  "lookup addrconfig trunc.test": {
+   "variant": "addrconfig",
+   "name": "trunc.test",
+   "error": {
+    "message": "getaddrinfo EAI_AGAIN trunc.test",
+    "code": "EAI_AGAIN",
+    "errno": -3001,
+    "syscall": "getaddrinfo",
+    "hostname": "trunc.test"
+   }
+  },
+  "lookup f6mapped trunc.test": {
+   "variant": "f6mapped",
+   "name": "trunc.test",
+   "error": {
+    "message": "getaddrinfo EAI_AGAIN trunc.test",
+    "code": "EAI_AGAIN",
+    "errno": -3001,
+    "syscall": "getaddrinfo",
+    "hostname": "trunc.test"
+   }
+  },
+  "lookup f6mappedall trunc.test": {
+   "variant": "f6mappedall",
+   "name": "trunc.test",
+   "error": {
+    "message": "getaddrinfo EAI_AGAIN trunc.test",
+    "code": "EAI_AGAIN",
+    "errno": -3001,
+    "syscall": "getaddrinfo",
+    "hostname": "trunc.test"
+   }
+  },
+  "lookup cb a..b": {
+   "variant": "cb",
+   "name": "a..b",
+   "error": {
+    "message": "getaddrinfo ENOTFOUND a..b",
+    "code": "ENOTFOUND",
+    "errno": -3008,
+    "syscall": "getaddrinfo",
+    "hostname": "a..b"
+   }
+  },
+  "lookup all a..b": {
+   "variant": "all",
+   "name": "a..b",
+   "error": {
+    "message": "getaddrinfo ENOTFOUND a..b",
+    "code": "ENOTFOUND",
+    "errno": -3008,
+    "syscall": "getaddrinfo",
+    "hostname": "a..b"
+   }
+  },
+  "lookup f4 a..b": {
+   "variant": "f4",
+   "name": "a..b",
+   "error": {
+    "message": "getaddrinfo ENOTFOUND a..b",
+    "code": "ENOTFOUND",
+    "errno": -3008,
+    "syscall": "getaddrinfo",
+    "hostname": "a..b"
+   }
+  },
+  "lookup f6 a..b": {
+   "variant": "f6",
+   "name": "a..b",
+   "error": {
+    "message": "getaddrinfo ENOTFOUND a..b",
+    "code": "ENOTFOUND",
+    "errno": -3008,
+    "syscall": "getaddrinfo",
+    "hostname": "a..b"
+   }
+  },
+  "lookup f4all a..b": {
+   "variant": "f4all",
+   "name": "a..b",
+   "error": {
+    "message": "getaddrinfo ENOTFOUND a..b",
+    "code": "ENOTFOUND",
+    "errno": -3008,
+    "syscall": "getaddrinfo",
+    "hostname": "a..b"
+   }
+  },
+  "lookup f6all a..b": {
+   "variant": "f6all",
+   "name": "a..b",
+   "error": {
+    "message": "getaddrinfo ENOTFOUND a..b",
+    "code": "ENOTFOUND",
+    "errno": -3008,
+    "syscall": "getaddrinfo",
+    "hostname": "a..b"
+   }
+  },
+  "lookup v4first a..b": {
+   "variant": "v4first",
+   "name": "a..b",
+   "error": {
+    "message": "getaddrinfo ENOTFOUND a..b",
+    "code": "ENOTFOUND",
+    "errno": -3008,
+    "syscall": "getaddrinfo",
+    "hostname": "a..b"
+   }
+  },
+  "lookup v6first a..b": {
+   "variant": "v6first",
+   "name": "a..b",
+   "error": {
+    "message": "getaddrinfo ENOTFOUND a..b",
+    "code": "ENOTFOUND",
+    "errno": -3008,
+    "syscall": "getaddrinfo",
+    "hostname": "a..b"
+   }
+  },
+  "lookup addrconfig a..b": {
+   "variant": "addrconfig",
+   "name": "a..b",
+   "error": {
+    "message": "getaddrinfo ENOTFOUND a..b",
+    "code": "ENOTFOUND",
+    "errno": -3008,
+    "syscall": "getaddrinfo",
+    "hostname": "a..b"
+   }
+  },
+  "lookup f6mapped a..b": {
+   "variant": "f6mapped",
+   "name": "a..b",
+   "error": {
+    "message": "getaddrinfo ENOTFOUND a..b",
+    "code": "ENOTFOUND",
+    "errno": -3008,
+    "syscall": "getaddrinfo",
+    "hostname": "a..b"
+   }
+  },
+  "lookup f6mappedall a..b": {
+   "variant": "f6mappedall",
+   "name": "a..b",
+   "error": {
+    "message": "getaddrinfo ENOTFOUND a..b",
+    "code": "ENOTFOUND",
+    "errno": -3008,
+    "syscall": "getaddrinfo",
+    "hostname": "a..b"
+   }
+  },
+  "lookup cb münchen.test": {
+   "variant": "cb",
+   "name": "münchen.test",
+   "error": {
+    "message": "getaddrinfo ENOTFOUND münchen.test",
+    "code": "ENOTFOUND",
+    "errno": -3008,
+    "syscall": "getaddrinfo",
+    "hostname": "münchen.test"
+   }
+  },
+  "lookup all münchen.test": {
+   "variant": "all",
+   "name": "münchen.test",
+   "error": {
+    "message": "getaddrinfo ENOTFOUND münchen.test",
+    "code": "ENOTFOUND",
+    "errno": -3008,
+    "syscall": "getaddrinfo",
+    "hostname": "münchen.test"
+   }
+  },
+  "lookup f4 münchen.test": {
+   "variant": "f4",
+   "name": "münchen.test",
+   "error": {
+    "message": "getaddrinfo ENOTFOUND münchen.test",
+    "code": "ENOTFOUND",
+    "errno": -3008,
+    "syscall": "getaddrinfo",
+    "hostname": "münchen.test"
+   }
+  },
+  "lookup f6 münchen.test": {
+   "variant": "f6",
+   "name": "münchen.test",
+   "error": {
+    "message": "getaddrinfo ENOTFOUND münchen.test",
+    "code": "ENOTFOUND",
+    "errno": -3008,
+    "syscall": "getaddrinfo",
+    "hostname": "münchen.test"
+   }
+  },
+  "lookup f4all münchen.test": {
+   "variant": "f4all",
+   "name": "münchen.test",
+   "error": {
+    "message": "getaddrinfo ENOTFOUND münchen.test",
+    "code": "ENOTFOUND",
+    "errno": -3008,
+    "syscall": "getaddrinfo",
+    "hostname": "münchen.test"
+   }
+  },
+  "lookup f6all münchen.test": {
+   "variant": "f6all",
+   "name": "münchen.test",
+   "error": {
+    "message": "getaddrinfo ENOTFOUND münchen.test",
+    "code": "ENOTFOUND",
+    "errno": -3008,
+    "syscall": "getaddrinfo",
+    "hostname": "münchen.test"
+   }
+  },
+  "lookup v4first münchen.test": {
+   "variant": "v4first",
+   "name": "münchen.test",
+   "error": {
+    "message": "getaddrinfo ENOTFOUND münchen.test",
+    "code": "ENOTFOUND",
+    "errno": -3008,
+    "syscall": "getaddrinfo",
+    "hostname": "münchen.test"
+   }
+  },
+  "lookup v6first münchen.test": {
+   "variant": "v6first",
+   "name": "münchen.test",
+   "error": {
+    "message": "getaddrinfo ENOTFOUND münchen.test",
+    "code": "ENOTFOUND",
+    "errno": -3008,
+    "syscall": "getaddrinfo",
+    "hostname": "münchen.test"
+   }
+  },
+  "lookup addrconfig münchen.test": {
+   "variant": "addrconfig",
+   "name": "münchen.test",
+   "error": {
+    "message": "getaddrinfo ENOTFOUND münchen.test",
+    "code": "ENOTFOUND",
+    "errno": -3008,
+    "syscall": "getaddrinfo",
+    "hostname": "münchen.test"
+   }
+  },
+  "lookup f6mapped münchen.test": {
+   "variant": "f6mapped",
+   "name": "münchen.test",
+   "error": {
+    "message": "getaddrinfo ENOTFOUND münchen.test",
+    "code": "ENOTFOUND",
+    "errno": -3008,
+    "syscall": "getaddrinfo",
+    "hostname": "münchen.test"
+   }
+  },
+  "lookup f6mappedall münchen.test": {
+   "variant": "f6mappedall",
+   "name": "münchen.test",
+   "error": {
+    "message": "getaddrinfo ENOTFOUND münchen.test",
+    "code": "ENOTFOUND",
+    "errno": -3008,
+    "syscall": "getaddrinfo",
+    "hostname": "münchen.test"
+   }
+  },
+  "lookup cb halffail.test": {
+   "variant": "cb",
+   "name": "halffail.test",
+   "error": {
+    "message": "getaddrinfo EAI_AGAIN halffail.test",
+    "code": "EAI_AGAIN",
+    "errno": -3001,
+    "syscall": "getaddrinfo",
+    "hostname": "halffail.test"
+   }
+  },
+  "lookup all halffail.test": {
+   "variant": "all",
+   "name": "halffail.test",
+   "error": {
+    "message": "getaddrinfo EAI_AGAIN halffail.test",
+    "code": "EAI_AGAIN",
+    "errno": -3001,
+    "syscall": "getaddrinfo",
+    "hostname": "halffail.test"
+   }
+  },
+  "lookup f4 halffail.test": {
+   "variant": "f4",
+   "name": "halffail.test",
+   "result": {
+    "address": "203.0.113.60",
+    "family": 4
+   }
+  },
+  "lookup f6 halffail.test": {
+   "variant": "f6",
+   "name": "halffail.test",
+   "error": {
+    "message": "getaddrinfo EAI_AGAIN halffail.test",
+    "code": "EAI_AGAIN",
+    "errno": -3001,
+    "syscall": "getaddrinfo",
+    "hostname": "halffail.test"
+   }
+  },
+  "lookup f4all halffail.test": {
+   "variant": "f4all",
+   "name": "halffail.test",
+   "result": [
+    {
+     "address": "203.0.113.60",
+     "family": 4
+    }
+   ]
+  },
+  "lookup f6all halffail.test": {
+   "variant": "f6all",
+   "name": "halffail.test",
+   "error": {
+    "message": "getaddrinfo EAI_AGAIN halffail.test",
+    "code": "EAI_AGAIN",
+    "errno": -3001,
+    "syscall": "getaddrinfo",
+    "hostname": "halffail.test"
+   }
+  },
+  "lookup v4first halffail.test": {
+   "variant": "v4first",
+   "name": "halffail.test",
+   "error": {
+    "message": "getaddrinfo EAI_AGAIN halffail.test",
+    "code": "EAI_AGAIN",
+    "errno": -3001,
+    "syscall": "getaddrinfo",
+    "hostname": "halffail.test"
+   }
+  },
+  "lookup v6first halffail.test": {
+   "variant": "v6first",
+   "name": "halffail.test",
+   "error": {
+    "message": "getaddrinfo EAI_AGAIN halffail.test",
+    "code": "EAI_AGAIN",
+    "errno": -3001,
+    "syscall": "getaddrinfo",
+    "hostname": "halffail.test"
+   }
+  },
+  "lookup addrconfig halffail.test": {
+   "variant": "addrconfig",
+   "name": "halffail.test",
+   "error": {
+    "message": "getaddrinfo EAI_AGAIN halffail.test",
+    "code": "EAI_AGAIN",
+    "errno": -3001,
+    "syscall": "getaddrinfo",
+    "hostname": "halffail.test"
+   }
+  },
+  "lookup f6mapped halffail.test": {
+   "variant": "f6mapped",
+   "name": "halffail.test",
+   "error": {
+    "message": "getaddrinfo EAI_AGAIN halffail.test",
+    "code": "EAI_AGAIN",
+    "errno": -3001,
+    "syscall": "getaddrinfo",
+    "hostname": "halffail.test"
+   }
+  },
+  "lookup f6mappedall halffail.test": {
+   "variant": "f6mappedall",
+   "name": "halffail.test",
+   "error": {
+    "message": "getaddrinfo EAI_AGAIN halffail.test",
+    "code": "EAI_AGAIN",
+    "errno": -3001,
+    "syscall": "getaddrinfo",
+    "hostname": "halffail.test"
+   }
+  },
+  "lookup cb refused.test": {
+   "variant": "cb",
+   "name": "refused.test",
+   "error": {
+    "message": "getaddrinfo EAI_AGAIN refused.test",
+    "code": "EAI_AGAIN",
+    "errno": -3001,
+    "syscall": "getaddrinfo",
+    "hostname": "refused.test"
+   }
+  },
+  "lookup all refused.test": {
+   "variant": "all",
+   "name": "refused.test",
+   "error": {
+    "message": "getaddrinfo EAI_AGAIN refused.test",
+    "code": "EAI_AGAIN",
+    "errno": -3001,
+    "syscall": "getaddrinfo",
+    "hostname": "refused.test"
+   }
+  },
+  "lookup f4 refused.test": {
+   "variant": "f4",
+   "name": "refused.test",
+   "error": {
+    "message": "getaddrinfo EAI_AGAIN refused.test",
+    "code": "EAI_AGAIN",
+    "errno": -3001,
+    "syscall": "getaddrinfo",
+    "hostname": "refused.test"
+   }
+  },
+  "lookup f6 refused.test": {
+   "variant": "f6",
+   "name": "refused.test",
+   "error": {
+    "message": "getaddrinfo EAI_AGAIN refused.test",
+    "code": "EAI_AGAIN",
+    "errno": -3001,
+    "syscall": "getaddrinfo",
+    "hostname": "refused.test"
+   }
+  },
+  "lookup f4all refused.test": {
+   "variant": "f4all",
+   "name": "refused.test",
+   "error": {
+    "message": "getaddrinfo EAI_AGAIN refused.test",
+    "code": "EAI_AGAIN",
+    "errno": -3001,
+    "syscall": "getaddrinfo",
+    "hostname": "refused.test"
+   }
+  },
+  "lookup f6all refused.test": {
+   "variant": "f6all",
+   "name": "refused.test",
+   "error": {
+    "message": "getaddrinfo EAI_AGAIN refused.test",
+    "code": "EAI_AGAIN",
+    "errno": -3001,
+    "syscall": "getaddrinfo",
+    "hostname": "refused.test"
+   }
+  },
+  "lookup v4first refused.test": {
+   "variant": "v4first",
+   "name": "refused.test",
+   "error": {
+    "message": "getaddrinfo EAI_AGAIN refused.test",
+    "code": "EAI_AGAIN",
+    "errno": -3001,
+    "syscall": "getaddrinfo",
+    "hostname": "refused.test"
+   }
+  },
+  "lookup v6first refused.test": {
+   "variant": "v6first",
+   "name": "refused.test",
+   "error": {
+    "message": "getaddrinfo EAI_AGAIN refused.test",
+    "code": "EAI_AGAIN",
+    "errno": -3001,
+    "syscall": "getaddrinfo",
+    "hostname": "refused.test"
+   }
+  },
+  "lookup addrconfig refused.test": {
+   "variant": "addrconfig",
+   "name": "refused.test",
+   "error": {
+    "message": "getaddrinfo EAI_AGAIN refused.test",
+    "code": "EAI_AGAIN",
+    "errno": -3001,
+    "syscall": "getaddrinfo",
+    "hostname": "refused.test"
+   }
+  },
+  "lookup f6mapped refused.test": {
+   "variant": "f6mapped",
+   "name": "refused.test",
+   "error": {
+    "message": "getaddrinfo EAI_AGAIN refused.test",
+    "code": "EAI_AGAIN",
+    "errno": -3001,
+    "syscall": "getaddrinfo",
+    "hostname": "refused.test"
+   }
+  },
+  "lookup f6mappedall refused.test": {
+   "variant": "f6mappedall",
+   "name": "refused.test",
+   "error": {
+    "message": "getaddrinfo EAI_AGAIN refused.test",
+    "code": "EAI_AGAIN",
+    "errno": -3001,
+    "syscall": "getaddrinfo",
+    "hostname": "refused.test"
+   }
+  },
+  "lookup cb mixed.test": {
+   "variant": "cb",
+   "name": "mixed.test",
+   "result": [
+    "2001:db8::70",
+    6
+   ]
+  },
+  "lookup all mixed.test": {
+   "variant": "all",
+   "name": "mixed.test",
+   "result": [
+    {
+     "address": "2001:db8::70",
+     "family": 6
+    },
+    {
+     "address": "10.1.2.3",
+     "family": 4
+    },
+    {
+     "address": "100.64.0.9",
+     "family": 4
+    },
+    {
+     "address": "203.0.113.70",
+     "family": 4
+    },
+    {
+     "address": "2002:cb00:7146::1",
+     "family": 6
+    },
+    {
+     "address": "2001:0:1::1",
+     "family": 6
+    },
+    {
+     "address": "fd00::70",
+     "family": 6
+    },
+    {
+     "address": "fe80::70",
+     "family": 6
+    }
+   ]
+  },
+  "lookup f4 mixed.test": {
+   "variant": "f4",
+   "name": "mixed.test",
+   "result": {
+    "address": "10.1.2.3",
+    "family": 4
+   }
+  },
+  "lookup f6 mixed.test": {
+   "variant": "f6",
+   "name": "mixed.test",
+   "result": {
+    "address": "2001:db8::70",
+    "family": 6
+   }
+  },
+  "lookup f4all mixed.test": {
+   "variant": "f4all",
+   "name": "mixed.test",
+   "result": [
+    {
+     "address": "10.1.2.3",
+     "family": 4
+    },
+    {
+     "address": "203.0.113.70",
+     "family": 4
+    },
+    {
+     "address": "100.64.0.9",
+     "family": 4
+    }
+   ]
+  },
+  "lookup f6all mixed.test": {
+   "variant": "f6all",
+   "name": "mixed.test",
+   "result": [
+    {
+     "address": "2001:db8::70",
+     "family": 6
+    },
+    {
+     "address": "2002:cb00:7146::1",
+     "family": 6
+    },
+    {
+     "address": "2001:0:1::1",
+     "family": 6
+    },
+    {
+     "address": "fd00::70",
+     "family": 6
+    },
+    {
+     "address": "fe80::70",
+     "family": 6
+    }
+   ]
+  },
+  "lookup v4first mixed.test": {
+   "variant": "v4first",
+   "name": "mixed.test",
+   "result": [
+    {
+     "address": "10.1.2.3",
+     "family": 4
+    },
+    {
+     "address": "100.64.0.9",
+     "family": 4
+    },
+    {
+     "address": "203.0.113.70",
+     "family": 4
+    },
+    {
+     "address": "2001:db8::70",
+     "family": 6
+    },
+    {
+     "address": "2002:cb00:7146::1",
+     "family": 6
+    },
+    {
+     "address": "2001:0:1::1",
+     "family": 6
+    },
+    {
+     "address": "fd00::70",
+     "family": 6
+    },
+    {
+     "address": "fe80::70",
+     "family": 6
+    }
+   ]
+  },
+  "lookup v6first mixed.test": {
+   "variant": "v6first",
+   "name": "mixed.test",
+   "result": [
+    {
+     "address": "2001:db8::70",
+     "family": 6
+    },
+    {
+     "address": "2002:cb00:7146::1",
+     "family": 6
+    },
+    {
+     "address": "2001:0:1::1",
+     "family": 6
+    },
+    {
+     "address": "fd00::70",
+     "family": 6
+    },
+    {
+     "address": "fe80::70",
+     "family": 6
+    },
+    {
+     "address": "10.1.2.3",
+     "family": 4
+    },
+    {
+     "address": "100.64.0.9",
+     "family": 4
+    },
+    {
+     "address": "203.0.113.70",
+     "family": 4
+    }
+   ]
+  },
+  "lookup addrconfig mixed.test": {
+   "variant": "addrconfig",
+   "name": "mixed.test",
+   "result": [
+    {
+     "address": "2001:db8::70",
+     "family": 6
+    },
+    {
+     "address": "10.1.2.3",
+     "family": 4
+    },
+    {
+     "address": "100.64.0.9",
+     "family": 4
+    },
+    {
+     "address": "203.0.113.70",
+     "family": 4
+    },
+    {
+     "address": "2002:cb00:7146::1",
+     "family": 6
+    },
+    {
+     "address": "2001:0:1::1",
+     "family": 6
+    },
+    {
+     "address": "fd00::70",
+     "family": 6
+    },
+    {
+     "address": "fe80::70",
+     "family": 6
+    }
+   ]
+  },
+  "lookup f6mapped mixed.test": {
+   "variant": "f6mapped",
+   "name": "mixed.test",
+   "result": [
+    {
+     "address": "2001:db8::70",
+     "family": 6
+    },
+    {
+     "address": "2002:cb00:7146::1",
+     "family": 6
+    },
+    {
+     "address": "2001:0:1::1",
+     "family": 6
+    },
+    {
+     "address": "fd00::70",
+     "family": 6
+    },
+    {
+     "address": "fe80::70",
+     "family": 6
+    }
+   ]
+  },
+  "lookup f6mappedall mixed.test": {
+   "variant": "f6mappedall",
+   "name": "mixed.test",
+   "result": [
+    {
+     "address": "2001:db8::70",
+     "family": 6
+    },
+    {
+     "address": "::ffff:10.1.2.3",
+     "family": 6
+    },
+    {
+     "address": "::ffff:203.0.113.70",
+     "family": 6
+    },
+    {
+     "address": "::ffff:100.64.0.9",
+     "family": 6
+    },
+    {
+     "address": "2002:cb00:7146::1",
+     "family": 6
+    },
+    {
+     "address": "2001:0:1::1",
+     "family": 6
+    },
+    {
+     "address": "fd00::70",
+     "family": 6
+    },
+    {
+     "address": "fe80::70",
+     "family": 6
+    }
+   ]
+  },
+  "lookup cb slow.test": {
+   "variant": "cb",
+   "name": "slow.test",
+   "error": {
+    "message": "getaddrinfo EAI_AGAIN slow.test",
+    "code": "EAI_AGAIN",
+    "errno": -3001,
+    "syscall": "getaddrinfo",
+    "hostname": "slow.test"
+   }
+  },
+  "lookup all slow.test": {
+   "variant": "all",
+   "name": "slow.test",
+   "error": {
+    "message": "getaddrinfo EAI_AGAIN slow.test",
+    "code": "EAI_AGAIN",
+    "errno": -3001,
+    "syscall": "getaddrinfo",
+    "hostname": "slow.test"
+   }
+  },
+  "lookup f4 slow.test": {
+   "variant": "f4",
+   "name": "slow.test",
+   "error": {
+    "message": "getaddrinfo EAI_AGAIN slow.test",
+    "code": "EAI_AGAIN",
+    "errno": -3001,
+    "syscall": "getaddrinfo",
+    "hostname": "slow.test"
+   }
+  },
+  "lookup f6 slow.test": {
+   "variant": "f6",
+   "name": "slow.test",
+   "error": {
+    "message": "getaddrinfo EAI_AGAIN slow.test",
+    "code": "EAI_AGAIN",
+    "errno": -3001,
+    "syscall": "getaddrinfo",
+    "hostname": "slow.test"
+   }
+  },
+  "lookup f4all slow.test": {
+   "variant": "f4all",
+   "name": "slow.test",
+   "error": {
+    "message": "getaddrinfo EAI_AGAIN slow.test",
+    "code": "EAI_AGAIN",
+    "errno": -3001,
+    "syscall": "getaddrinfo",
+    "hostname": "slow.test"
+   }
+  },
+  "lookup f6all slow.test": {
+   "variant": "f6all",
+   "name": "slow.test",
+   "error": {
+    "message": "getaddrinfo EAI_AGAIN slow.test",
+    "code": "EAI_AGAIN",
+    "errno": -3001,
+    "syscall": "getaddrinfo",
+    "hostname": "slow.test"
+   }
+  },
+  "lookup v4first slow.test": {
+   "variant": "v4first",
+   "name": "slow.test",
+   "error": {
+    "message": "getaddrinfo EAI_AGAIN slow.test",
+    "code": "EAI_AGAIN",
+    "errno": -3001,
+    "syscall": "getaddrinfo",
+    "hostname": "slow.test"
+   }
+  },
+  "lookup v6first slow.test": {
+   "variant": "v6first",
+   "name": "slow.test",
+   "error": {
+    "message": "getaddrinfo EAI_AGAIN slow.test",
+    "code": "EAI_AGAIN",
+    "errno": -3001,
+    "syscall": "getaddrinfo",
+    "hostname": "slow.test"
+   }
+  },
+  "lookup addrconfig slow.test": {
+   "variant": "addrconfig",
+   "name": "slow.test",
+   "error": {
+    "message": "getaddrinfo EAI_AGAIN slow.test",
+    "code": "EAI_AGAIN",
+    "errno": -3001,
+    "syscall": "getaddrinfo",
+    "hostname": "slow.test"
+   }
+  },
+  "lookup f6mapped slow.test": {
+   "variant": "f6mapped",
+   "name": "slow.test",
+   "error": {
+    "message": "getaddrinfo EAI_AGAIN slow.test",
+    "code": "EAI_AGAIN",
+    "errno": -3001,
+    "syscall": "getaddrinfo",
+    "hostname": "slow.test"
+   }
+  },
+  "lookup f6mappedall slow.test": {
+   "variant": "f6mappedall",
+   "name": "slow.test",
+   "error": {
+    "message": "getaddrinfo EAI_AGAIN slow.test",
+    "code": "EAI_AGAIN",
+    "errno": -3001,
+    "syscall": "getaddrinfo",
+    "hostname": "slow.test"
+   }
+  }
+ }
+}

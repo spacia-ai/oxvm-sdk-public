@@ -5,6 +5,8 @@ import { fileURLToPath } from "./node-url.ts";
 import type { LocalModuleFiles } from "./module-files.ts";
 import type { ExecutableSources } from "./executable-sources.ts";
 import { SourceMap } from "./node-source-map.ts";
+import type { ModulePaths } from "./node-module-paths.ts";
+import { invalidType, named } from "./node-util-validators.ts";
 
 // API classification from managed Node 24.18.1; the differential test pins this
 // list. Classification is not admission: unavailable implementations still fail.
@@ -42,6 +44,13 @@ export function createCommonJSLoader(
     readonly sources: ExecutableSources;
     /** Node 24's synchronous `require()` of an ES module; without it the load is refused as a late failure. */
     readonly loadModule?: (filename: string, requirer: string | undefined) => unknown;
+    /** Node's module search paths (`globalPaths`, `_resolveLookupPaths`) and `_findPath` over the file owner's lookups. */
+    readonly paths?: ModulePaths;
+    /** `runMain` of an ES module: Node imports it, asynchronously. Without it the entry is loaded with `require`. */
+    readonly importMain?: (filename: string) => void;
+    readonly isModule?: (filename: string) => boolean;
+    /** `process.argv[1]`, the entry `runMain()` loads when it is given none. */
+    readonly mainArgument?: () => unknown;
   },
 ) {
   const paths = createNodePath(context.cwd);
@@ -58,7 +67,9 @@ export function createCommonJSLoader(
   const loadingModules = new WeakSet<object>();
   class Module implements CommonJSRecord {
     static _cache = dictionary();
+    static _pathCache = dictionary();
     static _extensions = dictionary();
+    static globalPaths: string[] = context.paths?.initPaths() ?? [];
     static Module = Module;
     static SourceMap = SourceMap;
     static findSourceMap = (path: unknown) => context.sources.findSourceMap(path);
@@ -91,12 +102,52 @@ export function createCommonJSLoader(
       }
     }
 
+    static _findPath(request: unknown, searchPaths: unknown, isMain?: unknown): string | false {
+      void isMain; // Node's third parameter: symbolic links are resolved for the main module as for any other.
+      return context.paths?.findPath(Module._pathCache, request, searchPaths) ?? false;
+    }
+
+    static _resolveLookupPaths(request: unknown, parent?: unknown): string[] | null {
+      return context.paths === undefined ? null : context.paths.resolveLookupPaths(request, parent);
+    }
+
+    static _initPaths(): void {
+      if (context.paths !== undefined) Module.globalPaths = context.paths.initPaths();
+    }
+
+    /** Node's `--require` path: a dummy parent deemed to exist in the working directory, so no preload becomes the main module. */
+    static _preloadModules(requests: unknown): void {
+      if (!Array.isArray(requests)) return;
+      const parent = new Module("internal/preload", null);
+      parent.paths = Module._nodeModulePaths(context.cwd());
+      for (const request of requests) {
+        if (typeof request !== "string") throw invalidType("id", "string", request);
+        parent.require(request);
+      }
+    }
+
+    /** Node's `executeUserEntryPoint`: loads `main` as the main module; one already loaded is not run again. */
+    static runMain(main: unknown = context.mainArgument?.()): void {
+      if (typeof main !== "string") throw invalidType("paths[0]", "string", main);
+      const filename = string(Module._resolveFilename(paths.resolve(main), null, true), "resolved filename");
+      if (context.importMain !== undefined && context.isModule?.(filename) === true) context.importMain(filename);
+      else Module._load(filename, null, true);
+    }
+
     static _resolveFilename(request: unknown, parent?: Module | null, isMain = false, options?: unknown): string {
       if (typeof isMain !== "boolean") throw new TypeError("Module resolution requires a boolean main flag");
       const builtin = Module.isBuiltin(request);
       const search: unknown = !builtin && typeof options === "object" && options !== null ? Reflect.get(options, "paths") : undefined;
+      // A program that replaced Node's lookup functions (as require hooks do) is asked first, as in Node; what
+      // it does not find is left to this loader, which also knows package self-references and "#" imports.
+      if (!builtin && search === undefined && typeof request === "string" && !request.startsWith("#") &&
+          (Module._findPath !== defaultFindPath || Module._resolveLookupPaths !== defaultLookupPaths)) {
+        const found: unknown = Module._findPath(request, Module._resolveLookupPaths(request, parent), isMain);
+        if (typeof found === "string" && found !== "") return found;
+      }
       const filename = builtin || search === undefined ? resolve(request, parent?.filename) : resolveFromPaths(request, search);
-      return filename.startsWith("node:") && typeof request === "string" ? request : filename;
+      // A built-in resolves to the name it was asked by; a resolve hook may send any request to a built-in.
+      return filename.startsWith("node:") && builtin && typeof request === "string" ? request : filename;
     }
 
     static _load(request: unknown, parent?: Module | null, isMain = false): unknown {
@@ -175,6 +226,7 @@ export function createCommonJSLoader(
     }
   }
   const defaultResolve: unknown = Reflect.get(Module, "_resolveFilename");
+  const defaultFindPath: unknown = Reflect.get(Module, "_findPath"), defaultLookupPaths: unknown = Reflect.get(Module, "_resolveLookupPaths");
 
   function cachedExports(cached: unknown, parent: Module | null | undefined): unknown {
     if (cached instanceof Module && parent !== undefined && parent !== null && !parent.children.includes(cached)) parent.children.push(cached);
@@ -226,7 +278,7 @@ export function createCommonJSLoader(
     module._compile(input.source, filename);
   };
   Module._extensions[".json"] = (module: Module, filename: string) => {
-    module.exports = JSON.parse(files.read(filename).source.replace(/^\uFEFF/u, "")) as unknown;
+    module.exports = parseJSON(files.read(filename).source, filename);
   };
   Module._extensions[".node"] = (module: Module, filename: string) => {
     if (files.loadNative === undefined) throw unsupported("native addons");
@@ -234,7 +286,16 @@ export function createCommonJSLoader(
   };
   // Named builtin ESM exports are derived from enumerable properties, just as
   // for the other owned builtin adapters. Class methods default to hidden.
-  for (const name of ["createRequire", "isBuiltin"]) Object.defineProperty(Module, name, { enumerable: true });
+  for (const name of ["createRequire", "isBuiltin", "_findPath", "_resolveLookupPaths", "_initPaths", "_preloadModules", "runMain"]) Object.defineProperty(Module, name, { enumerable: true });
+  // Node assigns these as anonymous function expressions, and `runMain` is its `executeUserEntryPoint`.
+  for (const name of ["_findPath", "_resolveLookupPaths", "_initPaths", "_preloadModules"]) named(Object(Reflect.get(Module, name)), "");
+  named(Object(Reflect.get(Module, "runMain")), "executeUserEntryPoint");
+  const wrapper = ["(function (exports, require, module, __filename, __dirname) { ", "\n});"];
+  let wrap: unknown = named((script: unknown) => `${wrapper[0] ?? ""}${String(script)}${wrapper[1] ?? ""}`, "wrap");
+  Object.defineProperties(Module, {
+    wrap: { get: () => wrap, set: (value: unknown) => { wrap = value; } },
+    wrapper: { get: () => wrapper, set: (value: unknown) => { if (Array.isArray(value)) wrapper.splice(0, wrapper.length, ...value.map(String)); } },
+  });
   builtins["module"] = Module;
   return {
     Module,
@@ -253,7 +314,7 @@ export function createCommonJSLoader(
       }
       // ESM JSON translation does not invoke application require.extensions.
       // Publish only after parsing; require() then receives this exact object.
-      const value: unknown = JSON.parse(source.replace(/^\uFEFF/u, ""));
+      const value = parseJSON(source, filename);
       const module = new Module(filename);
       module.filename = filename;
       module.exports = value;
@@ -266,12 +327,17 @@ export function createCommonJSLoader(
       : Module.createRequire(parent)(request),
     /** Node's `Module._preloadModules` for `--require` (ADR 0026, 1.11): a dummy parent deemed
      * to exist in the working directory, so no preload becomes the main module. */
-    preload: (requests: readonly string[]): void => {
-      const parent = new Module("internal/preload", null);
-      parent.paths = Module._nodeModulePaths(context.cwd());
-      for (const request of requests) parent.require(request);
-    },
+    preload: (requests: readonly string[]): void => { Module._preloadModules(requests); },
   };
+}
+
+/** Node names the file in a JSON module's syntax error. */
+function parseJSON(source: string, filename: string): unknown {
+  try { const value: unknown = JSON.parse(source.replace(/^\uFEFF/u, "")); return value; }
+  catch (error) {
+    if (error instanceof Error) error.message = `${filename}: ${error.message}`;
+    throw error;
+  }
 }
 
 function unsupported(operation: string): VMError {

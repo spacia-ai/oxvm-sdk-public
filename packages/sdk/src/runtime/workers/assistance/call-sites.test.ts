@@ -112,3 +112,11 @@ it("reads JavaScriptCore and evaluated-code frame forms", () => {
     ["f", "http://h/d.js", 13, false, true],
   ]);
 });
+
+it("reads a function's own name out of SpiderMonkey's path of enclosing functions", () => {
+  const realm = foreignRealm(["captureStackTrace@http://localhost:1/a.js:1:1", "anonymous/exports.sites@oxidevm:compiled/2/x.js:4:1", "anonymous/<@oxidevm:compiled/1/y.js:8:1",
+    "outer/inner<@oxidevm:compiled/1/y.js:9:1", "t@oxidevm:compiled/1/y.js:4:1", "C4/</<@http://localhost:1/a.js:2:2", ""].join("\n"));
+  const restore = installCallSites(realm);
+  try { expect(captured(realm, ["getFunctionName"]).map(([name]) => name)).toEqual(["exports.sites", null, "inner", "t", null]); }
+  finally { restore(); }
+});

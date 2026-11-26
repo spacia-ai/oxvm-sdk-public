@@ -97,6 +97,54 @@ describe("descriptor-relative operations (Userspace API 147)", () => {
   });
 });
 
+describe("ownership (OXJR 260 and 93, Userspace API 154)", () => {
+  it("sends fchownat as dirfd, path, four-byte uid and gid, then flags", () => {
+    expect(wire(at.chownAt(CWD, "/workspace/a", 1000, 100))).toEqual({ number: 260, payload: [...AT_FDCWD, ...blob("/workspace/a"), ...u32(1000), ...u32(100), ...u64(0n)] });
+    // lchown is AT_SYMLINK_NOFOLLOW; a held directory travels as its number.
+    expect(wire(at.chownAt(fd, "link", 0, 0, 0x100))).toEqual({ number: 260, payload: [...u64(3n), ...blob("link"), ...u32(0), ...u32(0), ...u64(0x100n)] });
+    expect(wire(at.chownAt(fd, Uint8Array.of(0xff, 0xfe), 1, 2)).payload).toEqual([...u64(3n), ...u32(2), 0xff, 0xfe, ...u32(1), ...u32(2), ...u64(0n)]);
+    // An empty path is Rust's to judge (AT_EMPTY_PATH).
+    expect(wire(at.chownAt(fd, "", 1, 2, 0x1000)).payload).toEqual([...u64(3n), ...u32(0), ...u32(1), ...u32(2), ...u64(0x1000n)]);
+  });
+
+  it("sends fchown as the descriptor and the two four-byte IDs", () => {
+    expect(wire(at.fchown(fd, 1000, 100))).toEqual({ number: 93, payload: [...u64(3n), ...u32(1000), ...u32(100)] });
+    expect(wire(at.fchown(0x7fff_ffff, 0, 0xffff_fffe))).toEqual({ number: 93, payload: [...u64(0x7fff_ffffn), ...u32(0), ...u32(0xffff_fffe)] });
+  });
+
+  it("sends -1, leave this ID unchanged, as Linux's (uid_t)-1", () => {
+    const unchanged = u32(0xffff_ffff);
+    expect(wire(at.chownAt(CWD, "a", -1, 7)).payload).toEqual([...AT_FDCWD, ...blob("a"), ...unchanged, ...u32(7), ...u64(0n)]);
+    expect(wire(at.chownAt(CWD, "a", 7, 0xffff_ffff)).payload).toEqual([...AT_FDCWD, ...blob("a"), ...u32(7), ...unchanged, ...u64(0n)]);
+    expect(wire(at.fchown(fd, -1, -1)).payload).toEqual([...u64(3n), ...unchanged, ...unchanged]);
+  });
+
+  it("refuses an ID, descriptor, flag or path it cannot encode before anything is sent", () => {
+    for (const id of [-2, 2 ** 32, 1.5, NaN, Infinity]) {
+      expect(thrown(() => at.chownAt(CWD, "a", id, 0))).toMatchObject({ code: "INVALID_ARGUMENT" });
+      expect(thrown(() => at.chownAt(CWD, "a", 0, id))).toMatchObject({ code: "INVALID_ARGUMENT" });
+      expect(thrown(() => at.fchown(fd, id, 0))).toMatchObject({ code: "INVALID_ARGUMENT" });
+      expect(thrown(() => at.fchown(fd, 0, id))).toMatchObject({ code: "INVALID_ARGUMENT" });
+    }
+    const unlisted: unknown = "0";
+    expect(thrown(() => Reflect.apply(at.chownAt, undefined, [CWD, "a", unlisted, 0]))).toMatchObject({ code: "INVALID_ARGUMENT" });
+    expect(thrown(() => Reflect.apply(at.fchown, undefined, [fd, 0, unlisted]))).toMatchObject({ code: "INVALID_ARGUMENT" });
+    // fchown takes a descriptor, never AT_FDCWD.
+    for (const bad of [CWD, -1, 2 ** 31, 1.5]) expect(thrown(() => at.fchown(bad, 0, 0))).toMatchObject({ code: "INVALID_ARGUMENT" });
+    expect(thrown(() => at.chownAt(-1, "a", 0, 0))).toMatchObject({ code: "INVALID_ARGUMENT" });
+    expect(thrown(() => at.chownAt(CWD, "a", 0, 0, -1))).toMatchObject({ code: "INVALID_ARGUMENT" });
+    expect(thrown(() => at.chownAt(CWD, "a\0b", 0, 0))).toMatchObject({ code: "INVALID_ARGUMENT" });
+    expect(thrown(() => at.chownAt(CWD, "a".repeat(4096), 0, 0))).toMatchObject({ code: "INVALID_ARGUMENT" });
+  });
+
+  it("accepts only an empty reply with value 0", () => {
+    for (const operation of [at.chownAt(CWD, "a", 1, 1), at.fchown(fd, 1, 1)]) {
+      expect(() => { operation.decode(empty()); }).not.toThrow();
+      expect(() => { operation.decode(empty(1n)); }).toThrow(VMError);
+    }
+  });
+});
+
 describe("positional, status and directory operations", () => {
   it("encodes pread and pwrite with their offsets and bounds their replies", () => {
     expect(wire(at.pread(fd, 4, 9n))).toEqual({ number: 17, payload: [...u64(3n), ...u64(4n), ...u64(9n)] });

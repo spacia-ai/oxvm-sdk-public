@@ -1,0 +1,338 @@
+{
+ "image": "node:24.18.1-alpine",
+ "node": "v24.18.1",
+ "shapes": {
+  "userInfo": {
+   "kind": "data",
+   "enumerable": true,
+   "configurable": true,
+   "writable": true,
+   "name": "userInfo",
+   "length": 1
+  },
+  "uptime": {
+   "kind": "data",
+   "enumerable": true,
+   "configurable": true,
+   "writable": true,
+   "name": "wrappedFn",
+   "length": 0
+  },
+  "loadavg": {
+   "kind": "data",
+   "enumerable": true,
+   "configurable": true,
+   "writable": true,
+   "name": "loadavg",
+   "length": 0
+  },
+  "getPriority": {
+   "kind": "data",
+   "enumerable": true,
+   "configurable": true,
+   "writable": true,
+   "name": "getPriority",
+   "length": 1
+  },
+  "setPriority": {
+   "kind": "data",
+   "enumerable": true,
+   "configurable": true,
+   "writable": true,
+   "name": "setPriority",
+   "length": 2
+  },
+  "uptimeToPrimitive": {
+   "kind": "data",
+   "enumerable": true,
+   "configurable": true,
+   "writable": true,
+   "name": "",
+   "length": 0
+  }
+ },
+ "passwd": "root:x:0:0:root:/root:/bin/sh\n",
+ "userInfo": {
+  "uid": 0,
+  "gid": 0,
+  "username": "root",
+  "homedir": "/root",
+  "shell": "/bin/sh"
+ },
+ "userInfoHex": {
+  "uid": 0,
+  "gid": 0,
+  "username": "726f6f74",
+  "homedir": "2f726f6f74",
+  "shell": "2f62696e2f7368"
+ },
+ "userInfoBase64": {
+  "uid": 0,
+  "gid": 0,
+  "username": "cm9vdA==",
+  "homedir": "L3Jvb3Q=",
+  "shell": "L2Jpbi9zaA=="
+ },
+ "userInfoBogus": {
+  "uid": 0,
+  "gid": 0,
+  "username": "root",
+  "homedir": "/root",
+  "shell": "/bin/sh"
+ },
+ "userInfoNumberOption": {
+  "uid": 0,
+  "gid": 0,
+  "username": "root",
+  "homedir": "/root",
+  "shell": "/bin/sh"
+ },
+ "userInfoBuffer": {
+  "uid": 0,
+  "gid": 0,
+  "username": {
+   "hex": "726f6f74"
+  },
+  "homedir": {
+   "hex": "2f726f6f74"
+  },
+  "shell": {
+   "hex": "2f62696e2f7368"
+  }
+ },
+ "userInfoPrototypeIsNull": true,
+ "getPriorityErrors": {
+  "string": {
+   "name": "TypeError",
+   "code": "ERR_INVALID_ARG_TYPE",
+   "message": "The \"pid\" argument must be of type number. Received type string ('x')"
+  },
+  "null": {
+   "name": "TypeError",
+   "code": "ERR_INVALID_ARG_TYPE",
+   "message": "The \"pid\" argument must be of type number. Received null"
+  },
+  "object": {
+   "name": "TypeError",
+   "code": "ERR_INVALID_ARG_TYPE",
+   "message": "The \"pid\" argument must be of type number. Received an instance of Object"
+  },
+  "boolean": {
+   "name": "TypeError",
+   "code": "ERR_INVALID_ARG_TYPE",
+   "message": "The \"pid\" argument must be of type number. Received type boolean (true)"
+  },
+  "fraction": {
+   "name": "RangeError",
+   "code": "ERR_OUT_OF_RANGE",
+   "message": "The value of \"pid\" is out of range. It must be an integer. Received 1.5"
+  },
+  "high": {
+   "name": "RangeError",
+   "code": "ERR_OUT_OF_RANGE",
+   "message": "The value of \"pid\" is out of range. It must be >= -2147483648 && <= 2147483647. Received 2147483648"
+  },
+  "low": {
+   "name": "RangeError",
+   "code": "ERR_OUT_OF_RANGE",
+   "message": "The value of \"pid\" is out of range. It must be >= -2147483648 && <= 2147483647. Received -2147483649"
+  },
+  "missing": {
+   "name": "SystemError",
+   "code": "ERR_SYSTEM_ERROR",
+   "message": "A system error occurred: uv_os_getpriority returned ESRCH (no such process)"
+  },
+  "negative": {
+   "name": "SystemError",
+   "code": "ERR_SYSTEM_ERROR",
+   "message": "A system error occurred: uv_os_getpriority returned ESRCH (no such process)"
+  }
+ },
+ "setPriorityErrors": {
+  "none": {
+   "name": "TypeError",
+   "code": "ERR_INVALID_ARG_TYPE",
+   "message": "The \"priority\" argument must be of type number. Received undefined"
+  },
+  "pidString": {
+   "name": "TypeError",
+   "code": "ERR_INVALID_ARG_TYPE",
+   "message": "The \"pid\" argument must be of type number. Received type string ('x')"
+  },
+  "priorityString": {
+   "name": "TypeError",
+   "code": "ERR_INVALID_ARG_TYPE",
+   "message": "The \"priority\" argument must be of type number. Received type string ('x')"
+  },
+  "priorityHigh": {
+   "name": "RangeError",
+   "code": "ERR_OUT_OF_RANGE",
+   "message": "The value of \"priority\" is out of range. It must be >= -20 && <= 19. Received 20"
+  },
+  "priorityLow": {
+   "name": "RangeError",
+   "code": "ERR_OUT_OF_RANGE",
+   "message": "The value of \"priority\" is out of range. It must be >= -20 && <= 19. Received -21"
+  },
+  "priorityFraction": {
+   "name": "RangeError",
+   "code": "ERR_OUT_OF_RANGE",
+   "message": "The value of \"priority\" is out of range. It must be an integer. Received 1.5"
+  },
+  "pidFraction": {
+   "name": "RangeError",
+   "code": "ERR_OUT_OF_RANGE",
+   "message": "The value of \"pid\" is out of range. It must be an integer. Received 1.5"
+  },
+  "priorityNull": {
+   "name": "TypeError",
+   "code": "ERR_INVALID_ARG_TYPE",
+   "message": "The \"priority\" argument must be of type number. Received null"
+  },
+  "pidNull": {
+   "name": "TypeError",
+   "code": "ERR_INVALID_ARG_TYPE",
+   "message": "The \"pid\" argument must be of type number. Received null"
+  },
+  "pidUndefined": {
+   "name": "TypeError",
+   "code": "ERR_INVALID_ARG_TYPE",
+   "message": "The \"pid\" argument must be of type number. Received undefined"
+  },
+  "onlyHigh": {
+   "name": "RangeError",
+   "code": "ERR_OUT_OF_RANGE",
+   "message": "The value of \"priority\" is out of range. It must be >= -20 && <= 19. Received 20"
+  },
+  "onlyLow": {
+   "name": "RangeError",
+   "code": "ERR_OUT_OF_RANGE",
+   "message": "The value of \"priority\" is out of range. It must be >= -20 && <= 19. Received -21"
+  },
+  "pidHigh": {
+   "name": "RangeError",
+   "code": "ERR_OUT_OF_RANGE",
+   "message": "The value of \"pid\" is out of range. It must be >= -2147483648 && <= 2147483647. Received 2147483648"
+  },
+  "bothUndefined": {
+   "name": "TypeError",
+   "code": "ERR_INVALID_ARG_TYPE",
+   "message": "The \"priority\" argument must be of type number. Received undefined"
+  },
+  "onlyNaN": {
+   "name": "RangeError",
+   "code": "ERR_OUT_OF_RANGE",
+   "message": "The value of \"priority\" is out of range. It must be an integer. Received NaN"
+  },
+  "missing": {
+   "name": "SystemError",
+   "code": "ERR_SYSTEM_ERROR",
+   "message": "A system error occurred: uv_os_setpriority returned ESRCH (no such process)"
+  }
+ },
+ "systemErrors": {
+  "getPriorityMissing": {
+   "name": "SystemError",
+   "code": "ERR_SYSTEM_ERROR",
+   "message": "A system error occurred: uv_os_getpriority returned ESRCH (no such process)",
+   "info": {
+    "errno": -3,
+    "code": "ESRCH",
+    "message": "no such process",
+    "syscall": "uv_os_getpriority"
+   },
+   "errno": -3,
+   "syscall": "uv_os_getpriority",
+   "keys": [
+    "code",
+    "info",
+    "errno",
+    "syscall"
+   ],
+   "constructorName": "NodeError",
+   "isError": true,
+   "infoDescriptor": {
+    "writable": false,
+    "enumerable": true,
+    "configurable": true
+   },
+   "errnoAccessor": true
+  },
+  "setPriorityMissing": {
+   "name": "SystemError",
+   "code": "ERR_SYSTEM_ERROR",
+   "message": "A system error occurred: uv_os_setpriority returned ESRCH (no such process)",
+   "info": {
+    "errno": -3,
+    "code": "ESRCH",
+    "message": "no such process",
+    "syscall": "uv_os_setpriority"
+   },
+   "errno": -3,
+   "syscall": "uv_os_setpriority",
+   "keys": [
+    "code",
+    "info",
+    "errno",
+    "syscall"
+   ],
+   "constructorName": "NodeError",
+   "isError": true,
+   "infoDescriptor": {
+    "writable": false,
+    "enumerable": true,
+    "configurable": true
+   },
+   "errnoAccessor": true
+  },
+  "setPriorityDenied": {
+   "name": "SystemError",
+   "code": "ERR_SYSTEM_ERROR",
+   "message": "A system error occurred: uv_os_setpriority returned EACCES (permission denied)",
+   "info": {
+    "errno": -13,
+    "code": "EACCES",
+    "message": "permission denied",
+    "syscall": "uv_os_setpriority"
+   },
+   "errno": -13,
+   "syscall": "uv_os_setpriority",
+   "keys": [
+    "code",
+    "info",
+    "errno",
+    "syscall"
+   ],
+   "constructorName": "NodeError",
+   "isError": true,
+   "infoDescriptor": {
+    "writable": false,
+    "enumerable": true,
+    "configurable": true
+   },
+   "errnoAccessor": true
+  },
+  "userInfoMissing": {
+   "name": "SystemError",
+   "code": "ERR_SYSTEM_ERROR",
+   "message": "A system error occurred: uv_os_get_passwd returned ENOENT (no such file or directory)",
+   "info": {
+    "errno": -2,
+    "code": "ENOENT",
+    "message": "no such file or directory",
+    "syscall": "uv_os_get_passwd"
+   },
+   "errno": -2,
+   "syscall": "uv_os_get_passwd",
+   "keys": [
+    "code",
+    "info",
+    "errno",
+    "syscall"
+   ],
+   "constructorName": "NodeError",
+   "isError": true
+  }
+ },
+ "userInfoMissingCommand": "docker run --rm --user 12345 node:24.18.1-alpine node -e \"require('os').userInfo()\""
+}

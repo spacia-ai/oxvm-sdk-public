@@ -1,0 +1,656 @@
+{
+ "node": "v24.18.1",
+ "cachedDataVersionTag": 3480456349,
+ "values": [
+  {
+   "expr": "undefined",
+   "hex": "ff0f5f"
+  },
+  {
+   "expr": "null",
+   "hex": "ff0f30"
+  },
+  {
+   "expr": "true",
+   "hex": "ff0f54"
+  },
+  {
+   "expr": "false",
+   "hex": "ff0f46"
+  },
+  {
+   "expr": "0",
+   "hex": "ff0f4900"
+  },
+  {
+   "expr": "-0",
+   "hex": "ff0f4e0000000000000080"
+  },
+  {
+   "expr": "1",
+   "hex": "ff0f4902"
+  },
+  {
+   "expr": "-1",
+   "hex": "ff0f4901"
+  },
+  {
+   "expr": "42",
+   "hex": "ff0f4954"
+  },
+  {
+   "expr": "2147483647",
+   "hex": "ff0f49feffffff0f"
+  },
+  {
+   "expr": "-2147483648",
+   "hex": "ff0f49ffffffff0f"
+  },
+  {
+   "expr": "2147483648",
+   "hex": "ff0f4e000000000000e041"
+  },
+  {
+   "expr": "4294967295",
+   "hex": "ff0f4e0000e0ffffffef41"
+  },
+  {
+   "expr": "1.5",
+   "hex": "ff0f4e000000000000f83f"
+  },
+  {
+   "expr": "-1.5",
+   "hex": "ff0f4e000000000000f8bf"
+  },
+  {
+   "expr": "NaN",
+   "hex": "ff0f4e000000000000f87f"
+  },
+  {
+   "expr": "Infinity",
+   "hex": "ff0f4e000000000000f07f"
+  },
+  {
+   "expr": "Number.MAX_SAFE_INTEGER",
+   "hex": "ff0f4effffffffffff3f43"
+  },
+  {
+   "expr": "5e-324",
+   "hex": "ff0f4e0100000000000000"
+  },
+  {
+   "expr": "0n",
+   "hex": "ff0f5a00"
+  },
+  {
+   "expr": "1n",
+   "hex": "ff0f5a100100000000000000"
+  },
+  {
+   "expr": "-1n",
+   "hex": "ff0f5a110100000000000000"
+  },
+  {
+   "expr": "255n",
+   "hex": "ff0f5a10ff00000000000000"
+  },
+  {
+   "expr": "18446744073709551615n",
+   "hex": "ff0f5a10ffffffffffffffff"
+  },
+  {
+   "expr": "-18446744073709551616n",
+   "hex": "ff0f5a2100000000000000000100000000000000"
+  },
+  {
+   "expr": "123456789012345678901234567890n",
+   "hex": "ff0f5a20d20a3f4eeee073c3f60fe98e01000000"
+  },
+  {
+   "expr": "''",
+   "hex": "ff0f2200"
+  },
+  {
+   "expr": "'a'",
+   "hex": "ff0f220161"
+  },
+  {
+   "expr": "'hello world'",
+   "hex": "ff0f220b68656c6c6f20776f726c64"
+  },
+  {
+   "expr": "'caf\\u00e9'",
+   "hex": "ff0f2204636166e9"
+  },
+  {
+   "expr": "'\\u20ac'",
+   "hex": "ff0f6302ac20"
+  },
+  {
+   "expr": "'a\\u20ac'",
+   "hex": "ff0f63046100ac20"
+  },
+  {
+   "expr": "'ab\\u20ac'",
+   "hex": "ff0f630661006200ac20"
+  },
+  {
+   "expr": "'\\ud83d\\ude00x'",
+   "hex": "ff0f63063dd800de7800"
+  },
+  {
+   "expr": "'x'.repeat(200)",
+   "hex": "ff0f22c8017878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878"
+  },
+  {
+   "expr": "'\\u0100'.repeat(70)",
+   "hex": "ff0f00638c010001000100010001000100010001000100010001000100010001000100010001000100010001000100010001000100010001000100010001000100010001000100010001000100010001000100010001000100010001000100010001000100010001000100010001000100010001000100010001000100010001000100010001000100010001000100010001"
+  },
+  {
+   "expr": "new Date(0)",
+   "hex": "ff0f440000000000000000"
+  },
+  {
+   "expr": "new Date(1700000000123)",
+   "hex": "ff0f4400b08756febc7842"
+  },
+  {
+   "expr": "new Date(NaN)",
+   "hex": "ff0f44000000000000f87f"
+  },
+  {
+   "expr": "/a/",
+   "hex": "ff0f5222016100"
+  },
+  {
+   "expr": "/a+b/gimsuyd",
+   "hex": "ff0f522203612b62bf01"
+  },
+  {
+   "expr": "/[\\u20ac]/v",
+   "hex": "ff0f5222085b5c75323061635d8002"
+  },
+  {
+   "expr": "new RegExp('\\u20ac/','g')",
+   "hex": "ff0f52006306ac205c002f0001"
+  },
+  {
+   "expr": "new Boolean(true)",
+   "hex": "ff0f79"
+  },
+  {
+   "expr": "new Boolean(false)",
+   "hex": "ff0f78"
+  },
+  {
+   "expr": "new Number(1.5)",
+   "hex": "ff0f6e000000000000f83f"
+  },
+  {
+   "expr": "new Number(3)",
+   "hex": "ff0f6e0000000000000840"
+  },
+  {
+   "expr": "new String('ab')",
+   "hex": "ff0f7322026162"
+  },
+  {
+   "expr": "new String('\\u20ac')",
+   "hex": "ff0f73006302ac20"
+  },
+  {
+   "expr": "Object(5n)",
+   "hex": "ff0f7a100500000000000000"
+  },
+  {
+   "expr": "({})",
+   "hex": "ff0f6f7b00"
+  },
+  {
+   "expr": "({a:1})",
+   "hex": "ff0f6f22016149027b01"
+  },
+  {
+   "expr": "({a:1,b:'x',c:[1,2],d:{e:null}})",
+   "hex": "ff0f6f22016149022201622201782201634102490249042400022201646f220165307b017b04"
+  },
+  {
+   "expr": "({1:'a',b:2,0:'z'})",
+   "hex": "ff0f6f490022017a490222016122016249047b03"
+  },
+  {
+   "expr": "({4294967294:1,4294967295:2,'-1':3,'1.5':4,'01':5})",
+   "hex": "ff0f6f4e0000c0ffffffef414902220a34323934393637323935490422022d3149062203312e35490822023031490a7b05"
+  },
+  {
+   "expr": "({'\\u20ac':1})",
+   "hex": "ff0f6f006302ac2049027b01"
+  },
+  {
+   "expr": "({a:undefined})",
+   "hex": "ff0f6f2201615f7b01"
+  },
+  {
+   "expr": "[]",
+   "hex": "ff0f4100240000"
+  },
+  {
+   "expr": "[1,2,3]",
+   "hex": "ff0f4103490249044906240003"
+  },
+  {
+   "expr": "[1.5,2,3]",
+   "hex": "ff0f41034e000000000000f83f4e00000000000000404e0000000000000840240003"
+  },
+  {
+   "expr": "[1,2,'a',1.5]",
+   "hex": "ff0f4104490249042201614e000000000000f83f240004"
+  },
+  {
+   "expr": "[1,,3]",
+   "hex": "ff0f61034900490249044906400203"
+  },
+  {
+   "expr": "[,]",
+   "hex": "ff0f6101400001"
+  },
+  {
+   "expr": "[undefined,null]",
+   "hex": "ff0f41025f30240002"
+  },
+  {
+   "expr": "[1.5,,2]",
+   "hex": "ff0f610349004e000000000000f83f49044904400203"
+  },
+  {
+   "expr": "new Array(5)",
+   "hex": "ff0f6105400005"
+  },
+  {
+   "expr": "(()=>{const a=[1,2];a.x='y';return a})()",
+   "hex": "ff0f410249024904220178220179240102"
+  },
+  {
+   "expr": "(()=>{const a=[1,,2];a.x='y';return a})()",
+   "hex": "ff0f61034900490249044904220178220179400303"
+  },
+  {
+   "expr": "(()=>{const a=[];a[100]=1;return a})()",
+   "hex": "ff0f616549c8014902400165"
+  },
+  {
+   "expr": "[[1],[2,[3]]]",
+   "hex": "ff0f4102410149022400014102490441014906240001240002240002"
+  },
+  {
+   "expr": "[-0,NaN]",
+   "hex": "ff0f41024e00000000000000804e000000000000f87f240002"
+  },
+  {
+   "expr": "[2147483648,1]",
+   "hex": "ff0f41024e000000000000e0414e000000000000f03f240002"
+  },
+  {
+   "expr": "['a',{b:1}]",
+   "hex": "ff0f41022201616f22016249027b01240002"
+  },
+  {
+   "expr": "new Map()",
+   "hex": "ff0f3b3a00"
+  },
+  {
+   "expr": "new Map([[1,'a'],['b',{c:2}]])",
+   "hex": "ff0f3b49022201612201626f22016349047b013a04"
+  },
+  {
+   "expr": "new Set()",
+   "hex": "ff0f272c00"
+  },
+  {
+   "expr": "new Set([1,'a',null])",
+   "hex": "ff0f274902220161302c03"
+  },
+  {
+   "expr": "new Map([[new Map(),new Set([1])]])",
+   "hex": "ff0f3b3b3a002749022c013a02"
+  },
+  {
+   "expr": "new ArrayBuffer(0)",
+   "hex": "ff0f4200"
+  },
+  {
+   "expr": "new Uint8Array([1,2,3]).buffer",
+   "hex": "ff0f4203010203"
+  },
+  {
+   "expr": "new ArrayBuffer(4,{maxByteLength:16})",
+   "hex": "ff0f7e041000000000"
+  },
+  {
+   "expr": "new Uint8Array([1,2,3])",
+   "hex": "ff0f5c0103010203"
+  },
+  {
+   "expr": "new Int8Array([-1,2])",
+   "hex": "ff0f5c0002ff02"
+  },
+  {
+   "expr": "new Uint8ClampedArray([255,0])",
+   "hex": "ff0f5c0202ff00"
+  },
+  {
+   "expr": "new Int16Array([-2,3])",
+   "hex": "ff0f5c0304feff0300"
+  },
+  {
+   "expr": "new Uint16Array([1,65535])",
+   "hex": "ff0f5c04040100ffff"
+  },
+  {
+   "expr": "new Int32Array([-5])",
+   "hex": "ff0f5c0504fbffffff"
+  },
+  {
+   "expr": "new Uint32Array([7])",
+   "hex": "ff0f5c060407000000"
+  },
+  {
+   "expr": "new Float32Array([1.5])",
+   "hex": "ff0f5c07040000c03f"
+  },
+  {
+   "expr": "new Float64Array([1.5,-2])",
+   "hex": "ff0f5c0810000000000000f83f00000000000000c0"
+  },
+  {
+   "expr": "new BigInt64Array([-1n])",
+   "hex": "ff0f5c0b08ffffffffffffffff"
+  },
+  {
+   "expr": "new BigUint64Array([1n])",
+   "hex": "ff0f5c0c080100000000000000"
+  },
+  {
+   "expr": "new Float16Array([1.5])",
+   "hex": "ff0f5c0d02003e"
+  },
+  {
+   "expr": "new DataView(new Uint8Array([9,8,7,6]).buffer,1,2)",
+   "hex": "ff0f5c09020807"
+  },
+  {
+   "expr": "Buffer.from('ab')",
+   "hex": "ff0f5c0a026162"
+  },
+  {
+   "expr": "Buffer.alloc(0)",
+   "hex": "ff0f5c0a00"
+  },
+  {
+   "expr": "new Uint8Array(new Uint8Array([1,2,3,4,5]).buffer,1,3)",
+   "hex": "ff0f5c0103020304"
+  },
+  {
+   "expr": "new Uint16Array(new Uint8Array([1,2,3,4,5,6]).buffer,2,1)",
+   "hex": "ff0f5c04020304"
+  },
+  {
+   "expr": "({u:new Uint8Array([1]),s:'\\u20ac',t:'\\u20acb'})",
+   "hex": "ff0f6f2201755c010101220173006302ac20220174006304ac2062007b03"
+  },
+  {
+   "expr": "['\\u20ac','\\u20ac\\u20ac',1,'\\u20ac']",
+   "hex": "ff0f41046302ac206304ac20ac2049026302ac20240004"
+  },
+  {
+   "expr": "(()=>{const o={};o.self=o;return o})()",
+   "hex": "ff0f6f220473656c665e007b01"
+  },
+  {
+   "expr": "(()=>{const a=[];a.push(a);return a})()",
+   "hex": "ff0f41015e00240001"
+  },
+  {
+   "expr": "(()=>{const s={x:1};return {a:s,b:s,c:[s]}})()",
+   "hex": "ff0f6f2201616f22017849027b012201625e0122016341015e012400017b03"
+  },
+  {
+   "expr": "(()=>{const m=new Map();m.set('m',m);const s=new Set();s.add(s);return [m,s,m]})()",
+   "hex": "ff0f41033b22016d5e013a02275e022c015e01240003"
+  },
+  {
+   "expr": "(()=>{const d=new Date(5);const r=/x/;const u=new Uint8Array([1]);return [d,d,r,r,u,u]})()",
+   "hex": "ff0f41064400000000000014405e0152220178005e025c0101015e03240006"
+  },
+  {
+   "expr": "(()=>{const e=new Error('boom');e.stack='Error: boom\\n    at x';return e})()",
+   "hex": "ff0f726d2204626f6f6d7322144572726f723a20626f6f6d0a20202020617420782e"
+  },
+  {
+   "expr": "(()=>{const e=new TypeError('t',{cause:'c'});e.stack='S';return e})()",
+   "hex": "ff0f72546d22017473220153632201632e"
+  },
+  {
+   "expr": "(()=>{const e=new RangeError('\\u20ac');e.stack='S';return [e,e]})()",
+   "hex": "ff0f410272526d006302ac20732201532e5e01240002"
+  },
+  {
+   "expr": "(()=>{const e=new EvalError('1');e.stack='S';return e})()",
+   "hex": "ff0f72456d220131732201532e"
+  },
+  {
+   "expr": "(()=>{const e=new ReferenceError('1');e.stack='S';return e})()",
+   "hex": "ff0f72466d220131732201532e"
+  },
+  {
+   "expr": "(()=>{const e=new SyntaxError('1');e.stack='S';return e})()",
+   "hex": "ff0f72536d220131732201532e"
+  },
+  {
+   "expr": "(()=>{const e=new URIError('1');e.stack='S';return e})()",
+   "hex": "ff0f72556d220131732201532e"
+  },
+  {
+   "expr": "(()=>{const e=new Error('1',{cause:new Error('2')});e.stack='S';e.cause.stack='T';return e})()",
+   "hex": "ff0f726d2201317322015363726d220132732201542e2e"
+  },
+  {
+   "expr": "({a:{b:{c:{d:[new Map([[{k:1},new Set([[1]])]])]}}}})",
+   "hex": "ff0f6f2201616f2201626f2201636f22016441013b6f22016b49027b0127410149022400012c013a022400017b017b017b017b01"
+  },
+  {
+   "expr": "new (class Foo{constructor(){this.a=1}})()",
+   "hex": "ff0f6f22016149027b01"
+  },
+  {
+   "expr": "Object.create(null)",
+   "hex": "ff0f6f7b00"
+  },
+  {
+   "expr": "Object.assign(Object.create({inh:1}),{own:2})",
+   "hex": "ff0f6f22036f776e49047b01"
+  }
+ ],
+ "plain": [
+  {
+   "expr": "new Uint8Array([1,2,3])",
+   "hex": "ff0f42030102035642000300"
+  },
+  {
+   "expr": "new DataView(new Uint8Array([9,8,7,6]).buffer,1,2)",
+   "hex": "ff0f420409080706563f010200"
+  },
+  {
+   "expr": "new Float64Array([1.5])",
+   "hex": "ff0f4208000000000000f83f5646000800"
+  },
+  {
+   "expr": "new Float16Array([1.5])",
+   "hex": "ff0f4202003e5668000200"
+  },
+  {
+   "expr": "new BigUint64Array([1n])",
+   "hex": "ff0f420801000000000000005651000800"
+  },
+  {
+   "expr": "(()=>{const ab=new ArrayBuffer(4);return [new Uint8Array(ab,1,2),new DataView(ab),ab]})()",
+   "hex": "ff0f410342040000000056420102005e01563f0004005e01240003"
+  },
+  {
+   "expr": "new Uint8Array(new ArrayBuffer(4,{maxByteLength:8}))",
+   "hex": "ff0f7e0408000000005642000003"
+  },
+  {
+   "expr": "new Uint8Array(new ArrayBuffer(4,{maxByteLength:8}),1,2)",
+   "hex": "ff0f7e0408000000005642010202"
+  },
+  {
+   "expr": "new Int8Array(2)",
+   "hex": "ff0f420200005662000200"
+  },
+  {
+   "expr": "new Uint8ClampedArray(1)",
+   "hex": "ff0f4201005643000100"
+  },
+  {
+   "expr": "new Int16Array(1)",
+   "hex": "ff0f420200005677000200"
+  },
+  {
+   "expr": "new Uint16Array(1)",
+   "hex": "ff0f420200005657000200"
+  },
+  {
+   "expr": "new Int32Array(1)",
+   "hex": "ff0f4204000000005664000400"
+  },
+  {
+   "expr": "new Uint32Array(1)",
+   "hex": "ff0f4204000000005644000400"
+  },
+  {
+   "expr": "new Float32Array(1)",
+   "hex": "ff0f4204000000005666000400"
+  },
+  {
+   "expr": "new BigInt64Array(1)",
+   "hex": "ff0f420800000000000000005671000800"
+  },
+  {
+   "expr": "Buffer.from(new Uint8Array([5,6]).buffer)",
+   "hex": "ff0f420205065642000200"
+  }
+ ],
+ "errors": [
+  {
+   "expr": "(function f(){})",
+   "name": "Error",
+   "message": "function f(){} could not be cloned."
+  },
+  {
+   "expr": "()=>1",
+   "name": "Error",
+   "message": "()=>1 could not be cloned."
+  },
+  {
+   "expr": "(class A{})",
+   "name": "Error",
+   "message": "class A{} could not be cloned."
+  },
+  {
+   "expr": "Symbol('x')",
+   "name": "Error",
+   "message": "Symbol(x) could not be cloned."
+  },
+  {
+   "expr": "Symbol()",
+   "name": "Error",
+   "message": "Symbol() could not be cloned."
+  },
+  {
+   "expr": "Object(Symbol('x'))",
+   "name": "Error",
+   "message": "[object Symbol] could not be cloned."
+  },
+  {
+   "expr": "({a:[()=>1]})",
+   "name": "Error",
+   "message": "()=>1 could not be cloned."
+  },
+  {
+   "expr": "Promise.resolve()",
+   "name": "Error",
+   "message": "#<Promise> could not be cloned."
+  },
+  {
+   "expr": "new WeakMap()",
+   "name": "Error",
+   "message": "#<WeakMap> could not be cloned."
+  },
+  {
+   "expr": "new WeakSet()",
+   "name": "Error",
+   "message": "#<WeakSet> could not be cloned."
+  },
+  {
+   "expr": "new WeakRef({})",
+   "name": "Error",
+   "message": "#<WeakRef> could not be cloned."
+  },
+  {
+   "expr": "new SharedArrayBuffer(2)",
+   "name": "Error",
+   "message": "#<SharedArrayBuffer> could not be cloned."
+  },
+  {
+   "expr": "(function*(){})()",
+   "name": "Error",
+   "message": "[object Generator] could not be cloned."
+  },
+  {
+   "expr": "new Map().keys()",
+   "name": "Error",
+   "message": "[object Map Iterator] could not be cloned."
+  },
+  {
+   "expr": "[][Symbol.iterator]()",
+   "name": "Error",
+   "message": "[object Array Iterator] could not be cloned."
+  },
+  {
+   "expr": "(function(){return arguments})(1)",
+   "name": "Error",
+   "message": "#<Object> could not be cloned."
+  },
+  {
+   "expr": "(async function q(){})",
+   "name": "Error",
+   "message": "async function q(){} could not be cloned."
+  },
+  {
+   "expr": "(function f(){return 'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa'})",
+   "name": "Error",
+   "message": "function f(){return 'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa...<omitted>...'} could not be cloned."
+  },
+  {
+   "expr": "new Map([[1,()=>1]])",
+   "name": "Error",
+   "message": "()=>1 could not be cloned."
+  },
+  {
+   "expr": "new Set([Symbol.iterator])",
+   "name": "Error",
+   "message": "Symbol(Symbol.iterator) could not be cloned."
+  },
+  {
+   "expr": "new (class Foo extends Promise{})(()=>{})",
+   "name": "Error",
+   "message": "#<Foo> could not be cloned."
+  },
+  {
+   "expr": "(async function*(){})()",
+   "name": "Error",
+   "message": "[object AsyncGenerator] could not be cloned."
+  }
+ ]
+}

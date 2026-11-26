@@ -35,6 +35,11 @@ export function createNodeBuffer(globals: unknown, buffer: object, runtime: "nod
     isAscii: (value: unknown): boolean => bytes(value).every(byte => byte < 0x80),
     kMaxLength, kStringMaxLength: maxString, INSPECT_MAX_BYTES: 50,
     constants: Object.freeze({ MAX_LENGTH: kMaxLength, MAX_STRING_LENGTH: maxString }),
+    // Object URLs here come from the platform's URL.createObjectURL, never as Node's `blob:nodedata:` ids, so none resolves.
+    resolveObjectURL(url: unknown): undefined {
+      if (typeof url === "symbol") throw new TypeError("Cannot convert a Symbol value to a string");
+      return undefined;
+    },
     transcode: (): never => { throw new VMError("FEATURE_NOT_AVAILABLE", "buffer.transcode is not supported", { builtin: "buffer", export: "transcode" }); },
   });
 }

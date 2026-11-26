@@ -24,3 +24,14 @@ it("does not take another error, or a read-only path outside the dependencies, f
   kept.sync(() => failure("EROFS", 30))(mkdir("/workspace/app/my_node_modules/x"));
   expect(kept.refused()).toBeUndefined();
 });
+
+it("remembers a refusal Linux answered outside the assistance calls", () => {
+  const writes = keepingDependencyWrites();
+  writes.path("EPERM", "/workspace/app/node_modules/pkg/file");
+  writes.path("EROFS", "/workspace/app/src/file");
+  expect(writes.refused()).toBeUndefined();
+  writes.path("EROFS", "/workspace/app/node_modules/pkg/file");
+  writes.path("EROFS", "/workspace/app/node_modules/other");
+  expect(writes.refused()).toMatchObject({ kind: "read-only-dependencies" });
+  expect(JSON.stringify(writes.refused())).toContain("node_modules/pkg/file");
+});

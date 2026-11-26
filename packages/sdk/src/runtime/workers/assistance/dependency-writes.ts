@@ -12,18 +12,22 @@ import { lateFailureDetail, type LateFailure } from "../../js-process/late-failu
 export function keepingDependencyWrites(): {
   sync(call: (operation: AssistanceOperation) => AssistanceResult): (operation: AssistanceOperation) => AssistanceResult;
   asynchronous(call: (operation: AssistanceOperation) => Promise<AssistanceResult>): (operation: AssistanceOperation) => Promise<AssistanceResult>;
+  /** A refusal Linux answered outside those calls, such as a change of owner. */
+  path(code: string, path: string): void;
   refused(): LateFailure | undefined;
 } {
   let refused: LateFailure | undefined;
+  const keep = (code: string, path: string | null | undefined): void => {
+    if (refused === undefined && code === "EROFS" && path?.split("/").includes("node_modules") === true) refused = { kind: "read-only-dependencies", detail: lateFailureDetail(path) };
+  };
   const note = (operation: AssistanceOperation, result: AssistanceResult): AssistanceResult => {
-    if (refused !== undefined || result.kind !== "error" || result.code !== "EROFS") return result;
-    const path = "path" in operation && typeof operation.path === "string" ? operation.path : result.path;
-    if (path?.split("/").includes("node_modules") === true) refused = { kind: "read-only-dependencies", detail: lateFailureDetail(path) };
+    if (result.kind === "error") keep(result.code, "path" in operation && typeof operation.path === "string" ? operation.path : result.path);
     return result;
   };
   return {
     sync: call => operation => note(operation, call(operation)),
     asynchronous: call => async operation => note(operation, await call(operation)),
+    path: keep,
     refused: () => refused,
   };
 }

@@ -1,0 +1,3216 @@
+{
+ "node": {
+  "version": "v24.18.1",
+  "image": "node:24.18.1-alpine",
+  "openssl": "3.5.7"
+ },
+ "keys": [
+  "CLIENT_RENEG_LIMIT",
+  "CLIENT_RENEG_WINDOW",
+  "DEFAULT_CIPHERS",
+  "DEFAULT_ECDH_CURVE",
+  "DEFAULT_MIN_VERSION",
+  "DEFAULT_MAX_VERSION",
+  "getCiphers",
+  "rootCertificates",
+  "getCACertificates",
+  "setDefaultCACertificates",
+  "convertALPNProtocols",
+  "checkServerIdentity",
+  "createSecureContext",
+  "SecureContext",
+  "TLSSocket",
+  "Server",
+  "createServer",
+  "connect"
+ ],
+ "descriptors": {
+  "CLIENT_RENEG_LIMIT": {
+   "e": true,
+   "w": true,
+   "c": true,
+   "get": "undefined",
+   "set": "undefined"
+  },
+  "CLIENT_RENEG_WINDOW": {
+   "e": true,
+   "w": true,
+   "c": true,
+   "get": "undefined",
+   "set": "undefined"
+  },
+  "DEFAULT_CIPHERS": {
+   "e": true,
+   "w": true,
+   "c": true,
+   "get": "undefined",
+   "set": "undefined"
+  },
+  "DEFAULT_ECDH_CURVE": {
+   "e": true,
+   "w": true,
+   "c": true,
+   "get": "undefined",
+   "set": "undefined"
+  },
+  "DEFAULT_MIN_VERSION": {
+   "e": true,
+   "w": true,
+   "c": true,
+   "get": "undefined",
+   "set": "undefined"
+  },
+  "DEFAULT_MAX_VERSION": {
+   "e": true,
+   "w": true,
+   "c": true,
+   "get": "undefined",
+   "set": "undefined"
+  },
+  "getCiphers": {
+   "e": true,
+   "w": true,
+   "c": true,
+   "get": "undefined",
+   "set": "undefined"
+  },
+  "rootCertificates": {
+   "e": true,
+   "w": null,
+   "c": false,
+   "get": "function",
+   "set": "undefined"
+  },
+  "getCACertificates": {
+   "e": true,
+   "w": true,
+   "c": true,
+   "get": "undefined",
+   "set": "undefined"
+  },
+  "setDefaultCACertificates": {
+   "e": true,
+   "w": true,
+   "c": true,
+   "get": "undefined",
+   "set": "undefined"
+  },
+  "convertALPNProtocols": {
+   "e": true,
+   "w": true,
+   "c": true,
+   "get": "undefined",
+   "set": "undefined"
+  },
+  "checkServerIdentity": {
+   "e": true,
+   "w": true,
+   "c": true,
+   "get": "undefined",
+   "set": "undefined"
+  },
+  "createSecureContext": {
+   "e": true,
+   "w": true,
+   "c": true,
+   "get": "undefined",
+   "set": "undefined"
+  },
+  "SecureContext": {
+   "e": true,
+   "w": true,
+   "c": true,
+   "get": "undefined",
+   "set": "undefined"
+  },
+  "TLSSocket": {
+   "e": true,
+   "w": true,
+   "c": true,
+   "get": "undefined",
+   "set": "undefined"
+  },
+  "Server": {
+   "e": true,
+   "w": true,
+   "c": true,
+   "get": "undefined",
+   "set": "undefined"
+  },
+  "createServer": {
+   "e": true,
+   "w": true,
+   "c": true,
+   "get": "undefined",
+   "set": "undefined"
+  },
+  "connect": {
+   "e": true,
+   "w": true,
+   "c": true,
+   "get": "undefined",
+   "set": "undefined"
+  }
+ },
+ "functions": [
+  [
+   "checkServerIdentity",
+   "checkServerIdentity",
+   2
+  ],
+  [
+   "getCACertificates",
+   "getCACertificates",
+   0
+  ],
+  [
+   "setDefaultCACertificates",
+   "setDefaultCACertificates",
+   1
+  ],
+  [
+   "getCiphers",
+   "",
+   0
+  ],
+  [
+   "convertALPNProtocols",
+   "convertALPNProtocols",
+   2
+  ],
+  [
+   "createSecureContext",
+   "createSecureContext",
+   1
+  ],
+  [
+   "SecureContext",
+   "SecureContext",
+   4
+  ]
+ ],
+ "constants": {
+  "CLIENT_RENEG_LIMIT": 3,
+  "CLIENT_RENEG_WINDOW": 600,
+  "DEFAULT_CIPHERS": "TLS_AES_256_GCM_SHA384:TLS_CHACHA20_POLY1305_SHA256:TLS_AES_128_GCM_SHA256:ECDHE-RSA-AES128-GCM-SHA256:ECDHE-ECDSA-AES128-GCM-SHA256:ECDHE-RSA-AES256-GCM-SHA384:ECDHE-ECDSA-AES256-GCM-SHA384:DHE-RSA-AES128-GCM-SHA256:ECDHE-RSA-AES128-SHA256:DHE-RSA-AES128-SHA256:ECDHE-RSA-AES256-SHA384:DHE-RSA-AES256-SHA384:ECDHE-RSA-AES256-SHA256:DHE-RSA-AES256-SHA256:HIGH:!aNULL:!eNULL:!EXPORT:!DES:!RC4:!MD5:!PSK:!SRP:!CAMELLIA",
+  "DEFAULT_ECDH_CURVE": "auto",
+  "DEFAULT_MIN_VERSION": "TLSv1.2",
+  "DEFAULT_MAX_VERSION": "TLSv1.3"
+ },
+ "ciphers": {
+  "list": [
+   "aes128-gcm-sha256",
+   "aes128-sha",
+   "aes128-sha256",
+   "aes256-gcm-sha384",
+   "aes256-sha",
+   "aes256-sha256",
+   "dhe-psk-aes128-cbc-sha",
+   "dhe-psk-aes128-cbc-sha256",
+   "dhe-psk-aes128-gcm-sha256",
+   "dhe-psk-aes256-cbc-sha",
+   "dhe-psk-aes256-cbc-sha384",
+   "dhe-psk-aes256-gcm-sha384",
+   "dhe-psk-chacha20-poly1305",
+   "dhe-rsa-aes128-gcm-sha256",
+   "dhe-rsa-aes128-sha",
+   "dhe-rsa-aes128-sha256",
+   "dhe-rsa-aes256-gcm-sha384",
+   "dhe-rsa-aes256-sha",
+   "dhe-rsa-aes256-sha256",
+   "dhe-rsa-chacha20-poly1305",
+   "ecdhe-ecdsa-aes128-gcm-sha256",
+   "ecdhe-ecdsa-aes128-sha",
+   "ecdhe-ecdsa-aes128-sha256",
+   "ecdhe-ecdsa-aes256-gcm-sha384",
+   "ecdhe-ecdsa-aes256-sha",
+   "ecdhe-ecdsa-aes256-sha384",
+   "ecdhe-ecdsa-chacha20-poly1305",
+   "ecdhe-psk-aes128-cbc-sha",
+   "ecdhe-psk-aes128-cbc-sha256",
+   "ecdhe-psk-aes256-cbc-sha",
+   "ecdhe-psk-aes256-cbc-sha384",
+   "ecdhe-psk-chacha20-poly1305",
+   "ecdhe-rsa-aes128-gcm-sha256",
+   "ecdhe-rsa-aes128-sha",
+   "ecdhe-rsa-aes128-sha256",
+   "ecdhe-rsa-aes256-gcm-sha384",
+   "ecdhe-rsa-aes256-sha",
+   "ecdhe-rsa-aes256-sha384",
+   "ecdhe-rsa-chacha20-poly1305",
+   "psk-aes128-cbc-sha",
+   "psk-aes128-cbc-sha256",
+   "psk-aes128-gcm-sha256",
+   "psk-aes256-cbc-sha",
+   "psk-aes256-cbc-sha384",
+   "psk-aes256-gcm-sha384",
+   "psk-chacha20-poly1305",
+   "rsa-psk-aes128-cbc-sha",
+   "rsa-psk-aes128-cbc-sha256",
+   "rsa-psk-aes128-gcm-sha256",
+   "rsa-psk-aes256-cbc-sha",
+   "rsa-psk-aes256-cbc-sha384",
+   "rsa-psk-aes256-gcm-sha384",
+   "rsa-psk-chacha20-poly1305",
+   "srp-aes-128-cbc-sha",
+   "srp-aes-256-cbc-sha",
+   "srp-rsa-aes-128-cbc-sha",
+   "srp-rsa-aes-256-cbc-sha",
+   "tls_aes_128_ccm_8_sha256",
+   "tls_aes_128_ccm_sha256",
+   "tls_aes_128_gcm_sha256",
+   "tls_aes_256_gcm_sha384",
+   "tls_chacha20_poly1305_sha256"
+  ],
+  "same": false,
+  "frozen": false
+ },
+ "identity": [
+  {
+   "host": "a.com",
+   "cert": {
+    "subject": {
+     "CN": "a.com"
+    },
+    "subjectaltname": {
+     "$": "undefined"
+    }
+   },
+   "value": {
+    "$": "undefined"
+   }
+  },
+  {
+   "host": "a.com",
+   "cert": {
+    "subject": {
+     "CN": "b.com"
+    },
+    "subjectaltname": {
+     "$": "undefined"
+    }
+   },
+   "value": {
+    "isError": true,
+    "name": "Error",
+    "ctor": "Error",
+    "code": "ERR_TLS_CERT_ALTNAME_INVALID",
+    "message": "Hostname/IP does not match certificate's altnames: Host: a.com. is not cert's CN: b.com",
+    "reason": "Host: a.com. is not cert's CN: b.com",
+    "host": "a.com",
+    "certSame": true,
+    "keys": [
+     "code",
+     "reason",
+     "host",
+     "cert"
+    ]
+   }
+  },
+  {
+   "host": "A.COM",
+   "cert": {
+    "subject": {
+     "CN": "a.com"
+    },
+    "subjectaltname": {
+     "$": "undefined"
+    }
+   },
+   "value": {
+    "$": "undefined"
+   }
+  },
+  {
+   "host": "a.com.",
+   "cert": {
+    "subject": {
+     "CN": "a.com"
+    },
+    "subjectaltname": {
+     "$": "undefined"
+    }
+   },
+   "value": {
+    "$": "undefined"
+   }
+  },
+  {
+   "host": "a.com",
+   "cert": {
+    "subject": {
+     "CN": "a.com."
+    },
+    "subjectaltname": {
+     "$": "undefined"
+    }
+   },
+   "value": {
+    "$": "undefined"
+   }
+  },
+  {
+   "host": "a.com",
+   "cert": {
+    "subject": {
+     "CN": "*.com"
+    },
+    "subjectaltname": {
+     "$": "undefined"
+    }
+   },
+   "value": {
+    "isError": true,
+    "name": "Error",
+    "ctor": "Error",
+    "code": "ERR_TLS_CERT_ALTNAME_INVALID",
+    "message": "Hostname/IP does not match certificate's altnames: Host: a.com. is not cert's CN: *.com",
+    "reason": "Host: a.com. is not cert's CN: *.com",
+    "host": "a.com",
+    "certSame": true,
+    "keys": [
+     "code",
+     "reason",
+     "host",
+     "cert"
+    ]
+   }
+  },
+  {
+   "host": "b.a.com",
+   "cert": {
+    "subject": {
+     "CN": "*.a.com"
+    },
+    "subjectaltname": {
+     "$": "undefined"
+    }
+   },
+   "value": {
+    "$": "undefined"
+   }
+  },
+  {
+   "host": "a.com",
+   "cert": {
+    "subject": {
+     "CN": "*.a.com"
+    },
+    "subjectaltname": {
+     "$": "undefined"
+    }
+   },
+   "value": {
+    "isError": true,
+    "name": "Error",
+    "ctor": "Error",
+    "code": "ERR_TLS_CERT_ALTNAME_INVALID",
+    "message": "Hostname/IP does not match certificate's altnames: Host: a.com. is not cert's CN: *.a.com",
+    "reason": "Host: a.com. is not cert's CN: *.a.com",
+    "host": "a.com",
+    "certSame": true,
+    "keys": [
+     "code",
+     "reason",
+     "host",
+     "cert"
+    ]
+   }
+  },
+  {
+   "host": "c.b.a.com",
+   "cert": {
+    "subject": {
+     "CN": "*.a.com"
+    },
+    "subjectaltname": {
+     "$": "undefined"
+    }
+   },
+   "value": {
+    "isError": true,
+    "name": "Error",
+    "ctor": "Error",
+    "code": "ERR_TLS_CERT_ALTNAME_INVALID",
+    "message": "Hostname/IP does not match certificate's altnames: Host: c.b.a.com. is not cert's CN: *.a.com",
+    "reason": "Host: c.b.a.com. is not cert's CN: *.a.com",
+    "host": "c.b.a.com",
+    "certSame": true,
+    "keys": [
+     "code",
+     "reason",
+     "host",
+     "cert"
+    ]
+   }
+  },
+  {
+   "host": "b.a.com",
+   "cert": {
+    "subject": {
+     "CN": "b*.a.com"
+    },
+    "subjectaltname": {
+     "$": "undefined"
+    }
+   },
+   "value": {
+    "$": "undefined"
+   }
+  },
+  {
+   "host": "bar.a.com",
+   "cert": {
+    "subject": {
+     "CN": "b*r.a.com"
+    },
+    "subjectaltname": {
+     "$": "undefined"
+    }
+   },
+   "value": {
+    "$": "undefined"
+   }
+  },
+  {
+   "host": "bar.a.com",
+   "cert": {
+    "subject": {
+     "CN": "*a*.a.com"
+    },
+    "subjectaltname": {
+     "$": "undefined"
+    }
+   },
+   "value": {
+    "isError": true,
+    "name": "Error",
+    "ctor": "Error",
+    "code": "ERR_TLS_CERT_ALTNAME_INVALID",
+    "message": "Hostname/IP does not match certificate's altnames: Host: bar.a.com. is not cert's CN: *a*.a.com",
+    "reason": "Host: bar.a.com. is not cert's CN: *a*.a.com",
+    "host": "bar.a.com",
+    "certSame": true,
+    "keys": [
+     "code",
+     "reason",
+     "host",
+     "cert"
+    ]
+   }
+  },
+  {
+   "host": "b.a.com",
+   "cert": {
+    "subject": {
+     "CN": "*b.a.com"
+    },
+    "subjectaltname": {
+     "$": "undefined"
+    }
+   },
+   "value": {
+    "$": "undefined"
+   }
+  },
+  {
+   "host": "xn--bcher-kva.a.com",
+   "cert": {
+    "subject": {
+     "CN": "xn--*.a.com"
+    },
+    "subjectaltname": {
+     "$": "undefined"
+    }
+   },
+   "value": {
+    "isError": true,
+    "name": "Error",
+    "ctor": "Error",
+    "code": "ERR_TLS_CERT_ALTNAME_INVALID",
+    "message": "Hostname/IP does not match certificate's altnames: Host: xn--bcher-kva.a.com. is not cert's CN: xn--*.a.com",
+    "reason": "Host: xn--bcher-kva.a.com. is not cert's CN: xn--*.a.com",
+    "host": "xn--bcher-kva.a.com",
+    "certSame": true,
+    "keys": [
+     "code",
+     "reason",
+     "host",
+     "cert"
+    ]
+   }
+  },
+  {
+   "host": "xn--bcher-kva.a.com",
+   "cert": {
+    "subject": {
+     "CN": "*.a.com"
+    },
+    "subjectaltname": {
+     "$": "undefined"
+    }
+   },
+   "value": {
+    "$": "undefined"
+   }
+  },
+  {
+   "host": "bücher.a.com",
+   "cert": {
+    "subject": {
+     "CN": "*.a.com"
+    },
+    "subjectaltname": {
+     "$": "undefined"
+    }
+   },
+   "value": {
+    "$": "undefined"
+   }
+  },
+  {
+   "host": "bücher.com",
+   "cert": {
+    "subject": {
+     "CN": "xn--bcher-kva.com"
+    },
+    "subjectaltname": {
+     "$": "undefined"
+    }
+   },
+   "value": {
+    "$": "undefined"
+   }
+  },
+  {
+   "host": "a.com",
+   "cert": {
+    "subject": {
+     "CN": "ü.com"
+    },
+    "subjectaltname": {
+     "$": "undefined"
+    }
+   },
+   "value": {
+    "isError": true,
+    "name": "Error",
+    "ctor": "Error",
+    "code": "ERR_TLS_CERT_ALTNAME_INVALID",
+    "message": "Hostname/IP does not match certificate's altnames: Host: a.com. is not cert's CN: ü.com",
+    "reason": "Host: a.com. is not cert's CN: ü.com",
+    "host": "a.com",
+    "certSame": true,
+    "keys": [
+     "code",
+     "reason",
+     "host",
+     "cert"
+    ]
+   }
+  },
+  {
+   "host": "a.com",
+   "cert": {
+    "subject": {
+     "CN": [
+      "b.com",
+      "a.com"
+     ]
+    },
+    "subjectaltname": {
+     "$": "undefined"
+    }
+   },
+   "value": {
+    "$": "undefined"
+   }
+  },
+  {
+   "host": "a.com",
+   "cert": {
+    "subject": {
+     "CN": [
+      "b.com",
+      "c.com"
+     ]
+    },
+    "subjectaltname": {
+     "$": "undefined"
+    }
+   },
+   "value": {
+    "isError": true,
+    "name": "Error",
+    "ctor": "Error",
+    "code": "ERR_TLS_CERT_ALTNAME_INVALID",
+    "message": "Hostname/IP does not match certificate's altnames: Host: a.com. is not cert's CN: b.com,c.com",
+    "reason": "Host: a.com. is not cert's CN: b.com,c.com",
+    "host": "a.com",
+    "certSame": true,
+    "keys": [
+     "code",
+     "reason",
+     "host",
+     "cert"
+    ]
+   }
+  },
+  {
+   "host": "a.com",
+   "cert": {
+    "subject": {
+     "CN": ""
+    },
+    "subjectaltname": {
+     "$": "undefined"
+    }
+   },
+   "value": {
+    "isError": true,
+    "name": "Error",
+    "ctor": "Error",
+    "code": "ERR_TLS_CERT_ALTNAME_INVALID",
+    "message": "Hostname/IP does not match certificate's altnames: Cert does not contain a DNS name",
+    "reason": "Cert does not contain a DNS name",
+    "host": "a.com",
+    "certSame": true,
+    "keys": [
+     "code",
+     "reason",
+     "host",
+     "cert"
+    ]
+   }
+  },
+  {
+   "host": "a.com",
+   "cert": {
+    "subject": {},
+    "subjectaltname": {
+     "$": "undefined"
+    }
+   },
+   "value": {
+    "isError": true,
+    "name": "Error",
+    "ctor": "Error",
+    "code": "ERR_TLS_CERT_ALTNAME_INVALID",
+    "message": "Hostname/IP does not match certificate's altnames: Cert does not contain a DNS name",
+    "reason": "Cert does not contain a DNS name",
+    "host": "a.com",
+    "certSame": true,
+    "keys": [
+     "code",
+     "reason",
+     "host",
+     "cert"
+    ]
+   }
+  },
+  {
+   "host": "a.com",
+   "cert": {
+    "subject": {
+     "$": "undefined"
+    },
+    "subjectaltname": {
+     "$": "undefined"
+    }
+   },
+   "value": {
+    "isError": true,
+    "name": "Error",
+    "ctor": "Error",
+    "code": "ERR_TLS_CERT_ALTNAME_INVALID",
+    "message": "Hostname/IP does not match certificate's altnames: Cert does not contain a DNS name",
+    "reason": "Cert does not contain a DNS name",
+    "host": "a.com",
+    "certSame": true,
+    "keys": [
+     "code",
+     "reason",
+     "host",
+     "cert"
+    ]
+   }
+  },
+  {
+   "host": "a.com",
+   "cert": {
+    "subject": {
+     "CN": "b.com"
+    },
+    "subjectaltname": "DNS:a.com"
+   },
+   "value": {
+    "$": "undefined"
+   }
+  },
+  {
+   "host": "a.com",
+   "cert": {
+    "subject": {
+     "CN": "a.com"
+    },
+    "subjectaltname": "DNS:b.com"
+   },
+   "value": {
+    "isError": true,
+    "name": "Error",
+    "ctor": "Error",
+    "code": "ERR_TLS_CERT_ALTNAME_INVALID",
+    "message": "Hostname/IP does not match certificate's altnames: Host: a.com. is not in the cert's altnames: DNS:b.com",
+    "reason": "Host: a.com. is not in the cert's altnames: DNS:b.com",
+    "host": "a.com",
+    "certSame": true,
+    "keys": [
+     "code",
+     "reason",
+     "host",
+     "cert"
+    ]
+   }
+  },
+  {
+   "host": "a.com",
+   "cert": {
+    "subject": {
+     "CN": "a.com"
+    },
+    "subjectaltname": "DNS:b.com, DNS:a.com"
+   },
+   "value": {
+    "$": "undefined"
+   }
+  },
+  {
+   "host": "b.a.com",
+   "cert": {
+    "subject": {},
+    "subjectaltname": "DNS:*.a.com, DNS:a.com"
+   },
+   "value": {
+    "$": "undefined"
+   }
+  },
+  {
+   "host": "a.com",
+   "cert": {
+    "subject": {
+     "CN": "a.com"
+    },
+    "subjectaltname": "IP Address:1.2.3.4"
+   },
+   "value": {
+    "$": "undefined"
+   }
+  },
+  {
+   "host": "a.com",
+   "cert": {
+    "subject": {
+     "CN": "a.com"
+    },
+    "subjectaltname": "URI:http://a.com"
+   },
+   "value": {
+    "$": "undefined"
+   }
+  },
+  {
+   "host": "a.com",
+   "cert": {
+    "subject": {
+     "CN": "a.com"
+    },
+    "subjectaltname": "email:x@a.com, DNS:c.com"
+   },
+   "value": {
+    "isError": true,
+    "name": "Error",
+    "ctor": "Error",
+    "code": "ERR_TLS_CERT_ALTNAME_INVALID",
+    "message": "Hostname/IP does not match certificate's altnames: Host: a.com. is not in the cert's altnames: email:x@a.com, DNS:c.com",
+    "reason": "Host: a.com. is not in the cert's altnames: email:x@a.com, DNS:c.com",
+    "host": "a.com",
+    "certSame": true,
+    "keys": [
+     "code",
+     "reason",
+     "host",
+     "cert"
+    ]
+   }
+  },
+  {
+   "host": "a.com",
+   "cert": {
+    "subject": {},
+    "subjectaltname": "DNS:a.com."
+   },
+   "value": {
+    "$": "undefined"
+   }
+  },
+  {
+   "host": "a.com",
+   "cert": {
+    "subject": {},
+    "subjectaltname": "DNS:a..com"
+   },
+   "value": {
+    "isError": true,
+    "name": "Error",
+    "ctor": "Error",
+    "code": "ERR_TLS_CERT_ALTNAME_INVALID",
+    "message": "Hostname/IP does not match certificate's altnames: Host: a.com. is not in the cert's altnames: DNS:a..com",
+    "reason": "Host: a.com. is not in the cert's altnames: DNS:a..com",
+    "host": "a.com",
+    "certSame": true,
+    "keys": [
+     "code",
+     "reason",
+     "host",
+     "cert"
+    ]
+   }
+  },
+  {
+   "host": "a.com",
+   "cert": {
+    "subject": {},
+    "subjectaltname": "DNS:"
+   },
+   "value": {
+    "isError": true,
+    "name": "Error",
+    "ctor": "Error",
+    "code": "ERR_TLS_CERT_ALTNAME_INVALID",
+    "message": "Hostname/IP does not match certificate's altnames: Host: a.com. is not in the cert's altnames: DNS:",
+    "reason": "Host: a.com. is not in the cert's altnames: DNS:",
+    "host": "a.com",
+    "certSame": true,
+    "keys": [
+     "code",
+     "reason",
+     "host",
+     "cert"
+    ]
+   }
+  },
+  {
+   "host": "a.com",
+   "cert": {
+    "subject": {},
+    "subjectaltname": "DNS:a.com,DNS:b.com"
+   },
+   "value": {
+    "isError": true,
+    "name": "Error",
+    "ctor": "Error",
+    "code": "ERR_TLS_CERT_ALTNAME_INVALID",
+    "message": "Hostname/IP does not match certificate's altnames: Host: a.com. is not in the cert's altnames: DNS:a.com,DNS:b.com",
+    "reason": "Host: a.com. is not in the cert's altnames: DNS:a.com,DNS:b.com",
+    "host": "a.com",
+    "certSame": true,
+    "keys": [
+     "code",
+     "reason",
+     "host",
+     "cert"
+    ]
+   }
+  },
+  {
+   "host": "a.com",
+   "cert": {
+    "subject": {},
+    "subjectaltname": "DNS:b.com, DNS:\"a.com\""
+   },
+   "value": {
+    "$": "undefined"
+   }
+  },
+  {
+   "host": "a.com",
+   "cert": {
+    "subject": {},
+    "subjectaltname": "DNS:\"a.c\\u006fm\""
+   },
+   "value": {
+    "$": "undefined"
+   }
+  },
+  {
+   "host": "a,b.com",
+   "cert": {
+    "subject": {},
+    "subjectaltname": "DNS:\"a,b.com\", DNS:x"
+   },
+   "value": {
+    "$": "undefined"
+   }
+  },
+  {
+   "host": "a.com",
+   "cert": {
+    "subject": {},
+    "subjectaltname": "DNS:\"unterminated"
+   },
+   "error": {
+    "name": "SyntaxError",
+    "code": "ERR_TLS_CERT_ALTNAME_FORMAT",
+    "message": "Invalid subject alternative name string",
+    "ctor": "SyntaxError"
+   }
+  },
+  {
+   "host": "a b.com",
+   "cert": {
+    "subject": {
+     "CN": "a b.com"
+    },
+    "subjectaltname": {
+     "$": "undefined"
+    }
+   },
+   "value": {
+    "isError": true,
+    "name": "Error",
+    "ctor": "Error",
+    "code": "ERR_TLS_CERT_ALTNAME_INVALID",
+    "message": "Hostname/IP does not match certificate's altnames: Host: a b.com. is not cert's CN: a b.com",
+    "reason": "Host: a b.com. is not cert's CN: a b.com",
+    "host": "a b.com",
+    "certSame": true,
+    "keys": [
+     "code",
+     "reason",
+     "host",
+     "cert"
+    ]
+   }
+  },
+  {
+   "host": "a.com",
+   "cert": {
+    "subject": {},
+    "subjectaltname": "DNS:A.COM"
+   },
+   "value": {
+    "$": "undefined"
+   }
+  },
+  {
+   "host": "a.co.uk",
+   "cert": {
+    "subject": {},
+    "subjectaltname": "DNS:*.co.uk"
+   },
+   "value": {
+    "$": "undefined"
+   }
+  },
+  {
+   "host": "x.a.co.uk",
+   "cert": {
+    "subject": {},
+    "subjectaltname": "DNS:*.a.co.uk"
+   },
+   "value": {
+    "$": "undefined"
+   }
+  },
+  {
+   "host": "localhost",
+   "cert": {
+    "subject": {
+     "CN": "localhost"
+    },
+    "subjectaltname": {
+     "$": "undefined"
+    }
+   },
+   "value": {
+    "$": "undefined"
+   }
+  },
+  {
+   "host": "localhost",
+   "cert": {
+    "subject": {
+     "CN": "*"
+    },
+    "subjectaltname": {
+     "$": "undefined"
+    }
+   },
+   "value": {
+    "isError": true,
+    "name": "Error",
+    "ctor": "Error",
+    "code": "ERR_TLS_CERT_ALTNAME_INVALID",
+    "message": "Hostname/IP does not match certificate's altnames: Host: localhost. is not cert's CN: *",
+    "reason": "Host: localhost. is not cert's CN: *",
+    "host": "localhost",
+    "certSame": true,
+    "keys": [
+     "code",
+     "reason",
+     "host",
+     "cert"
+    ]
+   }
+  },
+  {
+   "host": "a",
+   "cert": {
+    "subject": {
+     "CN": "*"
+    },
+    "subjectaltname": {
+     "$": "undefined"
+    }
+   },
+   "value": {
+    "isError": true,
+    "name": "Error",
+    "ctor": "Error",
+    "code": "ERR_TLS_CERT_ALTNAME_INVALID",
+    "message": "Hostname/IP does not match certificate's altnames: Host: a. is not cert's CN: *",
+    "reason": "Host: a. is not cert's CN: *",
+    "host": "a",
+    "certSame": true,
+    "keys": [
+     "code",
+     "reason",
+     "host",
+     "cert"
+    ]
+   }
+  },
+  {
+   "host": "1.2.3.4",
+   "cert": {
+    "subject": {
+     "CN": "1.2.3.4"
+    },
+    "subjectaltname": {
+     "$": "undefined"
+    }
+   },
+   "value": {
+    "isError": true,
+    "name": "Error",
+    "ctor": "Error",
+    "code": "ERR_TLS_CERT_ALTNAME_INVALID",
+    "message": "Hostname/IP does not match certificate's altnames: IP: 1.2.3.4 is not in the cert's list: ",
+    "reason": "IP: 1.2.3.4 is not in the cert's list: ",
+    "host": "1.2.3.4",
+    "certSame": true,
+    "keys": [
+     "code",
+     "reason",
+     "host",
+     "cert"
+    ]
+   }
+  },
+  {
+   "host": "1.2.3.4",
+   "cert": {
+    "subject": {},
+    "subjectaltname": "IP Address:1.2.3.4"
+   },
+   "value": {
+    "$": "undefined"
+   }
+  },
+  {
+   "host": "1.2.3.4",
+   "cert": {
+    "subject": {},
+    "subjectaltname": "IP Address:1.2.3.5, IP Address:8.8.8.8"
+   },
+   "value": {
+    "isError": true,
+    "name": "Error",
+    "ctor": "Error",
+    "code": "ERR_TLS_CERT_ALTNAME_INVALID",
+    "message": "Hostname/IP does not match certificate's altnames: IP: 1.2.3.4 is not in the cert's list: 1.2.3.5, 8.8.8.8",
+    "reason": "IP: 1.2.3.4 is not in the cert's list: 1.2.3.5, 8.8.8.8",
+    "host": "1.2.3.4",
+    "certSame": true,
+    "keys": [
+     "code",
+     "reason",
+     "host",
+     "cert"
+    ]
+   }
+  },
+  {
+   "host": "1.2.3.4",
+   "cert": {
+    "subject": {},
+    "subjectaltname": "DNS:1.2.3.4"
+   },
+   "value": {
+    "isError": true,
+    "name": "Error",
+    "ctor": "Error",
+    "code": "ERR_TLS_CERT_ALTNAME_INVALID",
+    "message": "Hostname/IP does not match certificate's altnames: IP: 1.2.3.4 is not in the cert's list: ",
+    "reason": "IP: 1.2.3.4 is not in the cert's list: ",
+    "host": "1.2.3.4",
+    "certSame": true,
+    "keys": [
+     "code",
+     "reason",
+     "host",
+     "cert"
+    ]
+   }
+  },
+  {
+   "host": "1.2.3.4.",
+   "cert": {
+    "subject": {},
+    "subjectaltname": "IP Address:1.2.3.4"
+   },
+   "value": {
+    "$": "undefined"
+   }
+  },
+  {
+   "host": "::1",
+   "cert": {
+    "subject": {},
+    "subjectaltname": "IP Address:0:0:0:0:0:0:0:1"
+   },
+   "value": {
+    "isError": true,
+    "name": "Error",
+    "ctor": "Error",
+    "code": "ERR_TLS_CERT_ALTNAME_INVALID",
+    "message": "Hostname/IP does not match certificate's altnames: Cert does not contain a DNS name",
+    "reason": "Cert does not contain a DNS name",
+    "host": "::1",
+    "certSame": true,
+    "keys": [
+     "code",
+     "reason",
+     "host",
+     "cert"
+    ]
+   }
+  },
+  {
+   "host": "0:0:0:0:0:0:0:1",
+   "cert": {
+    "subject": {},
+    "subjectaltname": "IP Address:::1"
+   },
+   "value": {
+    "isError": true,
+    "name": "Error",
+    "ctor": "Error",
+    "code": "ERR_TLS_CERT_ALTNAME_INVALID",
+    "message": "Hostname/IP does not match certificate's altnames: Cert does not contain a DNS name",
+    "reason": "Cert does not contain a DNS name",
+    "host": "0:0:0:0:0:0:0:1",
+    "certSame": true,
+    "keys": [
+     "code",
+     "reason",
+     "host",
+     "cert"
+    ]
+   }
+  },
+  {
+   "host": "::ffff:1.2.3.4",
+   "cert": {
+    "subject": {},
+    "subjectaltname": "IP Address:::FFFF:102:304"
+   },
+   "value": {
+    "isError": true,
+    "name": "Error",
+    "ctor": "Error",
+    "code": "ERR_TLS_CERT_ALTNAME_INVALID",
+    "message": "Hostname/IP does not match certificate's altnames: Cert does not contain a DNS name",
+    "reason": "Cert does not contain a DNS name",
+    "host": "::ffff:1.2.3.4",
+    "certSame": true,
+    "keys": [
+     "code",
+     "reason",
+     "host",
+     "cert"
+    ]
+   }
+  },
+  {
+   "host": "::1",
+   "cert": {
+    "subject": {},
+    "subjectaltname": "IP Address:::2"
+   },
+   "value": {
+    "isError": true,
+    "name": "Error",
+    "ctor": "Error",
+    "code": "ERR_TLS_CERT_ALTNAME_INVALID",
+    "message": "Hostname/IP does not match certificate's altnames: Cert does not contain a DNS name",
+    "reason": "Cert does not contain a DNS name",
+    "host": "::1",
+    "certSame": true,
+    "keys": [
+     "code",
+     "reason",
+     "host",
+     "cert"
+    ]
+   }
+  },
+  {
+   "host": "[::1]",
+   "cert": {
+    "subject": {},
+    "subjectaltname": "IP Address:::1"
+   },
+   "value": {
+    "isError": true,
+    "name": "Error",
+    "ctor": "Error",
+    "code": "ERR_TLS_CERT_ALTNAME_INVALID",
+    "message": "Hostname/IP does not match certificate's altnames: Cert does not contain a DNS name",
+    "reason": "Cert does not contain a DNS name",
+    "host": "[::1]",
+    "certSame": true,
+    "keys": [
+     "code",
+     "reason",
+     "host",
+     "cert"
+    ]
+   }
+  },
+  {
+   "host": "fe80::1%lo",
+   "cert": {
+    "subject": {},
+    "subjectaltname": "IP Address:fe80::1"
+   },
+   "value": {
+    "isError": true,
+    "name": "Error",
+    "ctor": "Error",
+    "code": "ERR_TLS_CERT_ALTNAME_INVALID",
+    "message": "Hostname/IP does not match certificate's altnames: Cert does not contain a DNS name",
+    "reason": "Cert does not contain a DNS name",
+    "host": "fe80::1%lo",
+    "certSame": true,
+    "keys": [
+     "code",
+     "reason",
+     "host",
+     "cert"
+    ]
+   }
+  },
+  {
+   "host": "1.2.3.4",
+   "cert": {
+    "subject": {},
+    "subjectaltname": "IP Address:bogus, IP Address:1.2.3.4"
+   },
+   "value": {
+    "$": "undefined"
+   }
+  },
+  {
+   "host": "1.2.3.4",
+   "cert": {
+    "subject": {},
+    "subjectaltname": "IP Address:bogus"
+   },
+   "value": {
+    "isError": true,
+    "name": "Error",
+    "ctor": "Error",
+    "code": "ERR_TLS_CERT_ALTNAME_INVALID",
+    "message": "Hostname/IP does not match certificate's altnames: IP: 1.2.3.4 is not in the cert's list: ",
+    "reason": "IP: 1.2.3.4 is not in the cert's list: ",
+    "host": "1.2.3.4",
+    "certSame": true,
+    "keys": [
+     "code",
+     "reason",
+     "host",
+     "cert"
+    ]
+   }
+  },
+  {
+   "host": "127.1",
+   "cert": {
+    "subject": {},
+    "subjectaltname": "IP Address:127.0.0.1"
+   },
+   "value": {
+    "$": "undefined"
+   }
+  },
+  {
+   "host": "0x7f.0.0.1",
+   "cert": {
+    "subject": {},
+    "subjectaltname": "IP Address:127.0.0.1"
+   },
+   "value": {
+    "$": "undefined"
+   }
+  },
+  {
+   "host": "1.2.3.4",
+   "cert": {
+    "subject": {},
+    "subjectaltname": "IP Address:001.2.3.4"
+   },
+   "value": {
+    "isError": true,
+    "name": "Error",
+    "ctor": "Error",
+    "code": "ERR_TLS_CERT_ALTNAME_INVALID",
+    "message": "Hostname/IP does not match certificate's altnames: IP: 1.2.3.4 is not in the cert's list: ",
+    "reason": "IP: 1.2.3.4 is not in the cert's list: ",
+    "host": "1.2.3.4",
+    "certSame": true,
+    "keys": [
+     "code",
+     "reason",
+     "host",
+     "cert"
+    ]
+   }
+  },
+  {
+   "host": {
+    "$": "undefined"
+   },
+   "cert": {
+    "subject": {
+     "CN": "undefined"
+    },
+    "subjectaltname": {
+     "$": "undefined"
+    }
+   },
+   "value": {
+    "$": "undefined"
+   }
+  },
+  {
+   "host": null,
+   "cert": {
+    "subject": {
+     "CN": "null"
+    },
+    "subjectaltname": {
+     "$": "undefined"
+    }
+   },
+   "value": {
+    "$": "undefined"
+   }
+  },
+  {
+   "host": 123,
+   "cert": {
+    "subject": {
+     "CN": "123"
+    },
+    "subjectaltname": {
+     "$": "undefined"
+    }
+   },
+   "value": {
+    "isError": true,
+    "name": "Error",
+    "ctor": "Error",
+    "code": "ERR_TLS_CERT_ALTNAME_INVALID",
+    "message": "Hostname/IP does not match certificate's altnames: IP: 123 is not in the cert's list: ",
+    "reason": "IP: 123 is not in the cert's list: ",
+    "host": "123",
+    "certSame": true,
+    "keys": [
+     "code",
+     "reason",
+     "host",
+     "cert"
+    ]
+   }
+  },
+  {
+   "host": "",
+   "cert": {
+    "subject": {
+     "CN": "a.com"
+    },
+    "subjectaltname": {
+     "$": "undefined"
+    }
+   },
+   "value": {
+    "isError": true,
+    "name": "Error",
+    "ctor": "Error",
+    "code": "ERR_TLS_CERT_ALTNAME_INVALID",
+    "message": "Hostname/IP does not match certificate's altnames: Host: . is not cert's CN: a.com",
+    "reason": "Host: . is not cert's CN: a.com",
+    "host": "",
+    "certSame": true,
+    "keys": [
+     "code",
+     "reason",
+     "host",
+     "cert"
+    ]
+   }
+  },
+  {
+   "host": ".",
+   "cert": {
+    "subject": {
+     "CN": "a.com"
+    },
+    "subjectaltname": {
+     "$": "undefined"
+    }
+   },
+   "value": {
+    "isError": true,
+    "name": "Error",
+    "ctor": "Error",
+    "code": "ERR_TLS_CERT_ALTNAME_INVALID",
+    "message": "Hostname/IP does not match certificate's altnames: Host: . is not cert's CN: a.com",
+    "reason": "Host: . is not cert's CN: a.com",
+    "host": "",
+    "certSame": true,
+    "keys": [
+     "code",
+     "reason",
+     "host",
+     "cert"
+    ]
+   }
+  },
+  {
+   "host": "a_b.com",
+   "cert": {
+    "subject": {
+     "CN": "a_b.com"
+    },
+    "subjectaltname": {
+     "$": "undefined"
+    }
+   },
+   "value": {
+    "$": "undefined"
+   }
+  },
+  {
+   "host": "A.com",
+   "cert": {
+    "subject": {},
+    "subjectaltname": "DNS:*.COM"
+   },
+   "value": {
+    "isError": true,
+    "name": "Error",
+    "ctor": "Error",
+    "code": "ERR_TLS_CERT_ALTNAME_INVALID",
+    "message": "Hostname/IP does not match certificate's altnames: Host: A.com. is not in the cert's altnames: DNS:*.COM",
+    "reason": "Host: A.com. is not in the cert's altnames: DNS:*.COM",
+    "host": "A.com",
+    "certSame": true,
+    "keys": [
+     "code",
+     "reason",
+     "host",
+     "cert"
+    ]
+   }
+  },
+  {
+   "host": "foo.example.com",
+   "cert": {
+    "subject": {},
+    "subjectaltname": "DNS:f*.example.com"
+   },
+   "value": {
+    "$": "undefined"
+   }
+  },
+  {
+   "host": "foo.example.com",
+   "cert": {
+    "subject": {},
+    "subjectaltname": "DNS:*o.example.com"
+   },
+   "value": {
+    "$": "undefined"
+   }
+  },
+  {
+   "host": "foo.example.com",
+   "cert": {
+    "subject": {},
+    "subjectaltname": "DNS:f*o.example.com"
+   },
+   "value": {
+    "$": "undefined"
+   }
+  },
+  {
+   "host": "foo.example.com",
+   "cert": {
+    "subject": {},
+    "subjectaltname": "DNS:fooo*.example.com"
+   },
+   "value": {
+    "isError": true,
+    "name": "Error",
+    "ctor": "Error",
+    "code": "ERR_TLS_CERT_ALTNAME_INVALID",
+    "message": "Hostname/IP does not match certificate's altnames: Host: foo.example.com. is not in the cert's altnames: DNS:fooo*.example.com",
+    "reason": "Host: foo.example.com. is not in the cert's altnames: DNS:fooo*.example.com",
+    "host": "foo.example.com",
+    "certSame": true,
+    "keys": [
+     "code",
+     "reason",
+     "host",
+     "cert"
+    ]
+   }
+  },
+  {
+   "host": "sub.foo.example.com",
+   "cert": {
+    "subject": {},
+    "subjectaltname": "DNS:*.foo.example.com, DNS:foo.example.com"
+   },
+   "value": {
+    "$": "undefined"
+   }
+  }
+ ],
+ "identityLoose": [
+  {
+   "args": [
+    "a.com"
+   ],
+   "error": {
+    "name": "TypeError",
+    "code": null,
+    "message": "Cannot read properties of undefined (reading 'subject')",
+    "ctor": "TypeError"
+   }
+  },
+  {
+   "args": [
+    "a.com",
+    null
+   ],
+   "error": {
+    "name": "TypeError",
+    "code": null,
+    "message": "Cannot read properties of null (reading 'subject')",
+    "ctor": "TypeError"
+   }
+  },
+  {
+   "args": [
+    "a.com",
+    1
+   ],
+   "value": {
+    "code": "ERR_TLS_CERT_ALTNAME_INVALID",
+    "message": "Hostname/IP does not match certificate's altnames: Cert does not contain a DNS name"
+   }
+  },
+  {
+   "args": [
+    "a.com",
+    {
+     "subjectaltname": 5
+    }
+   ],
+   "error": {
+    "name": "TypeError",
+    "code": null,
+    "message": "altNames.includes is not a function",
+    "ctor": "TypeError"
+   }
+  },
+  {
+   "args": [
+    "a.com",
+    {
+     "subject": {
+      "CN": 5
+     }
+    }
+   ],
+   "error": {
+    "name": "TypeError",
+    "code": null,
+    "message": "host.replace is not a function",
+    "ctor": "TypeError"
+   }
+  },
+  {
+   "args": [
+    {
+     "$": "symbol"
+    },
+    {}
+   ],
+   "error": {
+    "name": "TypeError",
+    "code": null,
+    "message": "Cannot convert a Symbol value to a string",
+    "ctor": "TypeError"
+   }
+  }
+ ],
+ "alpn": [
+  {
+   "args": [
+    [
+     "h2",
+     "http/1.1"
+    ]
+   ],
+   "value": {
+    "returned": {
+     "$": "undefined"
+    },
+    "keys": [
+     "ALPNProtocols"
+    ],
+    "isBuffer": true,
+    "hex": "02683208687474702f312e31"
+   }
+  },
+  {
+   "args": [
+    []
+   ],
+   "value": {
+    "returned": {
+     "$": "undefined"
+    },
+    "keys": [
+     "ALPNProtocols"
+    ],
+    "isBuffer": true,
+    "hex": ""
+   }
+  },
+  {
+   "args": [
+    [
+     "a"
+    ]
+   ],
+   "value": {
+    "returned": {
+     "$": "undefined"
+    },
+    "keys": [
+     "ALPNProtocols"
+    ],
+    "isBuffer": true,
+    "hex": "0161"
+   }
+  },
+  {
+   "args": [
+    [
+     "é"
+    ]
+   ],
+   "value": {
+    "returned": {
+     "$": "undefined"
+    },
+    "keys": [
+     "ALPNProtocols"
+    ],
+    "isBuffer": true,
+    "hex": "02c3a9"
+   }
+  },
+  {
+   "args": [
+    [
+     "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
+    ]
+   ],
+   "value": {
+    "returned": {
+     "$": "undefined"
+    },
+    "keys": [
+     "ALPNProtocols"
+    ],
+    "isBuffer": true,
+    "hex": "ff787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878"
+   }
+  },
+  {
+   "args": [
+    [
+     "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
+    ]
+   ],
+   "error": {
+    "name": "RangeError",
+    "code": "ERR_OUT_OF_RANGE",
+    "message": "The byte length of the protocol at index 0 exceeds the maximum length. It must be <= 255. Received 256",
+    "ctor": "RangeError"
+   }
+  },
+  {
+   "args": [
+    [
+     "a",
+     "yyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyy"
+    ]
+   ],
+   "error": {
+    "name": "RangeError",
+    "code": "ERR_OUT_OF_RANGE",
+    "message": "The byte length of the protocol at index 1 exceeds the maximum length. It must be <= 255. Received 300",
+    "ctor": "RangeError"
+   }
+  },
+  {
+   "args": [
+    {
+     "$": "buffer",
+     "hex": "026832"
+    }
+   ],
+   "value": {
+    "returned": {
+     "$": "undefined"
+    },
+    "keys": [
+     "ALPNProtocols"
+    ],
+    "isBuffer": true,
+    "hex": "026832"
+   }
+  },
+  {
+   "args": [
+    {
+     "$": "u8",
+     "hex": "026832"
+    }
+   ],
+   "value": {
+    "returned": {
+     "$": "undefined"
+    },
+    "keys": [
+     "ALPNProtocols"
+    ],
+    "isBuffer": true,
+    "hex": "026832"
+   }
+  },
+  {
+   "args": [
+    {
+     "$": "u16",
+     "v": [
+      26626,
+      50
+     ]
+    }
+   ],
+   "value": {
+    "returned": {
+     "$": "undefined"
+    },
+    "keys": [
+     "ALPNProtocols"
+    ],
+    "isBuffer": true,
+    "hex": "02683200"
+   }
+  },
+  {
+   "args": [
+    {
+     "$": "dataview",
+     "hex": "026832"
+    }
+   ],
+   "value": {
+    "returned": {
+     "$": "undefined"
+    },
+    "keys": [
+     "ALPNProtocols"
+    ],
+    "isBuffer": true,
+    "hex": "026832"
+   }
+  },
+  {
+   "args": [
+    "h2"
+   ],
+   "value": {
+    "returned": {
+     "$": "undefined"
+    },
+    "keys": [],
+    "isBuffer": false,
+    "hex": null
+   }
+  },
+  {
+   "args": [
+    {
+     "$": "undefined"
+    }
+   ],
+   "value": {
+    "returned": {
+     "$": "undefined"
+    },
+    "keys": [],
+    "isBuffer": false,
+    "hex": null
+   }
+  },
+  {
+   "args": [
+    null
+   ],
+   "value": {
+    "returned": {
+     "$": "undefined"
+    },
+    "keys": [],
+    "isBuffer": false,
+    "hex": null
+   }
+  },
+  {
+   "args": [
+    5
+   ],
+   "value": {
+    "returned": {
+     "$": "undefined"
+    },
+    "keys": [],
+    "isBuffer": false,
+    "hex": null
+   }
+  },
+  {
+   "args": [
+    {}
+   ],
+   "value": {
+    "returned": {
+     "$": "undefined"
+    },
+    "keys": [],
+    "isBuffer": false,
+    "hex": null
+   }
+  },
+  {
+   "args": [
+    [
+     1
+    ]
+   ],
+   "error": {
+    "name": "TypeError",
+    "code": "ERR_INVALID_ARG_TYPE",
+    "message": "The \"string\" argument must be of type string or an instance of Buffer or ArrayBuffer. Received type number (1)",
+    "ctor": "TypeError"
+   }
+  },
+  {
+   "args": [
+    [
+     ""
+    ]
+   ],
+   "value": {
+    "returned": {
+     "$": "undefined"
+    },
+    "keys": [
+     "ALPNProtocols"
+    ],
+    "isBuffer": true,
+    "hex": "00"
+   }
+  },
+  {
+   "args": [
+    [
+     "a",
+     ""
+    ]
+   ],
+   "value": {
+    "returned": {
+     "$": "undefined"
+    },
+    "keys": [
+     "ALPNProtocols"
+    ],
+    "isBuffer": true,
+    "hex": "016100"
+   }
+  }
+ ],
+ "alpnLoose": [
+  {
+   "error": {
+    "name": "TypeError",
+    "code": null,
+    "message": "Cannot set properties of undefined (setting 'ALPNProtocols')",
+    "ctor": "TypeError"
+   }
+  },
+  {
+   "error": {
+    "name": "TypeError",
+    "code": null,
+    "message": "Cannot set properties of null (setting 'ALPNProtocols')",
+    "ctor": "TypeError"
+   }
+  },
+  {},
+  {
+   "error": {
+    "name": "TypeError",
+    "code": null,
+    "message": "Cannot add property ALPNProtocols, object is not extensible",
+    "ctor": "TypeError"
+   }
+  }
+ ],
+ "roots": {
+  "shape": {
+   "isArray": true,
+   "frozen": true,
+   "length": 120,
+   "allStrings": true,
+   "allPem": false
+  },
+  "same": true,
+  "first": "-----BEGIN CERTIFICATE-----\nMIIEkTCCA3mgAwIBAgIERWtQVDANBgkqhkiG9w0BAQUFADCBsDELMAkGA1UEBhMCVVMxFjAU\nBgNVBAoTDUVudHJ1c3QsIEluYy4xOTA3BgNVBAsTMHd3dy5lbnRydXN0Lm5ldC9DUFMgaXMg\naW5jb3Jwb3JhdGVkIGJ5IHJlZmVyZW5jZTEfMB0GA1UECxMWKGMpIDIwMDYgRW50cnVzdCwg\nSW5jLjEtMCsGA1UEAxMkRW50cnVzdCBSb290IENlcnRpZmljYXRpb24gQXV0aG9yaXR5MB4X\nDTA2MTEyNzIwMjM0MloXDTI2MTEyNzIwNTM0MlowgbAxCzAJBgNVBAYTAlVTMRYwFAYDVQQK\nEw1FbnRydXN0LCBJbmMuMTkwNwYDVQQLEzB3d3cuZW50cnVzdC5uZXQvQ1BTIGlzIGluY29y\ncG9yYXRlZCBieSByZWZlcmVuY2UxHzAdBgNVBAsTFihjKSAyMDA2IEVudHJ1c3QsIEluYy4x\nLTArBgNVBAMTJEVudHJ1c3QgUm9vdCBDZXJ0aWZpY2F0aW9uIEF1dGhvcml0eTCCASIwDQYJ\nKoZIhvcNAQEBBQADggEPADCCAQoCggEBALaVtkNC+sZtKm9I35RMOVcF7sN5EUFoNu3s/poB\nj6E4KPz3EEZmLk0eGrEaTsbRwJWIsMn/MYszA9u3g3s+IIRe7bJWKKf44LlAcTfFy0cOlypo\nwCKVYhXbR9n10Cv/gkvJrT7eTNuQgFA/CYqEAOwwCj0Yzfv9KlmaI5UXLEWeH25DeW0MXJj+\nSKfFI0dcXv1u5x609mhF0YaDW6KKjbHjKYD+JXGIrb68j6xSlkuqUY3kEzEZ6E5Nn9uss2rV\nvDlUccp6en+Q3X0dgNmBu1kmwhH+5pPi94DkZfs0Nw4pgHBNrziGLp5/V6+eF67rHMsoIV+2\nHNjnogQi+dPa2MsCAwEAAaOBsDCBrTAOBgNVHQ8BAf8EBAMCAQYwDwYDVR0TAQH/BAUwAwEB\n/zArBgNVHRAEJDAigA8yMDA2MTEyNzIwMjM0MlqBDzIwMjYxMTI3MjA1MzQyWjAfBgNVHSME\nGDAWgBRokORnpKZTgMeGZqTx90tD+4S9bTAdBgNVHQ4EFgQUaJDkZ6SmU4DHhmak8fdLQ/uE\nvW0wHQYJKoZIhvZ9B0EABBAwDhsIVjcuMTo0LjADAgSQMA0GCSqGSIb3DQEBBQUAA4IBAQCT\n1DCw1wMgKtD5Y+iRDAUgqV8ZyntyTtSx29CW+1RaGSwMCPeyvIWonX9tO1KzKtvn1ISMY/YP\nyyYBkVBs9F8U4pN0wBOeMDpQ47RgxRzwIkSNcUesyBrJ6ZuaAGAT/3B+XxFNSRuzFVJ7yVTa\nv52Vr2ua2J7p8eRDjeIRRDq/r72DQnNSi6q7pynP9WQcCk3RvKqsnyrQ/39/2n3qse0wJcGE\n2jTSW3iDVuycNsMm4hH2Z0kdkquM++v/eu6FSqdQgPCnXEqULl8FmTxSQeDNtGPPAUO6nIPc\nj2A781q0tHuu2guQOHXvgR1m0vdXcDazv/wor3ElhVsT/h5/WrQ8\n-----END CERTIFICATE-----",
+  "assign": {
+   "error": {
+    "name": "TypeError",
+    "code": null,
+    "message": "Cannot set property rootCertificates of #<Object> which has only a getter",
+    "ctor": "TypeError"
+   }
+  },
+  "push": {
+   "error": {
+    "name": "TypeError",
+    "code": null,
+    "message": "Cannot add property 120, object is not extensible",
+    "ctor": "TypeError"
+   }
+  }
+ },
+ "ca": {
+  "default": {
+   "isArray": true,
+   "frozen": true,
+   "length": 120,
+   "allStrings": true,
+   "allPem": false
+  },
+  "defaultIsBundledContent": true,
+  "defaultSameObject": true,
+  "defaultIsRoots": false,
+  "bundledIsRoots": true,
+  "system": {
+   "isArray": true,
+   "frozen": true,
+   "length": 238,
+   "allStrings": true,
+   "allPem": false
+  },
+  "systemSame": true,
+  "extra": {
+   "isArray": true,
+   "frozen": true,
+   "length": 0,
+   "allStrings": true,
+   "allPem": true
+  },
+  "extraSame": true,
+  "loose": [
+   {
+    "arg": {
+     "$": "undefined"
+    },
+    "value": 120
+   },
+   {
+    "arg": null,
+    "error": {
+     "name": "TypeError",
+     "code": "ERR_INVALID_ARG_TYPE",
+     "message": "The \"type\" argument must be of type string. Received null",
+     "ctor": "TypeError"
+    }
+   },
+   {
+    "arg": 1,
+    "error": {
+     "name": "TypeError",
+     "code": "ERR_INVALID_ARG_TYPE",
+     "message": "The \"type\" argument must be of type string. Received type number (1)",
+     "ctor": "TypeError"
+    }
+   },
+   {
+    "arg": "x",
+    "error": {
+     "name": "TypeError",
+     "code": "ERR_INVALID_ARG_VALUE",
+     "message": "The argument 'type' is invalid. Received 'x'",
+     "ctor": "TypeError"
+    }
+   },
+   {
+    "arg": "Default",
+    "error": {
+     "name": "TypeError",
+     "code": "ERR_INVALID_ARG_VALUE",
+     "message": "The argument 'type' is invalid. Received 'Default'",
+     "ctor": "TypeError"
+    }
+   },
+   {
+    "arg": "",
+    "error": {
+     "name": "TypeError",
+     "code": "ERR_INVALID_ARG_VALUE",
+     "message": "The argument 'type' is invalid. Received ''",
+     "ctor": "TypeError"
+    }
+   },
+   {
+    "arg": {},
+    "error": {
+     "name": "TypeError",
+     "code": "ERR_INVALID_ARG_TYPE",
+     "message": "The \"type\" argument must be of type string. Received an instance of Object",
+     "ctor": "TypeError"
+    }
+   }
+  ]
+ },
+ "setDefault": [
+  {
+   "args": [
+    []
+   ],
+   "value": {
+    "returned": {
+     "$": "undefined"
+    },
+    "shape": {
+     "isArray": true,
+     "frozen": true,
+     "length": 0,
+     "allStrings": true,
+     "allPem": true
+    },
+    "indexes": [],
+    "same": true,
+    "bundledUnchanged": true
+   }
+  },
+  {
+   "args": [
+    [
+     "<R0>",
+     "<R1>"
+    ]
+   ],
+   "value": {
+    "returned": {
+     "$": "undefined"
+    },
+    "shape": {
+     "isArray": true,
+     "frozen": true,
+     "length": 2,
+     "allStrings": true,
+     "allPem": false
+    },
+    "indexes": [
+     -1,
+     -1
+    ],
+    "same": true,
+    "bundledUnchanged": true
+   }
+  },
+  {
+   "args": [
+    [
+     "<R0>",
+     "<R0>"
+    ]
+   ],
+   "value": {
+    "returned": {
+     "$": "undefined"
+    },
+    "shape": {
+     "isArray": true,
+     "frozen": true,
+     "length": 1,
+     "allStrings": true,
+     "allPem": false
+    },
+    "indexes": [
+     -1
+    ],
+    "same": true,
+    "bundledUnchanged": true
+   }
+  },
+  {
+   "args": [
+    [
+     "<R0>\n<R1>"
+    ]
+   ],
+   "value": {
+    "returned": {
+     "$": "undefined"
+    },
+    "shape": {
+     "isArray": true,
+     "frozen": true,
+     "length": 2,
+     "allStrings": true,
+     "allPem": false
+    },
+    "indexes": [
+     -1,
+     -1
+    ],
+    "same": true,
+    "bundledUnchanged": true
+   }
+  },
+  {
+   "args": [
+    [
+     "<R2>\n"
+    ]
+   ],
+   "value": {
+    "returned": {
+     "$": "undefined"
+    },
+    "shape": {
+     "isArray": true,
+     "frozen": true,
+     "length": 1,
+     "allStrings": true,
+     "allPem": false
+    },
+    "indexes": [
+     -1
+    ],
+    "same": true,
+    "bundledUnchanged": true
+   }
+  },
+  {
+   "args": [
+    [
+     "\n\n<R2CRLF>\ntrailing"
+    ]
+   ],
+   "value": {
+    "returned": {
+     "$": "undefined"
+    },
+    "shape": {
+     "isArray": true,
+     "frozen": true,
+     "length": 1,
+     "allStrings": true,
+     "allPem": false
+    },
+    "indexes": [
+     -1
+    ],
+    "same": true,
+    "bundledUnchanged": true
+   }
+  },
+  {
+   "args": [
+    [
+     {
+      "$": "pem-buffer",
+      "i": 3
+     }
+    ]
+   ],
+   "value": {
+    "returned": {
+     "$": "undefined"
+    },
+    "shape": {
+     "isArray": true,
+     "frozen": true,
+     "length": 1,
+     "allStrings": true,
+     "allPem": false
+    },
+    "indexes": [
+     -1
+    ],
+    "same": true,
+    "bundledUnchanged": true
+   }
+  },
+  {
+   "args": [
+    [
+     {
+      "$": "pem-u8",
+      "i": 3
+     }
+    ]
+   ],
+   "value": {
+    "returned": {
+     "$": "undefined"
+    },
+    "shape": {
+     "isArray": true,
+     "frozen": true,
+     "length": 1,
+     "allStrings": true,
+     "allPem": false
+    },
+    "indexes": [
+     -1
+    ],
+    "same": true,
+    "bundledUnchanged": true
+   }
+  },
+  {
+   "args": [
+    [
+     "not a cert"
+    ]
+   ],
+   "error": {
+    "name": "Error",
+    "code": "ERR_CRYPTO_OPERATION_FAILED",
+    "message": "No valid certificates found in the provided array",
+    "ctor": "Error"
+   }
+  },
+  {
+   "args": [
+    [
+     ""
+    ]
+   ],
+   "error": {
+    "name": "Error",
+    "code": "ERR_CRYPTO_OPERATION_FAILED",
+    "message": "No valid certificates found in the provided array",
+    "ctor": "Error"
+   }
+  },
+  {
+   "args": [
+    [
+     "<R0>",
+     5
+    ]
+   ],
+   "error": {
+    "name": "TypeError",
+    "code": "ERR_INVALID_ARG_TYPE",
+    "message": "The \"certs[1]\" argument must be of type string or an instance of ArrayBufferView. Received type number (5)",
+    "ctor": "TypeError"
+   }
+  },
+  {
+   "args": [
+    [
+     null
+    ]
+   ],
+   "error": {
+    "name": "TypeError",
+    "code": "ERR_INVALID_ARG_TYPE",
+    "message": "The \"certs[0]\" argument must be of type string or an instance of ArrayBufferView. Received null",
+    "ctor": "TypeError"
+   }
+  },
+  {
+   "args": [
+    "x"
+   ],
+   "error": {
+    "name": "TypeError",
+    "code": "ERR_INVALID_ARG_TYPE",
+    "message": "The \"certs\" argument must be an instance of Array. Received type string ('x')",
+    "ctor": "TypeError"
+   }
+  },
+  {
+   "args": [
+    {
+     "$": "undefined"
+    }
+   ],
+   "error": {
+    "name": "TypeError",
+    "code": "ERR_INVALID_ARG_TYPE",
+    "message": "The \"certs\" argument must be an instance of Array. Received undefined",
+    "ctor": "TypeError"
+   }
+  },
+  {
+   "args": [
+    null
+   ],
+   "error": {
+    "name": "TypeError",
+    "code": "ERR_INVALID_ARG_TYPE",
+    "message": "The \"certs\" argument must be an instance of Array. Received null",
+    "ctor": "TypeError"
+   }
+  },
+  {
+   "args": [
+    {}
+   ],
+   "error": {
+    "name": "TypeError",
+    "code": "ERR_INVALID_ARG_TYPE",
+    "message": "The \"certs\" argument must be an instance of Array. Received an instance of Object",
+    "ctor": "TypeError"
+   }
+  },
+  {
+   "args": [
+    [
+     "<R0>",
+     "garbage"
+    ]
+   ],
+   "value": {
+    "returned": {
+     "$": "undefined"
+    },
+    "shape": {
+     "isArray": true,
+     "frozen": true,
+     "length": 1,
+     "allStrings": true,
+     "allPem": false
+    },
+    "indexes": [
+     -1
+    ],
+    "same": true,
+    "bundledUnchanged": true
+   }
+  },
+  {
+   "args": [
+    [
+     "<R1CUT>"
+    ]
+   ],
+   "error": {
+    "name": "Error",
+    "code": "ERR_OSSL_PEM_BAD_END_LINE",
+    "message": "error:04800066:PEM routines::bad end line",
+    "ctor": "Error"
+   }
+  }
+ ],
+ "rootsSample": [
+  "-----BEGIN CERTIFICATE-----\nMIIEkTCCA3mgAwIBAgIERWtQVDANBgkqhkiG9w0BAQUFADCBsDELMAkGA1UEBhMCVVMxFjAU\nBgNVBAoTDUVudHJ1c3QsIEluYy4xOTA3BgNVBAsTMHd3dy5lbnRydXN0Lm5ldC9DUFMgaXMg\naW5jb3Jwb3JhdGVkIGJ5IHJlZmVyZW5jZTEfMB0GA1UECxMWKGMpIDIwMDYgRW50cnVzdCwg\nSW5jLjEtMCsGA1UEAxMkRW50cnVzdCBSb290IENlcnRpZmljYXRpb24gQXV0aG9yaXR5MB4X\nDTA2MTEyNzIwMjM0MloXDTI2MTEyNzIwNTM0MlowgbAxCzAJBgNVBAYTAlVTMRYwFAYDVQQK\nEw1FbnRydXN0LCBJbmMuMTkwNwYDVQQLEzB3d3cuZW50cnVzdC5uZXQvQ1BTIGlzIGluY29y\ncG9yYXRlZCBieSByZWZlcmVuY2UxHzAdBgNVBAsTFihjKSAyMDA2IEVudHJ1c3QsIEluYy4x\nLTArBgNVBAMTJEVudHJ1c3QgUm9vdCBDZXJ0aWZpY2F0aW9uIEF1dGhvcml0eTCCASIwDQYJ\nKoZIhvcNAQEBBQADggEPADCCAQoCggEBALaVtkNC+sZtKm9I35RMOVcF7sN5EUFoNu3s/poB\nj6E4KPz3EEZmLk0eGrEaTsbRwJWIsMn/MYszA9u3g3s+IIRe7bJWKKf44LlAcTfFy0cOlypo\nwCKVYhXbR9n10Cv/gkvJrT7eTNuQgFA/CYqEAOwwCj0Yzfv9KlmaI5UXLEWeH25DeW0MXJj+\nSKfFI0dcXv1u5x609mhF0YaDW6KKjbHjKYD+JXGIrb68j6xSlkuqUY3kEzEZ6E5Nn9uss2rV\nvDlUccp6en+Q3X0dgNmBu1kmwhH+5pPi94DkZfs0Nw4pgHBNrziGLp5/V6+eF67rHMsoIV+2\nHNjnogQi+dPa2MsCAwEAAaOBsDCBrTAOBgNVHQ8BAf8EBAMCAQYwDwYDVR0TAQH/BAUwAwEB\n/zArBgNVHRAEJDAigA8yMDA2MTEyNzIwMjM0MlqBDzIwMjYxMTI3MjA1MzQyWjAfBgNVHSME\nGDAWgBRokORnpKZTgMeGZqTx90tD+4S9bTAdBgNVHQ4EFgQUaJDkZ6SmU4DHhmak8fdLQ/uE\nvW0wHQYJKoZIhvZ9B0EABBAwDhsIVjcuMTo0LjADAgSQMA0GCSqGSIb3DQEBBQUAA4IBAQCT\n1DCw1wMgKtD5Y+iRDAUgqV8ZyntyTtSx29CW+1RaGSwMCPeyvIWonX9tO1KzKtvn1ISMY/YP\nyyYBkVBs9F8U4pN0wBOeMDpQ47RgxRzwIkSNcUesyBrJ6ZuaAGAT/3B+XxFNSRuzFVJ7yVTa\nv52Vr2ua2J7p8eRDjeIRRDq/r72DQnNSi6q7pynP9WQcCk3RvKqsnyrQ/39/2n3qse0wJcGE\n2jTSW3iDVuycNsMm4hH2Z0kdkquM++v/eu6FSqdQgPCnXEqULl8FmTxSQeDNtGPPAUO6nIPc\nj2A781q0tHuu2guQOHXvgR1m0vdXcDazv/wor3ElhVsT/h5/WrQ8\n-----END CERTIFICATE-----",
+  "-----BEGIN CERTIFICATE-----\nMIICiTCCAg+gAwIBAgIQH0evqmIAcFBUTAGem2OZKjAKBggqhkjOPQQDAzCBhTELMAkGA1UE\nBhMCR0IxGzAZBgNVBAgTEkdyZWF0ZXIgTWFuY2hlc3RlcjEQMA4GA1UEBxMHU2FsZm9yZDEa\nMBgGA1UEChMRQ09NT0RPIENBIExpbWl0ZWQxKzApBgNVBAMTIkNPTU9ETyBFQ0MgQ2VydGlm\naWNhdGlvbiBBdXRob3JpdHkwHhcNMDgwMzA2MDAwMDAwWhcNMzgwMTE4MjM1OTU5WjCBhTEL\nMAkGA1UEBhMCR0IxGzAZBgNVBAgTEkdyZWF0ZXIgTWFuY2hlc3RlcjEQMA4GA1UEBxMHU2Fs\nZm9yZDEaMBgGA1UEChMRQ09NT0RPIENBIExpbWl0ZWQxKzApBgNVBAMTIkNPTU9ETyBFQ0Mg\nQ2VydGlmaWNhdGlvbiBBdXRob3JpdHkwdjAQBgcqhkjOPQIBBgUrgQQAIgNiAAQDR3svdcmC\nFYX7deSRFtSrYpn1PlILBs5BAH+X4QokPB0BBO490o0JlwzgdeT6+3eKKvUDYEs2ixYjFq0J\ncfRK9ChQtP6IHG4/bC8vCVlbpVsLM5niwz2J+Wos77LTBumjQjBAMB0GA1UdDgQWBBR1cacZ\nSBm8nZ3qQUfflMRId5nTeTAOBgNVHQ8BAf8EBAMCAQYwDwYDVR0TAQH/BAUwAwEB/zAKBggq\nhkjOPQQDAwNoADBlAjEA7wNbeqy3eApyt4jf/7VGFAkK+qDmfQjGGoe9GKhzvSbKYAydzpmf\nz1wPMOG+FDHqAjAU9JM8SaczepBGR7NjfRObTrdvGDeAU/7dIOA1mjbRxwG55tzd8/8dLDoW\nV9mSOdY=\n-----END CERTIFICATE-----",
+  "-----BEGIN CERTIFICATE-----\nMIIFsDCCA5igAwIBAgIQFci9ZUdcr7iXAF7kBtK8nTANBgkqhkiG9w0BAQUFADBeMQswCQYD\nVQQGEwJUVzEjMCEGA1UECgwaQ2h1bmdod2EgVGVsZWNvbSBDby4sIEx0ZC4xKjAoBgNVBAsM\nIWVQS0kgUm9vdCBDZXJ0aWZpY2F0aW9uIEF1dGhvcml0eTAeFw0wNDEyMjAwMjMxMjdaFw0z\nNDEyMjAwMjMxMjdaMF4xCzAJBgNVBAYTAlRXMSMwIQYDVQQKDBpDaHVuZ2h3YSBUZWxlY29t\nIENvLiwgTHRkLjEqMCgGA1UECwwhZVBLSSBSb290IENlcnRpZmljYXRpb24gQXV0aG9yaXR5\nMIICIjANBgkqhkiG9w0BAQEFAAOCAg8AMIICCgKCAgEA4SUP7o3biDN1Z82tH306Tm2d0y8U\n82N0ywEhajfqhFAHSyZbCUNsIZ5qyNUD9WBpj8zwIuQf5/dqIjG3LBXy4P4AakP/h2XGtRrB\np0xtInAhijHyl3SJCRImHJ7K2RKilTza6We/CKBk49ZCt0Xvl/T29de1ShUCWH2YWEtgvM3X\nDZoTM1PRYfl61dd4s5oz9wCGzh1NlDivqOx4UXCKXBCDUSH3ET00hl7lSM2XgYI1TBnsZfZr\nxQWh7kcT1rMhJ5QQCtkkO7q+RBNGMD+XPNjX12ruOzjjK9SXDrkb5wdJfzcq+Xd4z1TtW0ad\no4AOkUPB1ltfFLqfpo0kR0BZv3I4sjZsN/+Z0V0OWQqraffAsgRFelQArr5T9rXn4fg8ozHS\nqf4hUmTFpmfwdQcGlBSBVcYn5AGPF8Fqcde+S/uUWH1+ETOxQvdibBjWzwloPn9s9h6PYq2l\nY9sJpx8iQkEeb5mKPtf5P0B6ebClAZLSnT0IFaUQAS2zMnaolQ2zepr7BxB4EW/hj8e6DyUa\ndCrlHJhBmd8hh+iVBmoKs2pHdmX2Os+PYhcZewoozRrSgx4hxyy/vv9haLdnG7t4TY3OZ+Xk\nwY63I2binZB1NJipNiuKmpS5nezMirH4JYlcWrYvjB9teSSnUmjDhDXiZo1jDiVN1Rmy5nk3\npyKdVDECAwEAAaNqMGgwHQYDVR0OBBYEFB4M97Zn8uGSJglFwFU5Lnc/QkqiMAwGA1UdEwQF\nMAMBAf8wOQYEZyoHAAQxMC8wLQIBADAJBgUrDgMCGgUAMAcGBWcqAwAABBRFsMLHClZ87lt4\nDJX5GFPBphzYEDANBgkqhkiG9w0BAQUFAAOCAgEACbODU1kBPpVJufGBuvl2ICO1J2B01GqZ\nNF5sAFPZn/KmsSQHRGoqxqWOeBLoR9lYGxMqXnmbnwoqZ6YlPwZpVnPDimZI+ymBV3QGypzq\nKOg4ZyYr8dW1P2WT+DZdjo2NQCCHGervJ8A9tDkPJXtoUHRVnAxZfVo9QZQlUgjgRywVMRnV\nvwdVxrsStZf0X4OFunHB2WyBEXYKCrC/gpf36j36+uwtqSiUO1bd0lEursC9CBWMd1I0ltab\nrNMdjmEPNXubrjlpC2JgQCA2j6/7Nu4tCEoduL+bXPjqpRugc6bY+G7gMwRfaKonh+3ZwZCc\n7b3jajWvY9+rGNm65ulK6lCKD2GTHuItGeIwlDWSXQ62B68ZgI9HkFFLLk3dheLSClIKF5r8\nGrBQAuUBo2M3IUxExJtRmREOc5wGj1QupyheRDmHVi03vYVElOEMSyycw5KFNGHLD7ibSkNS\n/jQ6fbjpKdx2qcgw+BRxgMYeNkh0IkFch4LoGHGLQYlE535YW6i4jRPpp2zDR+2zGp1iro2C\n6pSe3VkQw63d4k3jMdXH7OjysP6SHhYKGvzZ8/gntsm+HbRsZJB/9OTEW9c3rkIO3aQab3yI\nVMUWbuF6aC74Or8NpDyJO3inTmODBCEIZ43ygknQW/2xzQ+DhNQ+IIX3Sj0rnP0qCglN6oH4\nEZw=\n-----END CERTIFICATE-----",
+  "-----BEGIN CERTIFICATE-----\nMIIEFTCCAv2gAwIBAgIGSUEs5AAQMA0GCSqGSIb3DQEBCwUAMIGnMQswCQYDVQQGEwJIVTER\nMA8GA1UEBwwIQnVkYXBlc3QxFTATBgNVBAoMDE5ldExvY2sgS2Z0LjE3MDUGA1UECwwuVGFu\nw7pzw610dsOhbnlraWFkw7NrIChDZXJ0aWZpY2F0aW9uIFNlcnZpY2VzKTE1MDMGA1UEAwws\nTmV0TG9jayBBcmFueSAoQ2xhc3MgR29sZCkgRsWRdGFuw7pzw610dsOhbnkwHhcNMDgxMjEx\nMTUwODIxWhcNMjgxMjA2MTUwODIxWjCBpzELMAkGA1UEBhMCSFUxETAPBgNVBAcMCEJ1ZGFw\nZXN0MRUwEwYDVQQKDAxOZXRMb2NrIEtmdC4xNzA1BgNVBAsMLlRhbsO6c8OtdHbDoW55a2lh\nZMOzayAoQ2VydGlmaWNhdGlvbiBTZXJ2aWNlcykxNTAzBgNVBAMMLE5ldExvY2sgQXJhbnkg\nKENsYXNzIEdvbGQpIEbFkXRhbsO6c8OtdHbDoW55MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8A\nMIIBCgKCAQEAxCRec75LbRTDofTjl5Bu0jBFHjzuZ9lk4BqKf8owyoPjIMHj9DrTlF8afFtt\nvzBPhCf2nx9JvMaZCpDyD/V/Q4Q3Y1GLeqVw/HpYzY6b7cNGbIRwXdrzAZAj/E4wqX7hJ2Pn\n7WQ8oLjJM2P+FpD/sLj916jAwJRDC7bVWaaeVtAkH3B5r9s5VA1lddkVQZQBr17s9o3x/61k\n/iCa11zr/qYfCGSji3ZVrR47KGAuhyXoqq8fxmRGILdwfzzeSNuWU7c5d+Qa4scWhHaXWy+7\nGRWF+GmF9ZmnqfI0p6m2pgP8b4Y9VHx2BJtr+UBdADTHLpl1neWIA6pN+APSQnbAGwIDAKiL\no0UwQzASBgNVHRMBAf8ECDAGAQH/AgEEMA4GA1UdDwEB/wQEAwIBBjAdBgNVHQ4EFgQUzPpn\nk/C2uNClwB7zU/2MU9+D15YwDQYJKoZIhvcNAQELBQADggEBAKt/7hwWqZw8UQCgwBEIBaeZ\n5m8BiFRhbvG5GK1Krf6BQCOUL/t1fC8oS2IkgYIL9WHxHG64YTjrgfpioTtaYtOUZcTh5m2C\n+C8lcLIhJsFyUR+MLMOEkMNaj7rP9KdlpeuY0fsFskZ1FSNqb4VjMIDw1Z4fKRzCbLBQWV2Q\nWzuoDTDPv31/zvGdg73JRm4gpvlhUbohL3u+pRVjodSVh/GeufOJ8z2FuLjbvrW5KfnaNwUA\nSZQDhETnv0Mxz3WLJdH0pmT1kvarBes96aULNmLazAZfNou2XjG4Kvte9nHfRCaexOYNkbQu\ndZWAUWpLMKawYqGT8ZvYzsRjdT9ZR7E=\n-----END CERTIFICATE-----"
+ ],
+ "secureContext": [
+  {
+   "args": [],
+   "value": {
+    "instance": true,
+    "ctor": "SecureContext",
+    "keys": [
+     "context"
+    ],
+    "contextType": "object"
+   }
+  },
+  {
+   "args": [
+    {
+     "$": "undefined"
+    }
+   ],
+   "value": {
+    "instance": true,
+    "ctor": "SecureContext",
+    "keys": [
+     "context"
+    ],
+    "contextType": "object"
+   }
+  },
+  {
+   "args": [
+    null
+   ],
+   "value": {
+    "instance": true,
+    "ctor": "SecureContext",
+    "keys": [
+     "context"
+    ],
+    "contextType": "object"
+   }
+  },
+  {
+   "args": [
+    {}
+   ],
+   "value": {
+    "instance": true,
+    "ctor": "SecureContext",
+    "keys": [
+     "context"
+    ],
+    "contextType": "object"
+   }
+  },
+  {
+   "args": [
+    0
+   ],
+   "value": {
+    "instance": true,
+    "ctor": "SecureContext",
+    "keys": [
+     "context"
+    ],
+    "contextType": "object"
+   }
+  },
+  {
+   "args": [
+    "x"
+   ],
+   "error": {
+    "name": "TypeError",
+    "code": "ERR_INVALID_ARG_TYPE",
+    "message": "The \"options\" argument must be of type object. Received type string ('x')",
+    "ctor": "TypeError"
+   }
+  },
+  {
+   "args": [
+    5
+   ],
+   "error": {
+    "name": "TypeError",
+    "code": "ERR_INVALID_ARG_TYPE",
+    "message": "The \"options\" argument must be of type object. Received type number (5)",
+    "ctor": "TypeError"
+   }
+  },
+  {
+   "args": [
+    []
+   ],
+   "error": {
+    "name": "TypeError",
+    "code": "ERR_INVALID_ARG_TYPE",
+    "message": "The \"options\" argument must be of type object. Received an instance of Array",
+    "ctor": "TypeError"
+   }
+  },
+  {
+   "args": [
+    {
+     "minVersion": "TLSv1.2"
+    }
+   ],
+   "value": {
+    "instance": true,
+    "ctor": "SecureContext",
+    "keys": [
+     "context"
+    ],
+    "contextType": "object"
+   }
+  },
+  {
+   "args": [
+    {
+     "minVersion": "TLSv1.4"
+    }
+   ],
+   "error": {
+    "name": "TypeError",
+    "code": "ERR_TLS_INVALID_PROTOCOL_VERSION",
+    "message": "\"TLSv1.4\" is not a valid minimum TLS protocol version",
+    "ctor": "TypeError"
+   }
+  },
+  {
+   "args": [
+    {
+     "maxVersion": "x"
+    }
+   ],
+   "error": {
+    "name": "TypeError",
+    "code": "ERR_TLS_INVALID_PROTOCOL_VERSION",
+    "message": "\"x\" is not a valid maximum TLS protocol version",
+    "ctor": "TypeError"
+   }
+  },
+  {
+   "args": [
+    {
+     "minVersion": 5
+    }
+   ],
+   "error": {
+    "name": "TypeError",
+    "code": "ERR_TLS_INVALID_PROTOCOL_VERSION",
+    "message": "5 is not a valid minimum TLS protocol version",
+    "ctor": "TypeError"
+   }
+  },
+  {
+   "args": [
+    {
+     "minVersion": "TLSv1.3",
+     "maxVersion": "TLSv1.2"
+    }
+   ],
+   "value": {
+    "instance": true,
+    "ctor": "SecureContext",
+    "keys": [
+     "context"
+    ],
+    "contextType": "object"
+   }
+  },
+  {
+   "args": [
+    {
+     "secureProtocol": "TLSv1_2_method"
+    }
+   ],
+   "value": {
+    "instance": true,
+    "ctor": "SecureContext",
+    "keys": [
+     "context"
+    ],
+    "contextType": "object"
+   }
+  },
+  {
+   "args": [
+    {
+     "secureProtocol": "TLSv1_2_method",
+     "minVersion": "TLSv1.2"
+    }
+   ],
+   "error": {
+    "name": "TypeError",
+    "code": "ERR_TLS_PROTOCOL_VERSION_CONFLICT",
+    "message": "TLS protocol version \"TLSv1.2\" conflicts with secureProtocol \"TLSv1_2_method\"",
+    "ctor": "TypeError"
+   }
+  },
+  {
+   "args": [
+    {
+     "secureProtocol": "TLSv1_2_method",
+     "maxVersion": "TLSv1.2"
+    }
+   ],
+   "error": {
+    "name": "TypeError",
+    "code": "ERR_TLS_PROTOCOL_VERSION_CONFLICT",
+    "message": "TLS protocol version \"TLSv1.2\" conflicts with secureProtocol \"TLSv1_2_method\"",
+    "ctor": "TypeError"
+   }
+  },
+  {
+   "args": [
+    {
+     "secureProtocol": "bogus"
+    }
+   ],
+   "error": {
+    "name": "TypeError",
+    "code": "ERR_TLS_INVALID_PROTOCOL_METHOD",
+    "message": "Unknown method: bogus",
+    "ctor": "TypeError"
+   }
+  },
+  {
+   "args": [
+    {
+     "secureOptions": 4
+    }
+   ],
+   "value": {
+    "instance": true,
+    "ctor": "SecureContext",
+    "keys": [
+     "context"
+    ],
+    "contextType": "object"
+   }
+  },
+  {
+   "args": [
+    {
+     "secureOptions": "4"
+    }
+   ],
+   "error": {
+    "name": "TypeError",
+    "code": "ERR_INVALID_ARG_TYPE",
+    "message": "The \"secureOptions\" argument must be of type number. Received type string ('4')",
+    "ctor": "TypeError"
+   }
+  },
+  {
+   "args": [
+    {
+     "secureOptions": 1.5
+    }
+   ],
+   "error": {
+    "name": "RangeError",
+    "code": "ERR_OUT_OF_RANGE",
+    "message": "The value of \"secureOptions\" is out of range. It must be an integer. Received 1.5",
+    "ctor": "RangeError"
+   }
+  },
+  {
+   "args": [
+    {
+     "ciphers": "HIGH"
+    }
+   ],
+   "value": {
+    "instance": true,
+    "ctor": "SecureContext",
+    "keys": [
+     "context"
+    ],
+    "contextType": "object"
+   }
+  },
+  {
+   "args": [
+    {
+     "ciphers": 5
+    }
+   ],
+   "error": {
+    "name": "TypeError",
+    "code": "ERR_INVALID_ARG_TYPE",
+    "message": "The \"options.ciphers\" property must be of type string. Received type number (5)",
+    "ctor": "TypeError"
+   }
+  },
+  {
+   "args": [
+    {
+     "ciphers": null
+    }
+   ],
+   "value": {
+    "instance": true,
+    "ctor": "SecureContext",
+    "keys": [
+     "context"
+    ],
+    "contextType": "object"
+   }
+  },
+  {
+   "args": [
+    {
+     "ciphers": ""
+    }
+   ],
+   "value": {
+    "instance": true,
+    "ctor": "SecureContext",
+    "keys": [
+     "context"
+    ],
+    "contextType": "object"
+   }
+  },
+  {
+   "args": [
+    {
+     "ciphers": "bogus-cipher"
+    }
+   ],
+   "error": {
+    "name": "Error",
+    "code": "ERR_SSL_NO_CIPHER_MATCH",
+    "message": "error:0A0000B9:SSL routines::no cipher match",
+    "ctor": "Error"
+   }
+  },
+  {
+   "args": [
+    {
+     "ca": "x"
+    }
+   ],
+   "value": {
+    "instance": true,
+    "ctor": "SecureContext",
+    "keys": [
+     "context"
+    ],
+    "contextType": "object"
+   }
+  },
+  {
+   "args": [
+    {
+     "ca": 5
+    }
+   ],
+   "error": {
+    "name": "TypeError",
+    "code": "ERR_INVALID_ARG_TYPE",
+    "message": "The \"options.ca\" property must be of type string or an instance of Buffer, TypedArray, or DataView. Received type number (5)",
+    "ctor": "TypeError"
+   }
+  },
+  {
+   "args": [
+    {
+     "ca": []
+    }
+   ],
+   "value": {
+    "instance": true,
+    "ctor": "SecureContext",
+    "keys": [
+     "context"
+    ],
+    "contextType": "object"
+   }
+  },
+  {
+   "args": [
+    {
+     "ca": [
+      "x",
+      5
+     ]
+    }
+   ],
+   "error": {
+    "name": "TypeError",
+    "code": "ERR_INVALID_ARG_TYPE",
+    "message": "The \"options.ca\" property must be of type string or an instance of Buffer, TypedArray, or DataView. Received type number (5)",
+    "ctor": "TypeError"
+   }
+  },
+  {
+   "args": [
+    {
+     "ca": "<R0>"
+    }
+   ],
+   "value": {
+    "instance": true,
+    "ctor": "SecureContext",
+    "keys": [
+     "context"
+    ],
+    "contextType": "object"
+   }
+  },
+  {
+   "args": [
+    {
+     "ca": [
+      "<R0>",
+      "<R1BUF>"
+     ]
+    }
+   ],
+   "value": {
+    "instance": true,
+    "ctor": "SecureContext",
+    "keys": [
+     "context"
+    ],
+    "contextType": "object"
+   }
+  },
+  {
+   "args": [
+    {
+     "cert": 5
+    }
+   ],
+   "error": {
+    "name": "TypeError",
+    "code": "ERR_INVALID_ARG_TYPE",
+    "message": "The \"options.cert\" property must be of type string or an instance of Buffer, TypedArray, or DataView. Received type number (5)",
+    "ctor": "TypeError"
+   }
+  },
+  {
+   "args": [
+    {
+     "key": 5
+    }
+   ],
+   "error": {
+    "name": "TypeError",
+    "code": "ERR_INVALID_ARG_TYPE",
+    "message": "The \"options.key\" property must be of type string or an instance of Buffer, TypedArray, or DataView. Received type number (5)",
+    "ctor": "TypeError"
+   }
+  },
+  {
+   "args": [
+    {
+     "cert": "x"
+    }
+   ],
+   "error": {
+    "name": "Error",
+    "code": "ERR_OSSL_PEM_NO_START_LINE",
+    "message": "error:0480006C:PEM routines::no start line",
+    "ctor": "Error"
+   }
+  },
+  {
+   "args": [
+    {
+     "key": "x"
+    }
+   ],
+   "error": {
+    "name": "Error",
+    "code": "ERR_OSSL_UNSUPPORTED",
+    "message": "error:1E08010C:DECODER routines::unsupported",
+    "ctor": "Error"
+   }
+  },
+  {
+   "args": [
+    {
+     "ecdhCurve": 5
+    }
+   ],
+   "error": {
+    "name": "TypeError",
+    "code": "ERR_INVALID_ARG_TYPE",
+    "message": "The \"options.ecdhCurve\" property must be of type string. Received type number (5)",
+    "ctor": "TypeError"
+   }
+  },
+  {
+   "args": [
+    {
+     "ecdhCurve": "auto"
+    }
+   ],
+   "value": {
+    "instance": true,
+    "ctor": "SecureContext",
+    "keys": [
+     "context"
+    ],
+    "contextType": "object"
+   }
+  },
+  {
+   "args": [
+    {
+     "ecdhCurve": "bogus"
+    }
+   ],
+   "error": {
+    "name": "Error",
+    "code": "ERR_CRYPTO_OPERATION_FAILED",
+    "message": "Failed to set ECDH curve",
+    "ctor": "Error"
+   }
+  },
+  {
+   "args": [
+    {
+     "sigalgs": 5
+    }
+   ],
+   "error": {
+    "name": "TypeError",
+    "code": "ERR_INVALID_ARG_TYPE",
+    "message": "The \"options.sigalgs\" property must be of type string. Received type number (5)",
+    "ctor": "TypeError"
+   }
+  },
+  {
+   "args": [
+    {
+     "sigalgs": ""
+    }
+   ],
+   "error": {
+    "name": "TypeError",
+    "code": "ERR_INVALID_ARG_VALUE",
+    "message": "The property 'options.sigalgs' is invalid. Received ''",
+    "ctor": "TypeError"
+   }
+  },
+  {
+   "args": [
+    {
+     "passphrase": 5,
+     "key": "x"
+    }
+   ],
+   "error": {
+    "name": "TypeError",
+    "code": "ERR_INVALID_ARG_TYPE",
+    "message": "The \"options.passphrase\" property must be of type string. Received type number (5)",
+    "ctor": "TypeError"
+   }
+  },
+  {
+   "args": [
+    {
+     "crl": 5
+    }
+   ],
+   "error": {
+    "name": "TypeError",
+    "code": "ERR_INVALID_ARG_TYPE",
+    "message": "The \"options.crl\" property must be of type string or an instance of Buffer, TypedArray, or DataView. Received type number (5)",
+    "ctor": "TypeError"
+   }
+  },
+  {
+   "args": [
+    {
+     "sessionIdContext": 5
+    }
+   ],
+   "error": {
+    "name": "TypeError",
+    "code": "ERR_INVALID_ARG_TYPE",
+    "message": "The \"options.sessionIdContext\" property must be of type string. Received type number (5)",
+    "ctor": "TypeError"
+   }
+  },
+  {
+   "args": [
+    {
+     "sessionTimeout": "x"
+    }
+   ],
+   "error": {
+    "name": "TypeError",
+    "code": "ERR_INVALID_ARG_TYPE",
+    "message": "The \"options.sessionTimeout\" property must be of type number. Received type string ('x')",
+    "ctor": "TypeError"
+   }
+  },
+  {
+   "args": [
+    {
+     "ticketKeys": "x"
+    }
+   ],
+   "error": {
+    "name": "TypeError",
+    "code": "ERR_INVALID_ARG_TYPE",
+    "message": "The \"options.ticketKeys\" property must be an instance of Buffer, TypedArray, or DataView. Received type string ('x')",
+    "ctor": "TypeError"
+   }
+  },
+  {
+   "args": [
+    {
+     "dhparam": 5
+    }
+   ],
+   "error": {
+    "name": "TypeError",
+    "code": "ERR_INVALID_ARG_TYPE",
+    "message": "The \"options.dhparam\" property must be of type string or an instance of Buffer, TypedArray, or DataView. Received type number (5)",
+    "ctor": "TypeError"
+   }
+  },
+  {
+   "args": [
+    {
+     "pfx": 5
+    }
+   ],
+   "error": {
+    "name": "Error",
+    "code": "ERR_CRYPTO_OPERATION_FAILED",
+    "message": "Unable to load PFX certificate",
+    "ctor": "Error"
+   }
+  },
+  {
+   "args": [
+    {
+     "honorCipherOrder": true
+    }
+   ],
+   "value": {
+    "instance": true,
+    "ctor": "SecureContext",
+    "keys": [
+     "context"
+    ],
+    "contextType": "object"
+   }
+  },
+  {
+   "args": [
+    {
+     "unknownKey": 1
+    }
+   ],
+   "value": {
+    "instance": true,
+    "ctor": "SecureContext",
+    "keys": [
+     "context"
+    ],
+    "contextType": "object"
+   }
+  },
+  {
+   "args": [
+    {
+     "allowPartialTrustChain": true
+    }
+   ],
+   "value": {
+    "instance": true,
+    "ctor": "SecureContext",
+    "keys": [
+     "context"
+    ],
+    "contextType": "object"
+   }
+  },
+  {
+   "args": [
+    {
+     "clientCertEngine": 5
+    }
+   ],
+   "error": {
+    "name": "TypeError",
+    "code": "ERR_INVALID_ARG_TYPE",
+    "message": "The \"options.clientCertEngine\" property must be of type string or one of null or undefined. Received type number (5)",
+    "ctor": "TypeError"
+   }
+  },
+  {
+   "args": [
+    {
+     "privateKeyIdentifier": 5
+    }
+   ],
+   "error": {
+    "name": "TypeError",
+    "code": "ERR_INVALID_ARG_VALUE",
+    "message": "The property 'options.privateKeyEngine' is invalid. Received undefined",
+    "ctor": "TypeError"
+   }
+  }
+ ],
+ "secureContextClass": {
+  "viaCall": {
+   "value": true
+  },
+  "viaNew": {
+   "value": [
+    "context"
+   ]
+  },
+  "conflict": {
+   "error": {
+    "name": "TypeError",
+    "code": "ERR_TLS_PROTOCOL_VERSION_CONFLICT",
+    "message": "TLS protocol version \"TLSv1.2\" conflicts with secureProtocol \"TLSv1_2_method\"",
+    "ctor": "TypeError"
+   }
+  },
+  "protoKeys": [
+   "constructor"
+  ]
+ },
+ "recorder": "\"use strict\";\nconst tls = require(\"tls\"), fs = require(\"fs\");\nconst U = { $: \"undefined\" };\nconst dec = v => Array.isArray(v) ? v.map(dec) : v && typeof v === \"object\" ? (\"$\" in v ? (v.$ === \"undefined\" ? undefined : v.$ === \"fn\" ? function fn() {} : v.$ === \"symbol\" ? Symbol(\"s\") : v.$ === \"buffer\" ? Buffer.from(v.hex, \"hex\") : v.$ === \"u8\" ? new Uint8Array(Buffer.from(v.hex, \"hex\")) : v.$ === \"u16\" ? new Uint16Array(v.v) : v.$ === \"dataview\" ? new DataView(Uint8Array.from(Buffer.from(v.hex, \"hex\")).buffer) : v) : Object.fromEntries(Object.entries(v).map(([k, x]) => [k, dec(x)]))) : v;\nconst err = e => ({ name: e.name, code: e.code === undefined ? null : e.code, message: e.message, ctor: e.constructor.name });\nconst run = f => { try { return { value: f() }; } catch (e) { return { error: err(e) }; } };\nconst out = { node: { version: process.version, image: \"node:24.18.1-alpine\", openssl: process.versions.openssl } };\nconst d = k => { const x = Object.getOwnPropertyDescriptor(tls, k); return { e: x.enumerable, w: x.writable ?? null, c: x.configurable, get: typeof x.get, set: typeof x.set }; };\nout.keys = Object.keys(tls);\nout.descriptors = Object.fromEntries(out.keys.map(k => [k, d(k)]));\nout.functions = [\"checkServerIdentity\", \"getCACertificates\", \"setDefaultCACertificates\", \"getCiphers\", \"convertALPNProtocols\", \"createSecureContext\", \"SecureContext\"].map(k => [k, tls[k].name, tls[k].length]);\nout.constants = { CLIENT_RENEG_LIMIT: tls.CLIENT_RENEG_LIMIT, CLIENT_RENEG_WINDOW: tls.CLIENT_RENEG_WINDOW, DEFAULT_CIPHERS: tls.DEFAULT_CIPHERS, DEFAULT_ECDH_CURVE: tls.DEFAULT_ECDH_CURVE, DEFAULT_MIN_VERSION: tls.DEFAULT_MIN_VERSION, DEFAULT_MAX_VERSION: tls.DEFAULT_MAX_VERSION };\nout.ciphers = { list: tls.getCiphers(), same: tls.getCiphers() === tls.getCiphers(), frozen: Object.isFrozen(tls.getCiphers()) };\nconst C = (subject, subjectaltname) => ({ subject, subjectaltname });\nconst id = [\n  [\"a.com\", C({ CN: \"a.com\" })], [\"a.com\", C({ CN: \"b.com\" })], [\"A.COM\", C({ CN: \"a.com\" })], [\"a.com.\", C({ CN: \"a.com\" })], [\"a.com\", C({ CN: \"a.com.\" })], [\"a.com\", C({ CN: \"*.com\" })], [\"b.a.com\", C({ CN: \"*.a.com\" })], [\"a.com\", C({ CN: \"*.a.com\" })], [\"c.b.a.com\", C({ CN: \"*.a.com\" })], [\"b.a.com\", C({ CN: \"b*.a.com\" })], [\"bar.a.com\", C({ CN: \"b*r.a.com\" })], [\"bar.a.com\", C({ CN: \"*a*.a.com\" })], [\"b.a.com\", C({ CN: \"*b.a.com\" })], [\"xn--bcher-kva.a.com\", C({ CN: \"xn--*.a.com\" })], [\"xn--bcher-kva.a.com\", C({ CN: \"*.a.com\" })], [\"bücher.a.com\", C({ CN: \"*.a.com\" })], [\"bücher.com\", C({ CN: \"xn--bcher-kva.com\" })], [\"a.com\", C({ CN: \"ü.com\" })],\n  [\"a.com\", C({ CN: [\"b.com\", \"a.com\"] })], [\"a.com\", C({ CN: [\"b.com\", \"c.com\"] })], [\"a.com\", C({ CN: \"\" })], [\"a.com\", C({})], [\"a.com\", C(undefined)], [\"a.com\", C({ CN: \"b.com\" }, \"DNS:a.com\")], [\"a.com\", C({ CN: \"a.com\" }, \"DNS:b.com\")], [\"a.com\", C({ CN: \"a.com\" }, \"DNS:b.com, DNS:a.com\")], [\"b.a.com\", C({}, \"DNS:*.a.com, DNS:a.com\")], [\"a.com\", C({ CN: \"a.com\" }, \"IP Address:1.2.3.4\")], [\"a.com\", C({ CN: \"a.com\" }, \"URI:http://a.com\")], [\"a.com\", C({ CN: \"a.com\" }, \"email:x@a.com, DNS:c.com\")], [\"a.com\", C({}, \"DNS:a.com.\")], [\"a.com\", C({}, \"DNS:a..com\")], [\"a.com\", C({}, \"DNS:\")], [\"a.com\", C({}, \"DNS:a.com,DNS:b.com\")], [\"a.com\", C({}, \"DNS:b.com, DNS:\\\"a.com\\\"\")], [\"a.com\", C({}, \"DNS:\\\"a.c\\\\u006fm\\\"\")], [\"a,b.com\", C({}, \"DNS:\\\"a,b.com\\\", DNS:x\")], [\"a.com\", C({}, \"DNS:\\\"unterminated\")], [\"a b.com\", C({ CN: \"a b.com\" })], [\"a.com\", C({}, \"DNS:A.COM\")], [\"a.co.uk\", C({}, \"DNS:*.co.uk\")], [\"x.a.co.uk\", C({}, \"DNS:*.a.co.uk\")], [\"localhost\", C({ CN: \"localhost\" })], [\"localhost\", C({ CN: \"*\" })], [\"a\", C({ CN: \"*\" })],\n  [\"1.2.3.4\", C({ CN: \"1.2.3.4\" })], [\"1.2.3.4\", C({}, \"IP Address:1.2.3.4\")], [\"1.2.3.4\", C({}, \"IP Address:1.2.3.5, IP Address:8.8.8.8\")], [\"1.2.3.4\", C({}, \"DNS:1.2.3.4\")], [\"1.2.3.4.\", C({}, \"IP Address:1.2.3.4\")], [\"::1\", C({}, \"IP Address:0:0:0:0:0:0:0:1\")], [\"0:0:0:0:0:0:0:1\", C({}, \"IP Address:::1\")], [\"::ffff:1.2.3.4\", C({}, \"IP Address:::FFFF:102:304\")], [\"::1\", C({}, \"IP Address:::2\")], [\"[::1]\", C({}, \"IP Address:::1\")], [\"fe80::1%lo\", C({}, \"IP Address:fe80::1\")], [\"1.2.3.4\", C({}, \"IP Address:bogus, IP Address:1.2.3.4\")], [\"1.2.3.4\", C({}, \"IP Address:bogus\")], [\"127.1\", C({}, \"IP Address:127.0.0.1\")], [\"0x7f.0.0.1\", C({}, \"IP Address:127.0.0.1\")], [\"1.2.3.4\", C({}, \"IP Address:001.2.3.4\")],\n  [U, C({ CN: \"undefined\" })], [null, C({ CN: \"null\" })], [123, C({ CN: \"123\" })], [\"\", C({ CN: \"a.com\" })], [\".\", C({ CN: \"a.com\" })], [\"a_b.com\", C({ CN: \"a_b.com\" })], [\"A.com\", C({}, \"DNS:*.COM\")], [\"foo.example.com\", C({}, \"DNS:f*.example.com\")], [\"foo.example.com\", C({}, \"DNS:*o.example.com\")], [\"foo.example.com\", C({}, \"DNS:f*o.example.com\")], [\"foo.example.com\", C({}, \"DNS:fooo*.example.com\")], [\"sub.foo.example.com\", C({}, \"DNS:*.foo.example.com, DNS:foo.example.com\")],\n];\nout.identity = id.map(([host, cert]) => ({ host, cert: cert === undefined ? U : { subject: cert.subject === undefined ? U : cert.subject, subjectaltname: cert.subjectaltname === undefined ? U : cert.subjectaltname }, ...run(() => { const e = tls.checkServerIdentity(dec(host), cert); return e === undefined ? U : { isError: e instanceof Error, name: e.name, ctor: e.constructor.name, code: e.code, message: e.message, reason: e.reason, host: e.host, certSame: e.cert === cert, keys: Object.keys(e) }; }) }));\nout.identityLoose = [[\"a.com\"], [\"a.com\", null], [\"a.com\", 1], [\"a.com\", { subjectaltname: 5 }], [\"a.com\", { subject: { CN: 5 } }], [{ $: \"symbol\" }, {}]].map(a => ({ args: a, ...run(() => { const e = tls.checkServerIdentity(...a.map(dec)); return e === undefined ? U : { code: e.code, message: e.message }; }) }));\nconst alpn = [[[\"h2\", \"http/1.1\"]], [[]], [[\"a\"]], [[\"é\"]], [[\"x\".repeat(255)]], [[\"x\".repeat(256)]], [[\"a\", \"y\".repeat(300)]], [{ $: \"buffer\", hex: \"026832\" }], [{ $: \"u8\", hex: \"026832\" }], [{ $: \"u16\", v: [0x6802, 0x32] }], [{ $: \"dataview\", hex: \"026832\" }], [\"h2\"], [U], [null], [5], [{}], [[1]], [[\"\"]], [[\"a\", \"\"]]];\nout.alpn = alpn.map(a => ({ args: a, ...run(() => { const o = {}; const r = tls.convertALPNProtocols(dec(a[0]), o); return { returned: r === undefined ? U : r, keys: Object.keys(o), isBuffer: Buffer.isBuffer(o.ALPNProtocols), hex: o.ALPNProtocols ? o.ALPNProtocols.toString(\"hex\") : null }; }) }));\nout.alpnLoose = [run(() => tls.convertALPNProtocols([\"a\"])), run(() => tls.convertALPNProtocols([\"a\"], null)), run(() => tls.convertALPNProtocols(\"x\", null)), run(() => { const f = Object.freeze({}); tls.convertALPNProtocols([\"a\"], f); return Object.keys(f); })];\n// CA certificates\nconst roots = tls.rootCertificates;\nconst shape = l => ({ isArray: Array.isArray(l), frozen: Object.isFrozen(l), length: l.length, allStrings: l.every(x => typeof x === \"string\"), allPem: l.every(x => /^-----BEGIN CERTIFICATE-----\\n(?:[A-Za-z0-9+/]{64}\\n)*[A-Za-z0-9+/=]{1,64}\\n-----END CERTIFICATE-----$/.test(x)) });\nout.roots = { shape: shape(roots), same: tls.rootCertificates === roots, first: roots[0], assign: run(() => { \"use strict\"; tls.rootCertificates = []; return tls.rootCertificates === roots; }), push: run(() => roots.push(\"x\")) };\nout.ca = { default: shape(tls.getCACertificates()), defaultIsBundledContent: JSON.stringify(tls.getCACertificates()) === JSON.stringify(roots), defaultSameObject: tls.getCACertificates() === tls.getCACertificates(\"default\"), defaultIsRoots: tls.getCACertificates() === roots, bundledIsRoots: tls.getCACertificates(\"bundled\") === roots,\n  system: shape(tls.getCACertificates(\"system\")), systemSame: tls.getCACertificates(\"system\") === tls.getCACertificates(\"system\"), extra: shape(tls.getCACertificates(\"extra\")), extraSame: tls.getCACertificates(\"extra\") === tls.getCACertificates(\"extra\"),\n  loose: [U, null, 1, \"x\", \"Default\", \"\", {}].map(a => ({ arg: a, ...run(() => shape(tls.getCACertificates(dec(a))).length) })) };\nconst two = [roots[0], roots[1]];\nconst sets = [[[]], [two], [[roots[0], roots[0]]], [[roots[0] + \"\\n\" + roots[1]]], [[roots[2] + \"\\n\"]], [[\"\\n\\n\" + roots[2].replace(/\\n/g, \"\\r\\n\") + \"\\ntrailing\"]], [[{ $: \"pem-buffer\", i: 3 }]], [[{ $: \"pem-u8\", i: 3 }]], [[\"not a cert\"]], [[\"\"]], [[roots[0], 5]], [[null]], [\"x\"], [U], [null], [{}], [[roots[0], \"garbage\"]], [[roots[1].slice(0, 200)]]];\nconst decSet = a => a.map(x => Array.isArray(x) ? x.map(y => y && y.$ === \"pem-buffer\" ? Buffer.from(roots[y.i]) : y && y.$ === \"pem-u8\" ? new Uint8Array(Buffer.from(roots[y.i])) : y) : dec(x));\nout.setDefault = sets.map(a => ({ args: a.map(x => Array.isArray(x) ? x.map(y => typeof y === \"string\" ? y.replace(roots[0], \"<R0>\").replace(roots[1], \"<R1>\").replace(roots[2], \"<R2>\").replace(roots[2].replace(/\\n/g, \"\\r\\n\"), \"<R2CRLF>\").replace(roots[1].slice(0, 200), \"<R1CUT>\") : y) : x), ...run(() => { const r = tls.setDefaultCACertificates(...decSet(a)); const now = tls.getCACertificates(\"default\"); return { returned: r === undefined ? U : r, shape: shape(now), indexes: now.map(c => roots.indexOf(c)), same: tls.getCACertificates(\"default\") === now, bundledUnchanged: tls.getCACertificates(\"bundled\") === roots && tls.rootCertificates === roots }; }) }));\nout.rootsSample = [roots[0], roots[1], roots[2], roots[3]];\n// secure context\nconst sc = [[], [U], [null], [{}], [0], [\"x\"], [5], [[]], [{ minVersion: \"TLSv1.2\" }], [{ minVersion: \"TLSv1.4\" }], [{ maxVersion: \"x\" }], [{ minVersion: 5 }], [{ minVersion: \"TLSv1.3\", maxVersion: \"TLSv1.2\" }], [{ secureProtocol: \"TLSv1_2_method\" }], [{ secureProtocol: \"TLSv1_2_method\", minVersion: \"TLSv1.2\" }], [{ secureProtocol: \"TLSv1_2_method\", maxVersion: \"TLSv1.2\" }], [{ secureProtocol: \"bogus\" }], [{ secureOptions: 4 }], [{ secureOptions: \"4\" }], [{ secureOptions: 1.5 }], [{ ciphers: \"HIGH\" }], [{ ciphers: 5 }], [{ ciphers: null }], [{ ciphers: \"\" }], [{ ciphers: \"bogus-cipher\" }], [{ ca: \"x\" }], [{ ca: 5 }], [{ ca: [] }], [{ ca: [\"x\", 5] }], [{ ca: roots[0] }], [{ ca: [roots[0], Buffer.from(roots[1])] }], [{ cert: 5 }], [{ key: 5 }], [{ cert: \"x\" }], [{ key: \"x\" }], [{ ecdhCurve: 5 }], [{ ecdhCurve: \"auto\" }], [{ ecdhCurve: \"bogus\" }], [{ sigalgs: 5 }], [{ sigalgs: \"\" }], [{ passphrase: 5, key: \"x\" }], [{ crl: 5 }], [{ sessionIdContext: 5 }], [{ sessionTimeout: \"x\" }], [{ ticketKeys: \"x\" }], [{ dhparam: 5 }], [{ pfx: 5 }], [{ honorCipherOrder: true }], [{ unknownKey: 1 }], [{ allowPartialTrustChain: true }], [{ clientCertEngine: 5 }], [{ privateKeyIdentifier: 5 }]];\nout.secureContext = sc.map(a => ({ args: a.map(x => x && typeof x === \"object\" && !Array.isArray(x) ? Object.fromEntries(Object.entries(x).map(([k, v]) => [k, v === roots[0] ? \"<R0>\" : Array.isArray(v) && v[0] === roots[0] ? [\"<R0>\", \"<R1BUF>\"] : v])) : x === undefined ? U : x), ...run(() => { const c = tls.createSecureContext(...a); return { instance: c instanceof tls.SecureContext, ctor: c.constructor.name, keys: Object.keys(c), contextType: typeof c.context }; }) }));\nout.secureContextClass = { viaCall: run(() => tls.SecureContext() instanceof tls.SecureContext), viaNew: run(() => Object.keys(new tls.SecureContext())), conflict: run(() => new tls.SecureContext(\"TLSv1_2_method\", 0, \"TLSv1.2\")), protoKeys: Object.getOwnPropertyNames(tls.SecureContext.prototype) };\nout.recorder = fs.readFileSync(__filename, \"utf8\");\nprocess.stdout.write(JSON.stringify(out, null, 1));\n"
+}

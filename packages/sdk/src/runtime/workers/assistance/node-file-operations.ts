@@ -87,7 +87,9 @@ export function createFileOperations(cwd: () => string, asynchronous = false, co
     const source = text ? Buffer.from(buffer, bufferEncoding(length, "utf8") ?? "utf8") : binary(buffer);
     const begin = text ? 0 : number(offset ?? 0, source.length);
     const count = text ? source.length : number(length ?? source.length - begin, source.length - begin);
-    let cursor = positionValue(text ? offset ?? null : position), written = 0;
+    // For text the third argument is the position. Node takes anything that is not a number there to mean the
+    // current position; fs.writeSync(fd, text, "utf8"), as sonic-boom calls it, is such a call.
+    let cursor = positionValue(text ? (typeof offset === "number" || typeof offset === "bigint" ? offset : null) : position), written = 0;
     do {
       const bytes = new Uint8Array(source.subarray(begin + written, begin + Math.min(count, written + ASSISTANCE_LIMITS.chunk)));
       const result = yield* perform({ kind: "write", fd: descriptor(fd), bytes, offset: cursor });

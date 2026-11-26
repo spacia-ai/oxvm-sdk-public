@@ -1,0 +1,1842 @@
+{
+ "node": "v24.18.1",
+ "recorder": "// Re-records the cases of node-domain.controls.json from real Node:\n//   docker run --rm -v \"$PWD\":/w node:24.18.1-alpine node /w/record.cjs /w/node-domain.controls.json > new.json\n// (save this text as record.cjs next to a copy of the controls file). Each case runs in its own process; its body is\n// the text of a function (require, process, out, setTimeout, setInterval, clearInterval, setImmediate, queueMicrotask).\nconst { spawnSync } = require(\"node:child_process\");\nconst fs = require(\"node:fs\");\nconst controls = JSON.parse(fs.readFileSync(process.argv[2], \"utf8\"));\nconst parameters = [\"require\", \"process\", \"out\", \"setTimeout\", \"setInterval\", \"clearInterval\", \"setImmediate\", \"queueMicrotask\"];\nif (process.argv[3] !== undefined) {\n  const events = [];\n  // Node emits no 'exit' when the exception handler itself fails (exit code 7): such a case records no events.\n  process.on(\"exit\", () => { fs.writeSync(1, \"\\n@@\" + JSON.stringify(events) + \"\\n\"); });\n  const body = controls.cases.find((entry) => entry.name === process.argv[3]).body;\n  new Function(...parameters, controls.prelude + body)(require, process, (value) => { events.push(value); }, setTimeout, setInterval, clearInterval, setImmediate, queueMicrotask);\n} else {\n  const cases = controls.cases.map(({ name, body }) => {\n    const child = spawnSync(process.execPath, [__filename, process.argv[2], name], { encoding: \"utf8\" });\n    const marker = child.stdout.lastIndexOf(\"\\n@@\");\n    const first = child.stderr.split(\"\\n\").find((line) => /^[A-Za-z]*Error( \\[\\w+\\])?: /.test(line)) ?? null;\n    return { name, body, code: child.status, events: marker === -1 ? null : JSON.parse(child.stdout.slice(marker + 3)), stderr: first };\n  });\n  console.log(JSON.stringify({ node: process.version, recorder: fs.readFileSync(__filename, \"utf8\"), prelude: controls.prelude, cases }, null, 1));\n}\n",
+ "prelude": "\nconst desc = (o, k) => { const d = Object.getOwnPropertyDescriptor(o, k); return d === undefined ? null : { e: d.enumerable, c: d.configurable, w: d.writable === undefined ? null : d.writable, get: typeof d.get, set: typeof d.set }; };\nconst fail = (f) => { try { return { value: f() }; } catch (e) { return { error: { name: e && e.name, code: e && e.code === undefined ? null : e.code, message: e && e.message, ctor: e && e.constructor && e.constructor.name } }; } };\nconst show = (v) => v === undefined ? \"undefined\" : v === null ? \"null\" : typeof v;\n",
+ "cases": [
+  {
+   "name": "module shape",
+   "body": "\nconst domain = require('domain'); const events = require('events');\nout(Object.keys(domain)); out(desc(domain, 'active')); out(desc(domain, '_stack')); out(desc(domain, 'Domain'));\nout([show(domain.active), Array.isArray(domain._stack), domain._stack.length, domain.create === domain.createDomain, domain.create.name, domain.create.length]);\nout([domain.Domain.name, domain.Domain.length, typeof domain.Domain, Object.getPrototypeOf(domain.Domain) === events, Object.getPrototypeOf(domain.Domain.prototype) === events.prototype]);\nout(Object.getOwnPropertyNames(domain.Domain.prototype).map(k => [k, typeof domain.Domain.prototype[k], typeof domain.Domain.prototype[k] === 'function' ? domain.Domain.prototype[k].name : null, typeof domain.Domain.prototype[k] === 'function' ? domain.Domain.prototype[k].length : null, desc(domain.Domain.prototype, k)]));\nout(fail(() => domain.Domain()));\nout([events.usingDomains, desc(events, 'usingDomains')]);\nout([desc(process, 'domain'), show(process.domain), process.hasUncaughtExceptionCaptureCallback()]);\nconst pd = Object.getOwnPropertyDescriptor(process, 'domain'); out([pd.get.name, pd.set.name, pd.get.length, pd.set.length]);\nout(require('domain') === domain);\n",
+   "code": 0,
+   "events": [
+    [
+     "_stack",
+     "Domain",
+     "createDomain",
+     "create",
+     "active"
+    ],
+    {
+     "e": true,
+     "c": true,
+     "w": true,
+     "get": "undefined",
+     "set": "undefined"
+    },
+    {
+     "e": true,
+     "c": true,
+     "w": true,
+     "get": "undefined",
+     "set": "undefined"
+    },
+    {
+     "e": true,
+     "c": true,
+     "w": true,
+     "get": "undefined",
+     "set": "undefined"
+    },
+    [
+     "null",
+     true,
+     0,
+     true,
+     "createDomain",
+     0
+    ],
+    [
+     "Domain",
+     0,
+     "function",
+     true,
+     true
+    ],
+    [
+     [
+      "constructor",
+      "function",
+      "Domain",
+      0,
+      {
+       "e": false,
+       "c": true,
+       "w": true,
+       "get": "undefined",
+       "set": "undefined"
+      }
+     ],
+     [
+      "members",
+      "undefined",
+      null,
+      null,
+      {
+       "e": true,
+       "c": true,
+       "w": true,
+       "get": "undefined",
+       "set": "undefined"
+      }
+     ],
+     [
+      "_errorHandler",
+      "function",
+      "",
+      1,
+      {
+       "e": true,
+       "c": true,
+       "w": true,
+       "get": "undefined",
+       "set": "undefined"
+      }
+     ],
+     [
+      "enter",
+      "function",
+      "",
+      0,
+      {
+       "e": true,
+       "c": true,
+       "w": true,
+       "get": "undefined",
+       "set": "undefined"
+      }
+     ],
+     [
+      "exit",
+      "function",
+      "",
+      0,
+      {
+       "e": true,
+       "c": true,
+       "w": true,
+       "get": "undefined",
+       "set": "undefined"
+      }
+     ],
+     [
+      "add",
+      "function",
+      "",
+      1,
+      {
+       "e": true,
+       "c": true,
+       "w": true,
+       "get": "undefined",
+       "set": "undefined"
+      }
+     ],
+     [
+      "remove",
+      "function",
+      "",
+      1,
+      {
+       "e": true,
+       "c": true,
+       "w": true,
+       "get": "undefined",
+       "set": "undefined"
+      }
+     ],
+     [
+      "run",
+      "function",
+      "",
+      1,
+      {
+       "e": true,
+       "c": true,
+       "w": true,
+       "get": "undefined",
+       "set": "undefined"
+      }
+     ],
+     [
+      "intercept",
+      "function",
+      "",
+      1,
+      {
+       "e": true,
+       "c": true,
+       "w": true,
+       "get": "undefined",
+       "set": "undefined"
+      }
+     ],
+     [
+      "bind",
+      "function",
+      "",
+      1,
+      {
+       "e": true,
+       "c": true,
+       "w": true,
+       "get": "undefined",
+       "set": "undefined"
+      }
+     ]
+    ],
+    {
+     "error": {
+      "name": "TypeError",
+      "code": null,
+      "message": "Class constructor Domain cannot be invoked without 'new'",
+      "ctor": "TypeError"
+     }
+    },
+    [
+     true,
+     {
+      "e": true,
+      "c": true,
+      "w": true,
+      "get": "undefined",
+      "set": "undefined"
+     }
+    ],
+    [
+     {
+      "e": true,
+      "c": true,
+      "w": null,
+      "get": "function",
+      "set": "function"
+     },
+     "null",
+     false
+    ],
+    [
+     "get",
+     "set",
+     0,
+     1
+    ],
+    true
+   ],
+   "stderr": null
+  },
+  {
+   "name": "domain instance",
+   "body": "\nconst domain = require('domain'); const events = require('events');\nconst d = domain.create();\nout([d instanceof domain.Domain, d instanceof events, d.constructor === domain.Domain, Object.keys(d), desc(d, 'members'), d.members.length, desc(d, 'domain'), show(d.domain)]);\nout([typeof d.dispose, 'dispose' in d, 'dispose' in domain.Domain.prototype, d.listenerCount('error'), d.listenerCount('newListener'), d.listenerCount('removeListener')]);\nout([d.listeners('newListener')[0].name, d.listeners('newListener')[0] === d.listeners('removeListener')[0]]);\nout(new domain.Domain() instanceof domain.Domain);\n",
+   "code": 0,
+   "events": [
+    [
+     true,
+     true,
+     true,
+     [
+      "_events",
+      "_eventsCount",
+      "_maxListeners",
+      "members"
+     ],
+     {
+      "e": true,
+      "c": true,
+      "w": true,
+      "get": "undefined",
+      "set": "undefined"
+     },
+     0,
+     {
+      "e": false,
+      "c": true,
+      "w": true,
+      "get": "undefined",
+      "set": "undefined"
+     },
+     "null"
+    ],
+    [
+     "undefined",
+     false,
+     false,
+     0,
+     1,
+     1
+    ],
+    [
+     "updateExceptionCapture",
+     true
+    ],
+    true
+   ],
+   "stderr": null
+  },
+  {
+   "name": "run passes arguments and returns",
+   "body": "\nconst domain = require('domain'); const d = domain.create();\nout([show(process.domain), show(domain.active), domain._stack.length]);\nconst r = d.run(function (a, b) { out([a, b, this === d, process.domain === d, domain.active === d, domain._stack.length, domain._stack[0] === d, arguments.length]); return 7; }, 1, 2);\nout([r, show(process.domain), show(domain.active), domain._stack.length]);\nout(fail(() => d.run()));\nout([show(process.domain), domain._stack.length]); d.exit();\nfor (const v of [5, 'text', null, {}, true, Symbol('s'), 10n]) { out(fail(() => d.run(v))); d.exit(); }\n",
+   "code": 0,
+   "events": [
+    [
+     "null",
+     "null",
+     0
+    ],
+    [
+     1,
+     2,
+     true,
+     true,
+     true,
+     1,
+     true,
+     2
+    ],
+    [
+     7,
+     "undefined",
+     "undefined",
+     0
+    ],
+    {
+     "error": {
+      "name": "TypeError",
+      "code": null,
+      "message": "Function.prototype.apply was called on undefined, which is a undefined and not a function",
+      "ctor": "TypeError"
+     }
+    },
+    [
+     "object",
+     1
+    ],
+    {
+     "error": {
+      "name": "TypeError",
+      "code": null,
+      "message": "Function.prototype.apply was called on 5, which is a number and not a function",
+      "ctor": "TypeError"
+     }
+    },
+    {
+     "error": {
+      "name": "TypeError",
+      "code": null,
+      "message": "Function.prototype.apply was called on text, which is a string and not a function",
+      "ctor": "TypeError"
+     }
+    },
+    {
+     "error": {
+      "name": "TypeError",
+      "code": null,
+      "message": "Function.prototype.apply was called on null, which is null and not a function",
+      "ctor": "TypeError"
+     }
+    },
+    {
+     "error": {
+      "name": "TypeError",
+      "code": null,
+      "message": "Function.prototype.apply was called on #<Object>, which is an object and not a function",
+      "ctor": "TypeError"
+     }
+    },
+    {
+     "error": {
+      "name": "TypeError",
+      "code": null,
+      "message": "Function.prototype.apply was called on true, which is a boolean and not a function",
+      "ctor": "TypeError"
+     }
+    },
+    {
+     "error": {
+      "name": "TypeError",
+      "code": null,
+      "message": "Function.prototype.apply was called on Symbol(s), which is a symbol and not a function",
+      "ctor": "TypeError"
+     }
+    },
+    {
+     "error": {
+      "name": "TypeError",
+      "code": null,
+      "message": "Function.prototype.apply was called on 10, which is a bigint and not a function",
+      "ctor": "TypeError"
+     }
+    }
+   ],
+   "stderr": null
+  },
+  {
+   "name": "run does not exit when the function throws",
+   "body": "\nconst domain = require('domain'); const d = domain.create();\ntry { d.run(() => { throw new Error('inside'); }); } catch (e) { out([e.message, 'domain' in e, e.domainThrown === undefined]); }\nout([process.domain === d, domain.active === d, domain._stack.length]);\nd.exit(); out([show(process.domain), show(domain.active), domain._stack.length]);\n",
+   "code": 0,
+   "events": [
+    [
+     "inside",
+     false,
+     true
+    ],
+    [
+     true,
+     true,
+     1
+    ],
+    [
+     "undefined",
+     "undefined",
+     0
+    ]
+   ],
+   "stderr": null
+  },
+  {
+   "name": "nested run and the stack",
+   "body": "\nconst domain = require('domain'); const d1 = domain.create(), d2 = domain.create();\nconst stack = domain._stack;\nd1.run(() => { out([process.domain === d1, domain._stack.length]);\n  d2.run(() => { out([process.domain === d2, domain.active === d2, domain._stack.length, domain._stack[0] === d1, domain._stack[1] === d2, domain._stack === stack]); });\n  out([process.domain === d1, domain.active === d1, domain._stack.length]);\n  d1.run(() => { out([domain._stack.length, domain._stack[0] === domain._stack[1]]); });\n  out([process.domain === d1, domain._stack.length]);\n});\nout([show(process.domain), show(domain.active), domain._stack.length, domain._stack === stack]);\n",
+   "code": 0,
+   "events": [
+    [
+     true,
+     1
+    ],
+    [
+     true,
+     true,
+     2,
+     true,
+     true,
+     true
+    ],
+    [
+     true,
+     true,
+     1
+    ],
+    [
+     2,
+     true
+    ],
+    [
+     true,
+     1
+    ],
+    [
+     "undefined",
+     "undefined",
+     0,
+     true
+    ]
+   ],
+   "stderr": null
+  },
+  {
+   "name": "enter and exit",
+   "body": "\nconst domain = require('domain'); const d1 = domain.create(), d2 = domain.create(), d3 = domain.create();\nout([show(d1.enter()), process.domain === d1, domain._stack.length]);\nd2.enter(); d3.enter(); out([process.domain === d3, domain._stack.length]);\nout([show(d2.exit()), process.domain === d1, domain.active === d1, domain._stack.length]);\nd3.exit(); out([process.domain === d1, domain._stack.length]);\nd1.enter(); d1.enter(); out(domain._stack.length); d1.exit(); out([domain._stack.length, process.domain === d1]);\nd2.enter(); d1.exit(); out([domain._stack.length, process.domain === d1, domain._stack[0] === d1, domain._stack[1] === d1]);\nd1.exit(); d1.exit(); out([domain._stack.length, show(process.domain), show(domain.active)]);\nd1.exit(); out([domain._stack.length, show(process.domain), show(domain.active)]);\n",
+   "code": 0,
+   "events": [
+    [
+     "undefined",
+     true,
+     1
+    ],
+    [
+     true,
+     3
+    ],
+    [
+     "undefined",
+     true,
+     true,
+     1
+    ],
+    [
+     true,
+     1
+    ],
+    3,
+    [
+     2,
+     true
+    ],
+    [
+     1,
+     true,
+     true,
+     false
+    ],
+    [
+     0,
+     "undefined",
+     "undefined"
+    ],
+    [
+     0,
+     "undefined",
+     "undefined"
+    ]
+   ],
+   "stderr": null
+  },
+  {
+   "name": "assigning process.domain and active",
+   "body": "\nconst domain = require('domain'); const d = domain.create();\nprocess.domain = d; out([process.domain === d, show(domain.active), domain._stack.length]);\nprocess.domain = null; domain.active = d; out([show(process.domain), domain.active === d]);\ndomain.active = null; domain._stack = []; out([Array.isArray(domain._stack)]);\nd.enter(); out([domain._stack.length, process.domain === d]); d.exit(); out(show(process.domain));\n",
+   "code": 0,
+   "events": [
+    [
+     true,
+     "null",
+     0
+    ],
+    [
+     "null",
+     true
+    ],
+    [
+     true
+    ],
+    [
+     0,
+     true
+    ],
+    "undefined"
+   ],
+   "stderr": null
+  },
+  {
+   "name": "bind",
+   "body": "\nconst domain = require('domain'); const d = domain.create();\nconst cb = function (x, y) { return [this.tag, x, y, process.domain === d, domain._stack.length, arguments.length]; };\nconst b = d.bind(cb);\nout([b.name, b.length, desc(b, 'domain'), b.domain === d, b !== cb]);\nout(b.call({ tag: 't' }, 5, 6)); out([show(process.domain), domain._stack.length]);\ntry { d.bind(() => { throw new Error('bound threw'); })(); } catch (e) { out([e.message, 'domain' in e, process.domain === d, domain._stack.length]); }\nd.exit();\nout(fail(() => d.bind(undefined)())); d.exit();\nout(fail(() => d.bind()().x));\n",
+   "code": 0,
+   "events": [
+    [
+     "runBound",
+     0,
+     {
+      "e": false,
+      "c": true,
+      "w": true,
+      "get": "undefined",
+      "set": "undefined"
+     },
+     true,
+     true
+    ],
+    [
+     "t",
+     5,
+     6,
+     true,
+     1,
+     2
+    ],
+    [
+     "undefined",
+     0
+    ],
+    [
+     "bound threw",
+     false,
+     true,
+     1
+    ],
+    {
+     "error": {
+      "name": "TypeError",
+      "code": null,
+      "message": "Function.prototype.apply was called on undefined, which is a undefined and not a function",
+      "ctor": "TypeError"
+     }
+    },
+    {
+     "error": {
+      "name": "TypeError",
+      "code": null,
+      "message": "Function.prototype.apply was called on undefined, which is a undefined and not a function",
+      "ctor": "TypeError"
+     }
+    }
+   ],
+   "stderr": null
+  },
+  {
+   "name": "intercept",
+   "body": "\nconst domain = require('domain'); const d = domain.create(); const seen = [];\nd.on('error', (er) => { seen.push(er); out(['error', er.message, er.domainBound === cb, er.domainThrown, er.domain === d, desc(er, 'domain'), desc(er, 'domainBound'), desc(er, 'domainThrown'), Object.keys(er), show(process.domain), domain._stack.length]); });\nconst cb = function (a, b) { return [this.tag, a, b, process.domain === d, arguments.length]; };\nconst i = d.intercept(cb);\nout([i.name, i.length, 'domain' in i]);\nout(i.call({ tag: 't' }, null, 1, 2));\nout(show(i.call({ tag: 't' }, new Error('first'), 1, 2)));\nout(i.call({ tag: 't' }, 'not an error', 1, 2));\nout(i.call({ tag: 't' }, { message: 'error-like' }, 3));\nout(i.call({ tag: 't' }));\nclass Mine extends TypeError {} out(show(i(new Mine('sub'))));\nout(seen.length);\n",
+   "code": 0,
+   "events": [
+    [
+     "runIntercepted",
+     0,
+     false
+    ],
+    [
+     "t",
+     1,
+     2,
+     true,
+     2
+    ],
+    [
+     "error",
+     "first",
+     true,
+     false,
+     true,
+     {
+      "e": false,
+      "c": true,
+      "w": true,
+      "get": "undefined",
+      "set": "undefined"
+     },
+     {
+      "e": true,
+      "c": true,
+      "w": true,
+      "get": "undefined",
+      "set": "undefined"
+     },
+     {
+      "e": true,
+      "c": true,
+      "w": true,
+      "get": "undefined",
+      "set": "undefined"
+     },
+     [
+      "domainBound",
+      "domainThrown"
+     ],
+     "undefined",
+     0
+    ],
+    "undefined",
+    [
+     "t",
+     1,
+     2,
+     true,
+     2
+    ],
+    [
+     "t",
+     3,
+     null,
+     true,
+     1
+    ],
+    [
+     "t",
+     null,
+     null,
+     true,
+     0
+    ],
+    [
+     "error",
+     "sub",
+     true,
+     false,
+     true,
+     {
+      "e": false,
+      "c": true,
+      "w": true,
+      "get": "undefined",
+      "set": "undefined"
+     },
+     {
+      "e": true,
+      "c": true,
+      "w": true,
+      "get": "undefined",
+      "set": "undefined"
+     },
+     {
+      "e": true,
+      "c": true,
+      "w": true,
+      "get": "undefined",
+      "set": "undefined"
+     },
+     [
+      "domainBound",
+      "domainThrown"
+     ],
+     "undefined",
+     0
+    ],
+    "undefined",
+    2
+   ],
+   "stderr": null
+  },
+  {
+   "name": "intercept without an error listener",
+   "body": "\nconst domain = require('domain'); const d = domain.create();\nconst i = d.intercept(() => 'called');\nconst er = new Error('nobody listens');\ntry { i(er); } catch (e) { out([e === er, e.domainThrown, e.domain === d, typeof e.domainBound, show(process.domain), domain._stack.length]); }\n",
+   "code": 0,
+   "events": [
+    [
+     true,
+     false,
+     true,
+     "function",
+     "null",
+     0
+    ]
+   ],
+   "stderr": null
+  },
+  {
+   "name": "implicit binding",
+   "body": "\nconst domain = require('domain'); const EventEmitter = require('events'); const d = domain.create();\nconst before = new EventEmitter();\nout([desc(before, 'domain'), show(before.domain), Object.keys(before)]);\nlet inside, sub, inner;\nclass Sub extends EventEmitter {}\nd.run(() => { inside = new EventEmitter(); sub = new Sub(); inner = domain.create(); });\nout([inside.domain === d, desc(inside, 'domain'), sub.domain === d, show(inner.domain), d.members.length, Object.keys(inside)]);\nconst after = new EventEmitter(); out(show(after.domain));\nfunction Legacy() { EventEmitter.call(this); } Legacy.prototype = Object.create(EventEmitter.prototype);\nd.run(() => { out(new Legacy().domain === d); });\n",
+   "code": 0,
+   "events": [
+    [
+     {
+      "e": false,
+      "c": true,
+      "w": true,
+      "get": "undefined",
+      "set": "undefined"
+     },
+     "null",
+     [
+      "_events",
+      "_eventsCount",
+      "_maxListeners"
+     ]
+    ],
+    [
+     true,
+     {
+      "e": false,
+      "c": true,
+      "w": true,
+      "get": "undefined",
+      "set": "undefined"
+     },
+     true,
+     "null",
+     0,
+     [
+      "_events",
+      "_eventsCount",
+      "_maxListeners"
+     ]
+    ],
+    "null",
+    true
+   ],
+   "stderr": null
+  },
+  {
+   "name": "add and remove",
+   "body": "\nconst domain = require('domain'); const EventEmitter = require('events'); const d = domain.create(), d2 = domain.create();\nconst e = new EventEmitter();\nout([show(d.add(e)), e.domain === d, desc(e, 'domain'), d.members.length, d.members[0] === e]);\nd.add(e); out(d.members.length);\nd2.add(e); out([e.domain === d2, d.members.length, d2.members.length]);\nout([show(d2.remove(e)), show(e.domain), d2.members.length, desc(e, 'domain')]);\nd2.remove(e); out(d2.members.length);\nconst plain = {}; d.add(plain); out([plain.domain === d, desc(plain, 'domain'), d.members.length]);\nd.remove(plain); out([show(plain.domain), d.members.length]);\nd.add(d2); out([d2.domain === d, d.members.length]); d2.add(d); out([show(d.domain), d2.members.length]);\nout(fail(() => d.add(null))); out(fail(() => d.remove(undefined)));\n",
+   "code": 0,
+   "events": [
+    [
+     "undefined",
+     true,
+     {
+      "e": false,
+      "c": true,
+      "w": true,
+      "get": "undefined",
+      "set": "undefined"
+     },
+     1,
+     true
+    ],
+    1,
+    [
+     true,
+     0,
+     1
+    ],
+    [
+     "undefined",
+     "null",
+     0,
+     {
+      "e": false,
+      "c": true,
+      "w": true,
+      "get": "undefined",
+      "set": "undefined"
+     }
+    ],
+    0,
+    [
+     true,
+     {
+      "e": false,
+      "c": true,
+      "w": true,
+      "get": "undefined",
+      "set": "undefined"
+     },
+     1
+    ],
+    [
+     "null",
+     0
+    ],
+    [
+     true,
+     1
+    ],
+    [
+     "null",
+     0
+    ],
+    {
+     "error": {
+      "name": "TypeError",
+      "code": null,
+      "message": "Cannot read properties of null (reading 'domain')",
+      "ctor": "TypeError"
+     }
+    },
+    {
+     "error": {
+      "name": "TypeError",
+      "code": null,
+      "message": "Cannot set properties of undefined (setting 'domain')",
+      "ctor": "TypeError"
+     }
+    }
+   ],
+   "stderr": null
+  },
+  {
+   "name": "emitter error goes to its domain",
+   "body": "\nconst domain = require('domain'); const EventEmitter = require('events'); const d = domain.create();\nconst e = new EventEmitter(); d.add(e); const er = new Error('emitted');\nd.on('error', (got) => { out(['domain error', got === er, got.domainEmitter === e, got.domain === d, got.domainThrown, desc(got, 'domainEmitter'), desc(got, 'domain'), desc(got, 'domainThrown'), Object.keys(got), show(process.domain), domain._stack.length]); });\nout(e.emit('error', er)); out([show(process.domain), domain._stack.length]);\nd.run(() => { const stack = domain._stack; out(e.emit('error', new Error('inside run'))); out([process.domain === d, domain._stack.length, domain._stack === stack]); });\n",
+   "code": 0,
+   "events": [
+    [
+     "domain error",
+     true,
+     true,
+     true,
+     false,
+     {
+      "e": true,
+      "c": true,
+      "w": true,
+      "get": "undefined",
+      "set": "undefined"
+     },
+     {
+      "e": false,
+      "c": true,
+      "w": true,
+      "get": "undefined",
+      "set": "undefined"
+     },
+     {
+      "e": true,
+      "c": true,
+      "w": true,
+      "get": "undefined",
+      "set": "undefined"
+     },
+     [
+      "domainEmitter",
+      "domainThrown"
+     ],
+     "null",
+     0
+    ],
+    false,
+    [
+     "null",
+     0
+    ],
+    [
+     "domain error",
+     false,
+     true,
+     true,
+     false,
+     {
+      "e": true,
+      "c": true,
+      "w": true,
+      "get": "undefined",
+      "set": "undefined"
+     },
+     {
+      "e": false,
+      "c": true,
+      "w": true,
+      "get": "undefined",
+      "set": "undefined"
+     },
+     {
+      "e": true,
+      "c": true,
+      "w": true,
+      "get": "undefined",
+      "set": "undefined"
+     },
+     [
+      "domainEmitter",
+      "domainThrown"
+     ],
+     "null",
+     0
+    ],
+    false,
+    [
+     true,
+     1,
+     false
+    ]
+   ],
+   "stderr": null
+  },
+  {
+   "name": "emitter with its own error listener",
+   "body": "\nconst domain = require('domain'); const EventEmitter = require('events'); const d = domain.create();\nconst e = new EventEmitter(); d.add(e); const er = new Error('own');\nd.on('error', () => out('domain error'));\ne.on('error', (got) => out(['own listener', got === er, 'domain' in got, 'domainEmitter' in got, show(process.domain), domain._stack.length]));\nout(e.emit('error', er));\n",
+   "code": 0,
+   "events": [
+    [
+     "own listener",
+     true,
+     false,
+     false,
+     "null",
+     0
+    ],
+    true
+   ],
+   "stderr": null
+  },
+  {
+   "name": "emitter error values",
+   "body": "\nconst domain = require('domain'); const EventEmitter = require('events'); const d = domain.create();\nconst e = new EventEmitter(); d.add(e);\nd.on('error', (got) => out([typeof got, got instanceof Error ? [got.name, got.code === undefined ? null : got.code, got.message, got.domainEmitter === e, got.domainThrown] : typeof got === 'object' ? [got.domainEmitter === e, got.domainThrown, Object.keys(got)] : got]));\nout(e.emit('error')); out(e.emit('error', 'text')); out(e.emit('error', 0)); out(e.emit('error', null)); out(e.emit('error', { plain: true })); out(e.emit('error', 42, 'more'));\n",
+   "code": 0,
+   "events": [
+    [
+     "object",
+     [
+      "Error",
+      "ERR_UNHANDLED_ERROR",
+      "Unhandled error.",
+      true,
+      false
+     ]
+    ],
+    false,
+    [
+     "string",
+     "text"
+    ],
+    false,
+    [
+     "object",
+     [
+      "Error",
+      "ERR_UNHANDLED_ERROR",
+      "Unhandled error.",
+      true,
+      false
+     ]
+    ],
+    false,
+    [
+     "object",
+     [
+      "Error",
+      "ERR_UNHANDLED_ERROR",
+      "Unhandled error.",
+      true,
+      false
+     ]
+    ],
+    false,
+    [
+     "object",
+     [
+      true,
+      false,
+      [
+       "plain",
+       "domainEmitter",
+       "domainThrown"
+      ]
+     ]
+    ],
+    false,
+    [
+     "number",
+     42
+    ],
+    false
+   ],
+   "stderr": null
+  },
+  {
+   "name": "emitter error without a domain listener",
+   "body": "\nconst domain = require('domain'); const EventEmitter = require('events'); const d = domain.create();\nconst e = new EventEmitter(); d.add(e); const er = new Error('unheard');\ntry { e.emit('error', er); } catch (got) { out([got === er, got.domainEmitter === e, got.domain === d, got.domainThrown, show(process.domain), domain._stack.length]); }\nd.run(() => { try { e.emit('error', new Error('again')); } catch (got) { out([got.message, show(process.domain), domain._stack.length]); } });\nout([show(process.domain), domain._stack.length]);\n",
+   "code": 0,
+   "events": [
+    [
+     true,
+     true,
+     true,
+     false,
+     "null",
+     0
+    ],
+    [
+     "again",
+     "null",
+     0
+    ],
+    [
+     "null",
+     0
+    ]
+   ],
+   "stderr": null
+  },
+  {
+   "name": "emitter events enter the domain",
+   "body": "\nconst domain = require('domain'); const EventEmitter = require('events'); const d = domain.create();\nconst e = new EventEmitter(); d.add(e);\ne.on('data', (a, b) => out(['listener', a, b, process.domain === d, domain.active === d, domain._stack.length]));\nout([e.emit('data', 1, 2), e.emit('nothing'), show(process.domain), domain._stack.length]);\nconst free = new EventEmitter(); free.on('data', () => out(['free', show(process.domain)])); free.emit('data');\nout([EventEmitter.prototype.emit.name, EventEmitter.prototype.emit.length, EventEmitter.init.name, EventEmitter.init.length]);\ne.on('boom', () => { throw new Error('listener threw'); });\ntry { e.emit('boom'); } catch (er) { out([er.message, 'domain' in er, process.domain === d, domain._stack.length]); }\n",
+   "code": 0,
+   "events": [
+    [
+     "listener",
+     1,
+     2,
+     true,
+     true,
+     1
+    ],
+    [
+     true,
+     false,
+     "undefined",
+     0
+    ],
+    [
+     "free",
+     "undefined"
+    ],
+    [
+     "emit",
+     0,
+     "",
+     1
+    ],
+    [
+     "listener threw",
+     false,
+     true,
+     1
+    ]
+   ],
+   "stderr": null
+  },
+  {
+   "name": "timer error reaches the domain",
+   "body": "\nconst domain = require('domain'); const d = domain.create();\nd.on('error', (er) => { out(['error', er.message, er.domain === d, er.domainThrown, desc(er, 'domain'), desc(er, 'domainThrown'), Object.keys(er), show(process.domain), show(domain.active), domain._stack.length, process.hasUncaughtExceptionCaptureCallback()]); });\nd.run(() => { setTimeout(() => { out(['timer', process.domain === d, domain._stack.length, process.hasUncaughtExceptionCaptureCallback()]); throw new Error('x'); }, 1); });\nout(['after run', show(process.domain), process.hasUncaughtExceptionCaptureCallback()]);\nsetTimeout(() => out(['later', show(process.domain), domain._stack.length, process.hasUncaughtExceptionCaptureCallback()]), 30);\n",
+   "code": 0,
+   "events": [
+    [
+     "after run",
+     "undefined",
+     false
+    ],
+    [
+     "timer",
+     true,
+     1,
+     true
+    ],
+    [
+     "error",
+     "x",
+     true,
+     true,
+     {
+      "e": false,
+      "c": true,
+      "w": true,
+      "get": "undefined",
+      "set": "undefined"
+     },
+     {
+      "e": true,
+      "c": true,
+      "w": true,
+      "get": "undefined",
+      "set": "undefined"
+     },
+     [
+      "domainThrown"
+     ],
+     "undefined",
+     "undefined",
+     0,
+     false
+    ],
+    [
+     "later",
+     "null",
+     0,
+     false
+    ]
+   ],
+   "stderr": null
+  },
+  {
+   "name": "timer handle and arguments",
+   "body": "\nconst domain = require('domain'); const d = domain.create();\nlet t; d.run(() => { t = setTimeout(function (a) { out(['timer', a, process.domain === d, this === t]); }, 1, 'arg'); });\nout([t.domain === d, desc(t, 'domain')]);\nconst free = setTimeout(() => out(['free', show(process.domain)]), 50); out('domain' in free);\nlet n = 0; d.run(() => { const i = setInterval(() => { out(['interval', process.domain === d]); if (++n === 2) clearInterval(i); }, 2); });\n",
+   "code": 0,
+   "events": [
+    [
+     true,
+     {
+      "e": false,
+      "c": true,
+      "w": true,
+      "get": "undefined",
+      "set": "undefined"
+     }
+    ],
+    false,
+    [
+     "timer",
+     "arg",
+     true,
+     true
+    ],
+    [
+     "interval",
+     true
+    ],
+    [
+     "interval",
+     true
+    ],
+    [
+     "free",
+     "undefined"
+    ]
+   ],
+   "stderr": null
+  },
+  {
+   "name": "nextTick error reaches the domain",
+   "body": "\nconst domain = require('domain'); const d = domain.create();\nd.on('error', (er) => out(['error', er.message, er.domain === d, er.domainThrown, show(process.domain), domain._stack.length]));\nd.run(() => { process.nextTick((a) => { out(['tick', a, process.domain === d, domain._stack.length]); throw new Error('tick'); }, 'arg'); });\nprocess.nextTick(() => out(['free tick', show(process.domain)]));\n",
+   "code": 0,
+   "events": [
+    [
+     "tick",
+     "arg",
+     true,
+     1
+    ],
+    [
+     "error",
+     "tick",
+     true,
+     true,
+     "undefined",
+     0
+    ],
+    [
+     "free tick",
+     "null"
+    ]
+   ],
+   "stderr": null
+  },
+  {
+   "name": "setImmediate error reaches the domain",
+   "body": "\nconst domain = require('domain'); const d = domain.create();\nd.on('error', (er) => out(['error', er.message, er.domain === d, er.domainThrown, show(process.domain), domain._stack.length]));\nd.run(() => { setImmediate((a) => { out(['immediate', a, process.domain === d]); throw new Error('immediate'); }, 'arg'); });\nsetImmediate(() => out(['free immediate', show(process.domain)]));\n",
+   "code": 0,
+   "events": [
+    [
+     "immediate",
+     "arg",
+     true
+    ],
+    [
+     "error",
+     "immediate",
+     true,
+     true,
+     "undefined",
+     0
+    ],
+    [
+     "free immediate",
+     "null"
+    ]
+   ],
+   "stderr": null
+  },
+  {
+   "name": "queueMicrotask error reaches the domain",
+   "body": "\nconst domain = require('domain'); const d = domain.create();\nd.on('error', (er) => out(['error', er.message, er.domain === d, er.domainThrown, show(process.domain), domain._stack.length]));\nd.run(() => { queueMicrotask(() => { out(['microtask', process.domain === d]); throw new Error('microtask'); }); });\n",
+   "code": 1,
+   "events": [
+    [
+     "microtask",
+     true
+    ]
+   ],
+   "stderr": "Error: microtask"
+  },
+  {
+   "name": "promise reactions run in the domain",
+   "body": "\nconst domain = require('domain'); const d = domain.create();\nlet p; d.run(() => { p = Promise.resolve(1); p.then((v) => { out(['then', v, process.domain === d, domain._stack.length]); return 2; }).then((v) => out(['chained', v, process.domain === d])); });\nout([p.domain === d, desc(p, 'domain'), 'domain' in Promise.resolve(2)]);\np.then(() => out(['outside then', show(process.domain)]));\nconst free = Promise.resolve(3); d.run(() => { free.then(() => out(['free promise, then in run', process.domain === d])); });\n",
+   "code": 0,
+   "events": [
+    [
+     true,
+     {
+      "e": false,
+      "c": true,
+      "w": true,
+      "get": "undefined",
+      "set": "undefined"
+     },
+     false
+    ],
+    [
+     "then",
+     1,
+     true,
+     1
+    ],
+    [
+     "outside then",
+     "undefined"
+    ],
+    [
+     "free promise, then in run",
+     true
+    ],
+    [
+     "chained",
+     2,
+     true
+    ]
+   ],
+   "stderr": null
+  },
+  {
+   "name": "unhandled rejection in a domain",
+   "body": "\nconst domain = require('domain'); const d = domain.create();\nprocess.on('unhandledRejection', (r) => out(['process unhandledRejection', r.message]));\nprocess.on('uncaughtException', (r) => out(['process uncaughtException', r.message]));\nd.on('error', (er) => out(['error', er.message, 'domain' in er, er.domainThrown === undefined, Object.keys(er), show(process.domain), domain._stack.length]));\nd.run(() => { Promise.reject(new Error('rejected')); });\nPromise.reject(new Error('outside'));\nsetTimeout(() => out('later'), 20);\n",
+   "code": 0,
+   "events": [
+    [
+     "error",
+     "rejected",
+     false,
+     true,
+     [],
+     "undefined",
+     0
+    ],
+    [
+     "process unhandledRejection",
+     "outside"
+    ],
+    "later"
+   ],
+   "stderr": null
+  },
+  {
+   "name": "unhandled rejection from a reaction in a domain",
+   "body": "\nconst domain = require('domain'); const d = domain.create();\nprocess.on('unhandledRejection', (r) => out(['process unhandledRejection', r.message]));\nd.on('error', (er) => out(['error', er.message, 'domain' in er, show(process.domain)]));\nd.run(() => { Promise.resolve().then(() => { throw new Error('reaction'); }); });\nd.run(() => { setTimeout(() => { Promise.reject(new Error('from timer')); }, 1); });\nsetTimeout(() => out('later'), 20);\n",
+   "code": 0,
+   "events": [
+    [
+     "error",
+     "reaction",
+     false,
+     "undefined"
+    ],
+    [
+     "error",
+     "from timer",
+     false,
+     "undefined"
+    ],
+    "later"
+   ],
+   "stderr": null
+  },
+  {
+   "name": "unhandled rejection in a domain without a listener",
+   "body": "\nconst domain = require('domain'); const d = domain.create();\nprocess.on('unhandledRejection', (r) => out(['process unhandledRejection', r.message]));\nprocess.on('uncaughtException', (r, origin) => out(['process uncaughtException', r.message, origin, 'domain' in r, show(process.domain)]));\nd.run(() => { Promise.reject(new Error('rejected')); });\nsetTimeout(() => out('later'), 20);\n",
+   "code": 0,
+   "events": [
+    [
+     "process uncaughtException",
+     "rejected",
+     "uncaughtException",
+     false,
+     "null"
+    ],
+    "later"
+   ],
+   "stderr": null
+  },
+  {
+   "name": "unhandled rejection in a domain ends the process",
+   "body": "\nconst domain = require('domain'); const d = domain.create();\nprocess.on('exit', (code) => out(['exit', code]));\nd.run(() => { Promise.reject(new Error('rejected')); });\nsetTimeout(() => out('later'), 20);\n",
+   "code": 1,
+   "events": [],
+   "stderr": "Error: rejected"
+  },
+  {
+   "name": "fs callback error reaches the domain",
+   "body": "\nconst domain = require('domain'); const fs = require('fs'); const d = domain.create();\nd.on('error', (er) => out(['error', er.message, er.domain === d, er.domainThrown, show(process.domain), domain._stack.length]));\nd.run(() => { fs.statfs('/', (err, stats) => { out(['callback', err === null, typeof stats, process.domain === d, domain._stack.length]); throw new Error('fs'); }); });\nfs.statfs('/', () => out(['free callback', show(process.domain)]));\n",
+   "code": 0,
+   "events": [
+    [
+     "callback",
+     true,
+     "object",
+     true,
+     1
+    ],
+    [
+     "error",
+     "fs",
+     true,
+     true,
+     "undefined",
+     0
+    ],
+    [
+     "free callback",
+     "null"
+    ]
+   ],
+   "stderr": null
+  },
+  {
+   "name": "nested domains across a timer",
+   "body": "\nconst domain = require('domain'); const d1 = domain.create(), d2 = domain.create();\nd1.on('error', (er) => out(['d1 error', er.message, er.domain === d1, er.domainThrown]));\nd2.on('error', (er) => out(['d2 error', er.message, er.domain === d2, er.domainThrown, show(process.domain), domain._stack.length]));\nd1.run(() => { d2.run(() => { setTimeout(() => { out(['timer', process.domain === d2, domain._stack.length]); throw new Error('inner'); }, 1); }); setTimeout(() => { out(['outer timer', process.domain === d1, domain._stack.length]); throw new Error('outer'); }, 5); });\n",
+   "code": 0,
+   "events": [
+    [
+     "timer",
+     true,
+     1
+    ],
+    [
+     "d2 error",
+     "inner",
+     true,
+     true,
+     "undefined",
+     0
+    ],
+    [
+     "outer timer",
+     true,
+     1
+    ],
+    [
+     "d1 error",
+     "outer",
+     true,
+     true
+    ]
+   ],
+   "stderr": null
+  },
+  {
+   "name": "error handler throws into the parent domain",
+   "body": "\nconst domain = require('domain'); const d1 = domain.create(), d2 = domain.create();\nd1.on('error', (er) => out(['d1 error', er.message, er.domain === d1, er.domainThrown, show(process.domain), domain._stack.length]));\nd2.on('error', (er) => { out(['d2 error', er.message, er.domain === d2, process.domain === d1, domain._stack.length]); throw new Error('from d2 handler'); });\nsetTimeout(() => { out(['later', show(process.domain), domain._stack.length]); }, 10);\nd1.run(() => { d2.run(() => { throw new Error('sync'); }); });\nout('not reached');\n",
+   "code": 0,
+   "events": [
+    [
+     "d2 error",
+     "sync",
+     true,
+     true,
+     1
+    ],
+    [
+     "d1 error",
+     "from d2 handler",
+     true,
+     true,
+     "undefined",
+     0
+    ],
+    [
+     "later",
+     "null",
+     0
+    ]
+   ],
+   "stderr": null
+  },
+  {
+   "name": "error handler throws with no parent",
+   "body": "\nconst domain = require('domain'); const d = domain.create();\nprocess.on('exit', (code) => out(['exit', code]));\nd.on('error', (er) => { out(['error', er.message, show(process.domain), domain._stack.length, process.hasUncaughtExceptionCaptureCallback()]); throw new Error('handler threw'); });\nd.run(() => { setTimeout(() => { throw new Error('first'); }, 1); });\nsetTimeout(() => out('later'), 30);\n",
+   "code": 7,
+   "events": null,
+   "stderr": "Error: handler threw"
+  },
+  {
+   "name": "error handler throws with an uncaughtException listener",
+   "body": "\nconst domain = require('domain'); const d = domain.create();\nprocess.on('exit', (code) => out(['exit', code]));\nprocess.on('uncaughtException', (er, origin) => out(['uncaughtException', er.message, origin, er.domain === d, er.domainThrown, show(process.domain), domain._stack.length]));\nd.on('error', (er) => { out(['error', er.message]); throw new Error('handler threw'); });\nd.run(() => { setTimeout(() => { throw new Error('first'); }, 1); });\nsetTimeout(() => out('later'), 30);\n",
+   "code": 7,
+   "events": null,
+   "stderr": "Error: handler threw"
+  },
+  {
+   "name": "domain without an error listener",
+   "body": "\nconst domain = require('domain'); const d = domain.create();\nprocess.on('exit', (code) => out(['exit', code]));\nd.run(() => { setTimeout(() => { out(['timer', process.domain === d, process.hasUncaughtExceptionCaptureCallback()]); throw new Error('unhandled'); }, 1); });\nsetTimeout(() => out('later'), 30);\n",
+   "code": 1,
+   "events": [
+    [
+     "timer",
+     true,
+     false
+    ]
+   ],
+   "stderr": "Error: unhandled"
+  },
+  {
+   "name": "domain without an error listener and uncaughtException",
+   "body": "\nconst domain = require('domain'); const d = domain.create();\nprocess.on('uncaughtException', (er, origin) => out(['uncaughtException', er.message, origin, 'domain' in er, er.domainThrown === undefined, show(process.domain), domain._stack.length]));\nout(process.listeners('uncaughtException').map((f) => f.name));\nd.run(() => { setTimeout(() => { throw new Error('unhandled'); }, 1); });\nsetTimeout(() => out(['later', show(process.domain), domain._stack.length]), 30);\n",
+   "code": 0,
+   "events": [
+    [
+     "domainUncaughtExceptionClear",
+     ""
+    ],
+    [
+     "uncaughtException",
+     "unhandled",
+     "uncaughtException",
+     false,
+     true,
+     "null",
+     0
+    ],
+    [
+     "later",
+     "null",
+     0
+    ]
+   ],
+   "stderr": null
+  },
+  {
+   "name": "domain error listener wins over uncaughtException",
+   "body": "\nconst domain = require('domain'); const d = domain.create();\nconst mine = function mine(er) { out(['uncaughtException', er.message]); };\nprocess.on('uncaughtException', mine);\nprocess.on('uncaughtExceptionMonitor', (er, origin) => out(['monitor', er.message, origin, process.domain === d]));\nd.on('error', (er) => out(['error', er.message, er.domainThrown]));\nd.run(() => { setTimeout(() => { throw new Error('in domain'); }, 1); });\nsetTimeout(() => { throw new Error('outside domain'); }, 10);\nsetTimeout(() => { process.removeListener('uncaughtException', mine); out(process.listeners('uncaughtException').length); }, 30);\n",
+   "code": 0,
+   "events": [
+    [
+     "monitor",
+     "in domain",
+     "uncaughtException",
+     true
+    ],
+    [
+     "error",
+     "in domain",
+     true
+    ],
+    [
+     "monitor",
+     "outside domain",
+     "uncaughtException",
+     false
+    ],
+    [
+     "uncaughtException",
+     "outside domain"
+    ],
+    0
+   ],
+   "stderr": null
+  },
+  {
+   "name": "sync throw at top level inside run",
+   "body": "\nconst domain = require('domain'); const d = domain.create();\nd.on('error', (er) => out(['error', er.message, er.domain === d, er.domainThrown, show(process.domain), domain._stack.length]));\nsetTimeout(() => out(['later', show(process.domain), domain._stack.length]), 5);\nd.run(() => { throw new Error('sync'); });\nout('not reached');\n",
+   "code": 0,
+   "events": [
+    [
+     "error",
+     "sync",
+     true,
+     true,
+     "undefined",
+     0
+    ],
+    [
+     "later",
+     "null",
+     0
+    ]
+   ],
+   "stderr": null
+  },
+  {
+   "name": "thrown non-errors",
+   "body": "\nconst domain = require('domain'); const d = domain.create();\nd.on('error', (er) => out(['error', typeof er, typeof er === 'object' && er !== null ? [er.domain === d, er.domainThrown, Object.keys(er)] : typeof er === 'function' ? [er.domain === d, er.domainThrown] : er]));\nd.run(() => { setTimeout(() => { throw 'text'; }, 1); setTimeout(() => { throw { plain: 1 }; }, 3); setTimeout(() => { throw null; }, 5); setTimeout(() => { throw function thrown() {}; }, 7); });\n",
+   "code": 0,
+   "events": [
+    [
+     "error",
+     "string",
+     "text"
+    ],
+    [
+     "error",
+     "object",
+     [
+      true,
+      true,
+      [
+       "plain",
+       "domainThrown"
+      ]
+     ]
+    ],
+    [
+     "error",
+     "object",
+     null
+    ],
+    [
+     "error",
+     "function",
+     [
+      true,
+      true
+     ]
+    ]
+   ],
+   "stderr": null
+  },
+  {
+   "name": "capture callback state",
+   "body": "\nconst domain = require('domain'); const d = domain.create(), quiet = domain.create();\nout(process.hasUncaughtExceptionCaptureCallback());\nquiet.run(() => out(['no listener', process.hasUncaughtExceptionCaptureCallback()]));\nconst listener = () => {};\nd.run(() => { out(['before listener', process.hasUncaughtExceptionCaptureCallback()]); d.on('error', listener); out(['with listener', process.hasUncaughtExceptionCaptureCallback()]);\n  quiet.run(() => out(['nested quiet', process.hasUncaughtExceptionCaptureCallback()]));\n  d.removeListener('error', listener); out(['listener removed', process.hasUncaughtExceptionCaptureCallback()]); d.on('error', listener); });\nout(['outside', process.hasUncaughtExceptionCaptureCallback()]);\n",
+   "code": 0,
+   "events": [
+    false,
+    [
+     "no listener",
+     false
+    ],
+    [
+     "before listener",
+     false
+    ],
+    [
+     "with listener",
+     false
+    ],
+    [
+     "nested quiet",
+     true
+    ],
+    [
+     "listener removed",
+     false
+    ],
+    [
+     "outside",
+     false
+    ]
+   ],
+   "stderr": null
+  },
+  {
+   "name": "ERR_DOMAIN_CANNOT_SET_UNCAUGHT_EXCEPTION_CAPTURE",
+   "body": "\nconst before = process.setUncaughtExceptionCaptureCallback;\nconst domain = require('domain');\nconst f = process.setUncaughtExceptionCaptureCallback;\nout([f === before, f.name, f.length, desc(process, 'setUncaughtExceptionCaptureCallback')]);\nout(fail(() => process.setUncaughtExceptionCaptureCallback(() => {})));\nout(fail(() => process.setUncaughtExceptionCaptureCallback(null)));\nout(fail(() => process.setUncaughtExceptionCaptureCallback()));\ntry { process.setUncaughtExceptionCaptureCallback(() => {}); } catch (e) { const lines = e.stack.split('\\n'); const at = lines.findIndex((l) => /^-+$/.test(l)); out([e instanceof Error, Object.getPrototypeOf(e) === Error.prototype, lines[0], at > 0, at > 0 ? lines[at] : null, at > 0 ? lines[at + 1] : null, Object.keys(e)]); }\nout(process.hasUncaughtExceptionCaptureCallback());\n",
+   "code": 0,
+   "events": [
+    [
+     false,
+     "",
+     1,
+     {
+      "e": true,
+      "c": true,
+      "w": true,
+      "get": "undefined",
+      "set": "undefined"
+     }
+    ],
+    {
+     "error": {
+      "name": "Error",
+      "code": "ERR_DOMAIN_CANNOT_SET_UNCAUGHT_EXCEPTION_CAPTURE",
+      "message": "The `domain` module is in use, which is mutually exclusive with calling process.setUncaughtExceptionCaptureCallback()",
+      "ctor": "Error"
+     }
+    },
+    {
+     "error": {
+      "name": "Error",
+      "code": "ERR_DOMAIN_CANNOT_SET_UNCAUGHT_EXCEPTION_CAPTURE",
+      "message": "The `domain` module is in use, which is mutually exclusive with calling process.setUncaughtExceptionCaptureCallback()",
+      "ctor": "Error"
+     }
+    },
+    {
+     "error": {
+      "name": "Error",
+      "code": "ERR_DOMAIN_CANNOT_SET_UNCAUGHT_EXCEPTION_CAPTURE",
+      "message": "The `domain` module is in use, which is mutually exclusive with calling process.setUncaughtExceptionCaptureCallback()",
+      "ctor": "Error"
+     }
+    },
+    [
+     true,
+     false,
+     "Error [ERR_DOMAIN_CANNOT_SET_UNCAUGHT_EXCEPTION_CAPTURE]: The `domain` module is in use, which is mutually exclusive with calling process.setUncaughtExceptionCaptureCallback()",
+     true,
+     "----------------------------------------",
+     "Error: require(`domain`) at this point",
+     [
+      "code"
+     ]
+    ],
+    false
+   ],
+   "stderr": null
+  },
+  {
+   "name": "ERR_DOMAIN_CALLBACK_NOT_AVAILABLE",
+   "body": "\nprocess.setUncaughtExceptionCaptureCallback(() => {});\nout(fail(() => require('domain')));\ntry { require('domain'); } catch (e) { out([e instanceof Error, Object.getPrototypeOf(e) === Error.prototype, e.stack.split('\\n')[0], Object.keys(e)]); }\nout([desc(process, 'domain'), show(process.domain), require('events').usingDomains]);\nprocess.setUncaughtExceptionCaptureCallback(null);\nconst domain = require('domain'); out([typeof domain.create, require('events').usingDomains]);\nout(fail(() => process.setUncaughtExceptionCaptureCallback(() => {})));\n",
+   "code": 0,
+   "events": [
+    {
+     "error": {
+      "name": "Error",
+      "code": "ERR_DOMAIN_CALLBACK_NOT_AVAILABLE",
+      "message": "A callback was registered through process.setUncaughtExceptionCaptureCallback(), which is mutually exclusive with using the `domain` module",
+      "ctor": "Error"
+     }
+    },
+    [
+     true,
+     false,
+     "Error [ERR_DOMAIN_CALLBACK_NOT_AVAILABLE]: A callback was registered through process.setUncaughtExceptionCaptureCallback(), which is mutually exclusive with using the `domain` module",
+     [
+      "code"
+     ]
+    ],
+    [
+     {
+      "e": true,
+      "c": true,
+      "w": null,
+      "get": "function",
+      "set": "function"
+     },
+     "null",
+     false
+    ],
+    [
+     "function",
+     true
+    ],
+    {
+     "error": {
+      "name": "Error",
+      "code": "ERR_DOMAIN_CANNOT_SET_UNCAUGHT_EXCEPTION_CAPTURE",
+      "message": "The `domain` module is in use, which is mutually exclusive with calling process.setUncaughtExceptionCaptureCallback()",
+      "ctor": "Error"
+     }
+    }
+   ],
+   "stderr": null
+  },
+  {
+   "name": "no warning on require",
+   "body": "\nconst warnings = []; process.on('warning', (w) => warnings.push([w.name, w.code, w.message]));\nconst domain = require('domain'); const d = domain.create(); d.run(() => {}); d.bind(() => {})(); d.intercept(() => {})(null);\nsetTimeout(() => out(warnings), 10);\n",
+   "code": 0,
+   "events": [
+    []
+   ],
+   "stderr": null
+  },
+  {
+   "name": "uncaughtException listener bookkeeping",
+   "body": "\nconst domain = require('domain');\nout(process.listeners('uncaughtException').map((f) => f.name));\nconst a = function a() {}, b = function b() {};\nprocess.on('uncaughtException', a); out(process.listeners('uncaughtException').map((f) => f.name));\nprocess.on('uncaughtException', b); out(process.listeners('uncaughtException').map((f) => f.name));\nprocess.prependListener('uncaughtException', b); out(process.listeners('uncaughtException').map((f) => f.name));\nprocess.removeListener('uncaughtException', a); process.removeListener('uncaughtException', b); out(process.listeners('uncaughtException').map((f) => f.name));\nprocess.removeListener('uncaughtException', b); out(process.listeners('uncaughtException').map((f) => f.name));\n",
+   "code": 0,
+   "events": [
+    [],
+    [
+     "domainUncaughtExceptionClear",
+     "a"
+    ],
+    [
+     "domainUncaughtExceptionClear",
+     "a",
+     "b"
+    ],
+    [
+     "b",
+     "domainUncaughtExceptionClear",
+     "a",
+     "b"
+    ],
+    [
+     "b",
+     "domainUncaughtExceptionClear"
+    ],
+    []
+   ],
+   "stderr": null
+  },
+  {
+   "name": "AsyncResource carries the domain",
+   "body": "\nconst domain = require('domain'); const { AsyncResource } = require('async_hooks'); const d = domain.create();\nlet r; d.run(() => { r = new AsyncResource('Scenario'); });\nout([r.domain === d, desc(r, 'domain'), 'domain' in new AsyncResource('Free')]);\nout(r.runInAsyncScope(() => [process.domain === d, domain._stack.length])); out([show(process.domain), domain._stack.length]);\nconst bound = r.bind(() => process.domain === d); out(bound());\n",
+   "code": 0,
+   "events": [
+    [
+     true,
+     {
+      "e": false,
+      "c": true,
+      "w": true,
+      "get": "undefined",
+      "set": "undefined"
+     },
+     false
+    ],
+    [
+     true,
+     1
+    ],
+    [
+     "undefined",
+     0
+    ],
+    true
+   ],
+   "stderr": null
+  },
+  {
+   "name": "domain created before any callback is scheduled",
+   "body": "\nconst domain = require('domain');\nsetTimeout(() => { const d = domain.create(); d.on('error', (er) => out(['error', er.message, er.domainThrown])); d.run(() => { setTimeout(() => { throw new Error('late domain'); }, 1); }); }, 1);\nlet early; setTimeout(() => out(['scheduled before any domain', show(process.domain)]), 8);\n",
+   "code": 0,
+   "events": [
+    [
+     "error",
+     "late domain",
+     true
+    ],
+    [
+     "scheduled before any domain",
+     "null"
+    ]
+   ],
+   "stderr": null
+  },
+  {
+   "name": "run inside a callback of another domain",
+   "body": "\nconst domain = require('domain'); const d1 = domain.create(), d2 = domain.create();\nd1.on('error', (er) => out(['d1 error', er.message]));\nd2.on('error', (er) => out(['d2 error', er.message, show(process.domain), domain._stack.length]));\nd1.run(() => { setTimeout(() => { d2.run(() => { out(['in both', domain._stack.length, domain._stack[0] === d1, domain._stack[1] === d2]); throw new Error('deep'); }); }, 1); });\nsetTimeout(() => out(['later', show(process.domain), domain._stack.length]), 20);\n",
+   "code": 0,
+   "events": [
+    [
+     "in both",
+     2,
+     true,
+     true
+    ],
+    [
+     "d2 error",
+     "deep",
+     "object",
+     1
+    ],
+    [
+     "later",
+     "null",
+     0
+    ]
+   ],
+   "stderr": null
+  },
+  {
+   "name": "handled error lets later callbacks run",
+   "body": "\nconst domain = require('domain'); const EventEmitter = require('events'); const d = domain.create(); let count = 0;\nd.on('error', (er) => { out(['error', er.message, ++count]); if (count === 1) setTimeout(() => { out(['from handler', show(process.domain)]); throw new Error('second'); }, 1); });\nd.run(() => { const e = new EventEmitter(); setTimeout(() => { e.emit('error', new Error('first')); out(['after emit', process.domain === d, domain._stack.length]); }, 1); });\n",
+   "code": 1,
+   "events": [
+    [
+     "error",
+     "first",
+     1
+    ],
+    [
+     "after emit",
+     true,
+     1
+    ],
+    [
+     "from handler",
+     "undefined"
+    ]
+   ],
+   "stderr": "Error: second"
+  },
+  {
+   "name": "immediate handle carries the domain",
+   "body": "\nconst domain = require('domain'); const d = domain.create();\nlet i; d.run(() => { i = setImmediate(() => {}); });\nout([i.domain === d, desc(i, 'domain')]);\n",
+   "code": 0,
+   "events": [
+    [
+     true,
+     {
+      "e": false,
+      "c": true,
+      "w": true,
+      "get": "undefined",
+      "set": "undefined"
+     }
+    ]
+   ],
+   "stderr": null
+  },
+  {
+   "name": "thrown frozen error",
+   "body": "\nconst domain = require('domain'); const d = domain.create();\nd.on('error', (er) => out(['error', er.message]));\nd.run(() => { setTimeout(() => { throw Object.freeze(new Error('frozen')); }, 1); });\nsetTimeout(() => out('later'), 30);\n",
+   "code": 7,
+   "events": null,
+   "stderr": "TypeError: Cannot define property domain, object is not extensible"
+  },
+  {
+   "name": "AsyncResource scope that throws has left the domain",
+   "body": "\nconst domain = require('domain'); const { AsyncResource } = require('async_hooks'); const d = domain.create();\nd.on('error', (er) => out(['error', er.message]));\nprocess.on('uncaughtException', (er, origin) => out(['uncaughtException', er.message, origin, 'domain' in er, show(process.domain), domain._stack.length]));\nlet r; d.run(() => { r = new AsyncResource('Scenario'); });\nsetTimeout(() => { r.runInAsyncScope(() => { throw new Error('scope'); }); }, 1);\nd.run(() => { queueMicrotask(() => { throw new Error('microtask'); }); });\n",
+   "code": 0,
+   "events": [
+    [
+     "uncaughtException",
+     "microtask",
+     "uncaughtException",
+     false,
+     "null",
+     0
+    ],
+    [
+     "uncaughtException",
+     "scope",
+     "uncaughtException",
+     false,
+     "null",
+     0
+    ]
+   ],
+   "stderr": null
+  }
+ ]
+}

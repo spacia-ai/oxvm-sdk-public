@@ -51,4 +51,12 @@ const constants = Object.freeze({
   BROTLI_MODE_GENERIC: 0, BROTLI_MODE_TEXT: 1, BROTLI_MODE_FONT: 2,
   BROTLI_DECODER_PARAM_DISABLE_RING_BUFFER_REALLOCATION: 0, BROTLI_DECODER_PARAM_LARGE_WINDOW: 1,
 });
-export const nodeZlib = { ...unavailable, ...nodeZlibSync, ...constants, constants };
+/** Node's translation table for zlib return codes: each name to its number and each number back to its name. */
+const codes: Record<string, string | number> = {
+  Z_OK: constants.Z_OK, Z_STREAM_END: constants.Z_STREAM_END, Z_NEED_DICT: constants.Z_NEED_DICT, Z_ERRNO: constants.Z_ERRNO, Z_STREAM_ERROR: constants.Z_STREAM_ERROR,
+  Z_DATA_ERROR: constants.Z_DATA_ERROR, Z_MEM_ERROR: constants.Z_MEM_ERROR, Z_BUF_ERROR: constants.Z_BUF_ERROR, Z_VERSION_ERROR: constants.Z_VERSION_ERROR,
+};
+for (const key of Object.keys(codes)) codes[String(codes[key])] = key;
+Object.freeze(codes);
+export const nodeZlib = { ...unavailable, ...nodeZlibSync, ...constants, constants, codes };
+Object.defineProperty(nodeZlib, "codes", { writable: false, configurable: false });

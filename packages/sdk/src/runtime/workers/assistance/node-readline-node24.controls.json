@@ -1,0 +1,5782 @@
+{
+ "schemaVersion": 1,
+ "node": {
+  "version": "v24.18.1",
+  "image": "node:24.18.1-alpine"
+ },
+ "recorder": "\"use strict\";\nconst readline = require(\"readline\"), rlp = require(\"readline/promises\"), { EventEmitter } = require(\"events\"), { PassThrough, Writable } = require(\"stream\");\nconst U = { $: \"undefined\" }, enc = v => v === undefined ? U : typeof v === \"number\" && Number.isNaN(v) ? { $: \"NaN\" } : typeof v === \"function\" ? { $: \"fn\" } : v;\nconst err = e => ({ name: e.name, code: enc(e.code), message: e.message });\nconst tick = () => new Promise(r => setImmediate(r));\n(async () => {\n  const out = { node: process.version };\n  out.functions = [\"cursorTo\", \"moveCursor\", \"clearLine\", \"clearScreenDown\", \"emitKeypressEvents\", \"createInterface\", \"Interface\"].map(n => ({ name: n, fname: readline[n].name, length: readline[n].length }));\n  out.promisesFunctions = [\"Interface\", \"Readline\", \"createInterface\"].map(n => ({ name: n, fname: rlp[n].name, length: rlp[n].length }));\n  out.promisesSame = readline.promises === rlp; out.promisesKeys = Object.keys(rlp); out.readlineProto = Object.getOwnPropertyNames(rlp.Readline.prototype);\n  out.interfaceExtends = Object.getPrototypeOf(rlp.Interface.prototype) === Object.getPrototypeOf(readline.Interface.prototype);\n  // callbacks. arg tokens: \"$stream\", \"$cb\", {\"$\":\"NaN\"}, {\"$\":\"undefined\"}\n  const cases = [\n    [\"cursorTo\", [\"$stream\", 0]], [\"cursorTo\", [\"$stream\", 5]], [\"cursorTo\", [\"$stream\", 3, 7]], [\"cursorTo\", [\"$stream\", 0, 0]], [\"cursorTo\", [\"$stream\", 3, U, \"$cb\"]], [\"cursorTo\", [\"$stream\", 3, \"$cb\"]], [\"cursorTo\", [\"$stream\", 3, 7, \"$cb\"]],\n    [\"cursorTo\", [\"$stream\", { $: \"NaN\" }]], [\"cursorTo\", [\"$stream\", 1, { $: \"NaN\" }]], [\"cursorTo\", [\"$stream\", U, 4]], [\"cursorTo\", [\"$stream\", \"1\", 4]], [\"cursorTo\", [\"$stream\", \"a\", \"b\"]], [\"cursorTo\", [\"$stream\"]], [\"cursorTo\", [\"$stream\", U, U, \"$cb\"]], [\"cursorTo\", [\"$stream\", \"1\"]], [\"cursorTo\", [\"$stream\", 1, \"2\"]],\n    [\"cursorTo\", [null, 1, 2]], [\"cursorTo\", [U, 1, 2, \"$cb\"]], [\"cursorTo\", [null, 1, \"$cb\"]], [\"cursorTo\", [\"$stream\", 1, 2, \"notfn\"]], [\"cursorTo\", [\"$stream\", 1, 2, null]], [\"cursorTo\", [null, { $: \"NaN\" }]], [\"cursorTo\", [\"$stream\", 1.5, -2]], [\"cursorTo\", [\"$stream\", -1]], [\"cursorTo\", [null, U, 3]],\n    [\"moveCursor\", [\"$stream\", 1, 0]], [\"moveCursor\", [\"$stream\", -2, 0]], [\"moveCursor\", [\"$stream\", 0, 3]], [\"moveCursor\", [\"$stream\", 0, -4]], [\"moveCursor\", [\"$stream\", 2, -3]], [\"moveCursor\", [\"$stream\", -1, 1, \"$cb\"]], [\"moveCursor\", [\"$stream\", 0, 0]], [\"moveCursor\", [\"$stream\", 0, 0, \"$cb\"]], [\"moveCursor\", [\"$stream\"]], [\"moveCursor\", [null, 1, 1, \"$cb\"]], [\"moveCursor\", [U, 1, 1]],\n    [\"moveCursor\", [\"$stream\", 1, 1, 5]], [\"moveCursor\", [\"$stream\", \"2\", \"x\"]], [\"moveCursor\", [\"$stream\", { $: \"NaN\" }, 1]], [\"moveCursor\", [\"$stream\", 1.5, U]], [\"moveCursor\", [\"$stream\", \"abc\", 0]],\n    [\"clearLine\", [\"$stream\", -1]], [\"clearLine\", [\"$stream\", 1]], [\"clearLine\", [\"$stream\", 0]], [\"clearLine\", [\"$stream\"]], [\"clearLine\", [\"$stream\", 5, \"$cb\"]], [\"clearLine\", [\"$stream\", \"x\"]], [\"clearLine\", [null, 0, \"$cb\"]], [\"clearLine\", [U, 0]], [\"clearLine\", [\"$stream\", 0, {}]], [\"clearLine\", [\"$stream\", \"-1\"]],\n    [\"clearScreenDown\", [\"$stream\"]], [\"clearScreenDown\", [\"$stream\", \"$cb\"]], [\"clearScreenDown\", [null, \"$cb\"]], [\"clearScreenDown\", [U]], [\"clearScreenDown\", [\"$stream\", \"x\"]], [\"clearScreenDown\", [\"$stream\", null]],\n  ];\n  out.callbacks = [];\n  for (const [fn, args] of cases) {\n    const writes = [], cbCalls = [];\n    const stream = { write(s, cb) { writes.push([s, typeof cb]); return \"written\"; } };\n    const cb = (...a) => { cbCalls.push(a.map(enc)); };\n    const real = args.map(a => a === \"$stream\" ? stream : a === \"$cb\" ? cb : a && a.$ === \"NaN\" ? NaN : a && a.$ === \"undefined\" ? undefined : a);\n    const row = { fn, args };\n    let syncCb = 0;\n    try { row.returned = enc(readline[fn](...real)); syncCb = cbCalls.length; } catch (e) { row.error = err(e); }\n    await tick(); row.writes = writes; row.cbCalls = cbCalls; row.cbSync = syncCb; out.callbacks.push(row);\n  }\n  // keypress\n  const B = s => Buffer.from(s, \"latin1\").toString(\"hex\"), H = s => Buffer.from(s, \"utf8\").toString(\"hex\");\n  const E = \"\\x1b\";\n  const keyCases = { a: [\"a\"], z: [\"z\"], A: [\"A\"], Z: [\"Z\"], digit: [\"5\"], dot: [\".\"], \"ctrl-a\": [\"\\x01\"], \"ctrl-c\": [\"\\x03\"], \"ctrl-d\": [\"\\x04\"], \"ctrl-z\": [\"\\x1a\"], \"ctrl-@\": [\"\\x00\"], return: [\"\\r\"], enter: [\"\\n\"], tab: [\"\\t\"], backspace: [\"\\x7f\"], \"ctrl-h\": [\"\\b\"], space: [\" \"],\n    up: [E + \"[A\"], down: [E + \"[B\"], right: [E + \"[C\"], left: [E + \"[D\"], clear: [E + \"[E\"], home: [E + \"[H\"], end: [E + \"[F\"], \"home~\": [E + \"[1~\"], \"end~\": [E + \"[4~\"], insert: [E + \"[2~\"], delete: [E + \"[3~\"], pageup: [E + \"[5~\"], pagedown: [E + \"[6~\"], \"home-rxvt\": [E + \"[7~\"], \"end-rxvt\": [E + \"[8~\"],\n    \"O-up\": [E + \"OA\"], \"O-home\": [E + \"OH\"], \"O-end\": [E + \"OF\"],\n    f1: [E + \"OP\"], f2: [E + \"OQ\"], f3: [E + \"OR\"], f4: [E + \"OS\"], \"f1~\": [E + \"[11~\"], \"f2~\": [E + \"[12~\"], \"f3~\": [E + \"[13~\"], \"f4~\": [E + \"[14~\"], \"f1[[\": [E + \"[[A\"], \"f5[[\": [E + \"[[E\"], f5: [E + \"[15~\"], f6: [E + \"[17~\"], f7: [E + \"[18~\"], f8: [E + \"[19~\"], f9: [E + \"[20~\"], f10: [E + \"[21~\"], f11: [E + \"[23~\"], f12: [E + \"[24~\"], \"f1-xterm-mod\": [E + \"[1;2P\"],\n    \"shift-up\": [E + \"[1;2A\"], \"meta-up\": [E + \"[1;3A\"], \"ctrl-up\": [E + \"[1;5A\"], \"ctrl-shift-right\": [E + \"[1;6C\"], \"meta-ctrl-left\": [E + \"[1;7D\"], \"all-down\": [E + \"[1;8B\"], \"ralt-up\": [E + \"[1;9A\"], \"ctrl-f12\": [E + \"[24;5~\"], \"shift-delete\": [E + \"[3;2~\"], \"ctrl-home\": [E + \"[1;5H\"], \"mod-short\": [E + \"[5A\"], \"O-mod\": [E + \"O5A\"],\n    \"rxvt-shift-up\": [E + \"[a\"], \"rxvt-ctrl-up\": [E + \"Oa\"], \"rxvt-shift-insert\": [E + \"[2$\"], \"rxvt-ctrl-pageup\": [E + \"[5^\"], \"shift-tab\": [E + \"[Z\"], \"paste-start\": [E + \"[200~\"], \"paste-end\": [E + \"[201~\"], \"unknown-csi\": [E + \"[99~\"], \"unknown-letter\": [E + \"[X\"],\n    \"meta-a\": [E + \"a\"], \"meta-A\": [E + \"A\"], \"meta-return\": [E + \"\\r\"], \"meta-enter\": [E + \"\\n\"], \"meta-tab\": [E + \"\\t\"], \"meta-backspace\": [E + \"\\x7f\"], \"meta-space\": [E + \" \"], \"meta-dot\": [E + \".\"], \"meta-ctrl-a\": [E + \"\\x01\"], \"esc-esc\": [E + E], \"esc-esc-[A\": [E + E + \"[A\"], \"esc-esc-OA\": [E + E + \"OA\"], \"esc-esc-a\": [E + E + \"a\"],\n    paste: [\"hello World\\r\\n\"], mixed: [\"a\" + E + \"[Ab\" + E + \"OPc\"], \"split-escape\": [E, \"[\", \"A\"], \"split-escape-2\": [E + \"[1\", \";5\", \"C\"], unicode: [\"\u00e9\"], cjk: [\"\u65e5\u672c\"], emoji: [\"\ud83d\ude00\"], \"emoji-in-text\": [\"a\ud83d\ude00b\"], empty: [\"\"], \"broken-then-key\": [E + \"[1;\", \"x\"], \"three-digit-not-paste\": [E + \"[123~\"], \"four-digit\": [E + \"[1234~x\"],\n  };\n  const enchunk = c => c.map(s => /[^\\x00-\\x7f]/.test(s) ? H(s) : B(s));\n  const hexCases = Object.entries(keyCases).map(([label, chunks]) => ({ label, chunks: enchunk(chunks) }));\n  const euro = Buffer.from(\"\u20ac\"), smile = Buffer.from(\"\ud83d\ude00\");\n  hexCases.push({ label: \"utf8-split-euro\", chunks: [euro.subarray(0, 1).toString(\"hex\"), euro.subarray(1).toString(\"hex\")] });\n  hexCases.push({ label: \"utf8-split-emoji-3\", chunks: [smile.subarray(0, 1).toString(\"hex\"), smile.subarray(1, 3).toString(\"hex\"), smile.subarray(3).toString(\"hex\")] });\n  hexCases.push({ label: \"utf8-split-with-ascii\", chunks: [Buffer.concat([Buffer.from(\"a\"), euro.subarray(0, 2)]).toString(\"hex\"), Buffer.concat([euro.subarray(2), Buffer.from(\"b\")]).toString(\"hex\")] });\n  const keyRow = (s, k) => ({ s: enc(s), keys: Object.keys(k), key: Object.fromEntries(Object.entries(k).map(([a, b]) => [a, enc(b)])) });\n  out.keys = [];\n  for (const c of hexCases) {\n    const stream = new EventEmitter(), events = [], iface = {};\n    readline.emitKeypressEvents(stream, iface);\n    stream.on(\"keypress\", (s, k) => events.push(keyRow(s, k)));\n    for (const h of c.chunks) stream.emit(\"data\", Buffer.from(h, \"hex\"));\n    out.keys.push({ ...c, events, completion: enc(iface.isCompletionEnabled) });\n  }\n  // string chunks (no decoder needed)\n  { const stream = new EventEmitter(), events = []; readline.emitKeypressEvents(stream); stream.on(\"keypress\", (s, k) => events.push(keyRow(s, k))); stream.emit(\"data\", \"x\\x1b[By\"); out.keyStrings = events; }\n  // escape timeout\n  const timeoutCase = async (chunks, iface, waits) => { const stream = new EventEmitter(), events = []; readline.emitKeypressEvents(stream, iface); stream.on(\"keypress\", (s, k) => events.push(keyRow(s, k))); const counts = []; for (let i = 0; i < chunks.length; i++) { stream.emit(\"data\", Buffer.from(chunks[i], \"latin1\")); counts.push(events.length); await new Promise(r => setTimeout(r, waits[i])); counts.push(events.length); } return { chunks: chunks.map(B), waits, counts, events }; };\n  out.escapeTimeout = [\n    await timeoutCase([E], undefined, [700]), await timeoutCase([E, \"a\"], undefined, [100, 10]), await timeoutCase([E, \"a\"], undefined, [700, 10]), await timeoutCase([E], { escapeCodeTimeout: 50 }, [200]), await timeoutCase([E + \"[\", \"A\"], undefined, [700, 10]), await timeoutCase([\"a\" + E], { escapeCodeTimeout: 50 }, [200]), await timeoutCase([E + E], { escapeCodeTimeout: 50 }, [200]), await timeoutCase([E, E], { escapeCodeTimeout: 50 }, [10, 200]),\n  ];\n  // listener management\n  { const s = new EventEmitter(); const r = {}; r.ret = enc(readline.emitKeypressEvents(s)); r.afterInstall = { data: s.listenerCount(\"data\"), newListener: s.listenerCount(\"newListener\") }; const l = () => {}; s.on(\"keypress\", l); r.afterKeypress = { data: s.listenerCount(\"data\"), newListener: s.listenerCount(\"newListener\") }; readline.emitKeypressEvents(s); r.twice = { data: s.listenerCount(\"data\"), newListener: s.listenerCount(\"newListener\") }; s.removeListener(\"keypress\", l); s.emit(\"data\", Buffer.from(\"a\")); r.afterRemoveAndData = { data: s.listenerCount(\"data\"), newListener: s.listenerCount(\"newListener\") };\n    const got = []; s.on(\"keypress\", (x) => got.push(x)); s.emit(\"data\", Buffer.from(\"b\")); r.reattached = got; r.symbols = Object.getOwnPropertySymbols(s).map(String).filter(x => /keypress|escape/.test(x));\n    const s2 = new EventEmitter(); s2.on(\"keypress\", () => {}); readline.emitKeypressEvents(s2); r.preexisting = { data: s2.listenerCount(\"data\"), newListener: s2.listenerCount(\"newListener\") };\n    // throwing listener restarts decoder\n    const s3 = new EventEmitter(); readline.emitKeypressEvents(s3); let n = 0; const seen = []; s3.on(\"keypress\", (x) => { seen.push(x); if (n++ === 0) throw new Error(\"boom\"); }); try { s3.emit(\"data\", Buffer.from(\"ab\")); } catch (e) { r.thrown = e.message; } s3.emit(\"data\", Buffer.from(\"c\")); r.afterThrow = seen;\n    r.errors = [[], [null], [undefined], [5]].map(a => { try { return { value: enc(readline.emitKeypressEvents(...a)) }; } catch (e) { return { error: err(e) }; } });\n    out.keypressListeners = r; }\n  // promises.Readline\n  const mk = () => { const writes = []; const w = new Writable({ write(c, e, cb) { writes.push(String(c)); cb(); } }); return { w, writes }; };\n  const seqs = [\n    [[\"cursorTo\", 0]], [[\"cursorTo\", 3, 4]], [[\"cursorTo\", 1, U]], [[\"cursorTo\", 1, null]], [[\"moveCursor\", 1, -1]], [[\"moveCursor\", -3, 2]], [[\"moveCursor\", 0, 0]], [[\"clearLine\", -1]], [[\"clearLine\", 0]], [[\"clearLine\", 1]], [[\"clearScreenDown\"]],\n    [[\"cursorTo\", 0, 0], [\"clearScreenDown\"], [\"moveCursor\", 2, 2], [\"clearLine\", 0]], [[\"clearLine\", 1], [\"rollback\"], [\"cursorTo\", 9]], [],\n    [[\"cursorTo\", \"1\"]], [[\"cursorTo\", 1.5]], [[\"cursorTo\", 1, \"2\"]], [[\"cursorTo\"]], [[\"cursorTo\", { $: \"NaN\" }]], [[\"moveCursor\", 1]], [[\"moveCursor\", \"1\", 0]], [[\"moveCursor\", 0, 1.5]], [[\"moveCursor\", U, U]], [[\"moveCursor\", 0, \"a\"]], [[\"clearLine\", 2]], [[\"clearLine\", -2]], [[\"clearLine\", \"0\"]], [[\"clearLine\"]], [[\"clearLine\", 0.5]], [[\"cursorTo\", -1, -5]],\n  ];\n  out.readlineClass = [];\n  for (const seq of seqs) {\n    const { w, writes } = mk(); const rl = new rlp.Readline(w); const steps = [];\n    for (const [op, ...a] of seq) { try { const r = rl[op](...a.map(x => x && x.$ === \"NaN\" ? NaN : x && x.$ === \"undefined\" ? undefined : x)); steps.push({ chain: r === rl }); } catch (e) { steps.push({ error: err(e) }); } }\n    const before = writes.slice(); const res = await rl.commit(); const again = await (async () => { const n = writes.length; await rl.commit(); return writes.slice(n); })();\n    out.readlineClass.push({ seq, steps, before, writes: writes.slice(0, writes.length - again.length), commitResult: enc(res), secondCommit: again });\n  }\n  { const { w, writes } = mk(); const rl = new rlp.Readline(w, { autoCommit: true }); const r = {}; r.chain = rl.cursorTo(1, 2).moveCursor(1, 1).clearLine(0).clearScreenDown() === rl; r.sync = writes.slice(); await tick(); r.afterTick = writes.slice(); await rl.commit(); r.afterCommit = writes.slice(); out.autoCommit = r; }\n  out.readlineCtorErrors = [[], [null], [{}], [{ write() {} }], [\"s\"], [\"$w\", { autoCommit: \"yes\" }], [\"$w\", { autoCommit: 1 }], [\"$w\", { autoCommit: null }], [\"$w\", null], [\"$w\", 5], [\"$ended\"], [\"$destroyed\"], [\"$fake\"], [\"$fakeNoOn\"], [\"$emitter\"], [\"$pass\"]].map(a => { try { const real = a.map(x => x === \"$w\" ? mk().w : x === \"$ended\" ? (() => { const w = mk().w; w.end(); return w; })() : x === \"$destroyed\" ? (() => { const w = mk().w; w.destroy(); return w; })() : x === \"$fake\" ? { writable: true, write() {}, on() {} } : x === \"$fakeNoOn\" ? { writable: true, write() {} } : x === \"$emitter\" ? Object.assign(new EventEmitter(), { write() {} }) : x === \"$pass\" ? new PassThrough() : x); new rlp.Readline(...real); return { args: a, ok: true }; } catch (e) { return { args: a, error: err(e) }; } });\n  // promises.Interface\n  { const r = {}; const input = new PassThrough(), { w, writes } = mk();\n    const rl = rlp.createInterface({ input, output: w, terminal: false });\n    r.instance = [rl instanceof rlp.Interface, rl instanceof readline.Interface, rl instanceof EventEmitter];\n    const p = rl.question(\"name? \"); r.isPromise = p instanceof Promise; input.write(\"Ada\\n\"); r.answer = await p; r.writes = writes.slice();\n    const ac = new AbortController(); const p2 = rl.question(\"q2 \", { signal: ac.signal }); ac.abort(); r.abort = await p2.then(v => ({ v }), e => ({ ...err(e), cause: enc(e.cause && e.cause.name), causeIsReason: e.cause === ac.signal.reason, isError: e instanceof Error, ctor: e.constructor.name }));\n    const lines = []; rl.on(\"line\", l => lines.push(l)); input.write(\"after-abort\\n\"); await tick(); await tick(); r.linesAfterAbort = lines.slice();\n    const ac3 = new AbortController(); ac3.abort(new Error(\"custom\")); r.preAborted = await rl.question(\"q3 \", { signal: ac3.signal }).then(v => ({ v }), e => ({ ...err(e), causeMsg: e.cause && e.cause.message })); r.writesAfterPreAbort = writes.slice();\n    r.badSignal = await rl.question(\"q4 \", { signal: {} }).then(v => ({ v }), e => err(e)); r.badSignal2 = await rl.question(\"q4b \", { signal: \"x\" }).then(v => ({ v }), e => err(e));\n    r.nullOptions = await (() => { const q = rl.question(\"q5 \", null); input.write(\"five\\n\"); return q; })();\n    r.writesAll = writes.slice();\n    const ac6 = new AbortController(); const p6 = rl.question(\"q6 \", { signal: ac6.signal }); input.write(\"six\\n\"); r.answered6 = await p6; ac6.abort(); await tick(); r.afterAnswerAbortOk = true;\n    const pending = rl.question(\"pending \"); let settled = \"pending\"; pending.then(v => { settled = { v }; }, e => { settled = err(e); }); rl.close(); await new Promise(x => setTimeout(x, 50)); r.pendingAfterClose = settled;\n    r.afterClose = await rl.question(\"closed? \").then(v => ({ v }), e => err(e)); r.questionLength = rl.question.length; r.questionName = rl.question.name;\n    out.promisesInterface = r; }\n  process.stdout.write(JSON.stringify(out, null, 1));\n})().catch(e => { console.error(e); process.exit(1); });\n",
+ "functions": [
+  {
+   "name": "cursorTo",
+   "fname": "cursorTo",
+   "length": 4
+  },
+  {
+   "name": "moveCursor",
+   "fname": "moveCursor",
+   "length": 4
+  },
+  {
+   "name": "clearLine",
+   "fname": "clearLine",
+   "length": 3
+  },
+  {
+   "name": "clearScreenDown",
+   "fname": "clearScreenDown",
+   "length": 2
+  },
+  {
+   "name": "emitKeypressEvents",
+   "fname": "emitKeypressEvents",
+   "length": 1
+  },
+  {
+   "name": "createInterface",
+   "fname": "createInterface",
+   "length": 4
+  },
+  {
+   "name": "Interface",
+   "fname": "Interface",
+   "length": 4
+  }
+ ],
+ "promisesFunctions": [
+  {
+   "name": "Interface",
+   "fname": "Interface",
+   "length": 0
+  },
+  {
+   "name": "Readline",
+   "fname": "Readline",
+   "length": 1
+  },
+  {
+   "name": "createInterface",
+   "fname": "createInterface",
+   "length": 4
+  }
+ ],
+ "promisesSame": true,
+ "promisesKeys": [
+  "Interface",
+  "Readline",
+  "createInterface"
+ ],
+ "readlineProto": [
+  "constructor",
+  "cursorTo",
+  "moveCursor",
+  "clearLine",
+  "clearScreenDown",
+  "commit",
+  "rollback"
+ ],
+ "interfaceExtends": true,
+ "callbacks": [
+  {
+   "fn": "cursorTo",
+   "args": [
+    "$stream",
+    0
+   ],
+   "returned": "written",
+   "writes": [
+    [
+     "\u001b[1G",
+     "undefined"
+    ]
+   ],
+   "cbCalls": [],
+   "cbSync": 0
+  },
+  {
+   "fn": "cursorTo",
+   "args": [
+    "$stream",
+    5
+   ],
+   "returned": "written",
+   "writes": [
+    [
+     "\u001b[6G",
+     "undefined"
+    ]
+   ],
+   "cbCalls": [],
+   "cbSync": 0
+  },
+  {
+   "fn": "cursorTo",
+   "args": [
+    "$stream",
+    3,
+    7
+   ],
+   "returned": "written",
+   "writes": [
+    [
+     "\u001b[8;4H",
+     "undefined"
+    ]
+   ],
+   "cbCalls": [],
+   "cbSync": 0
+  },
+  {
+   "fn": "cursorTo",
+   "args": [
+    "$stream",
+    0,
+    0
+   ],
+   "returned": "written",
+   "writes": [
+    [
+     "\u001b[1;1H",
+     "undefined"
+    ]
+   ],
+   "cbCalls": [],
+   "cbSync": 0
+  },
+  {
+   "fn": "cursorTo",
+   "args": [
+    "$stream",
+    3,
+    {
+     "$": "undefined"
+    },
+    "$cb"
+   ],
+   "returned": "written",
+   "writes": [
+    [
+     "\u001b[4G",
+     "function"
+    ]
+   ],
+   "cbCalls": [],
+   "cbSync": 0
+  },
+  {
+   "fn": "cursorTo",
+   "args": [
+    "$stream",
+    3,
+    "$cb"
+   ],
+   "returned": "written",
+   "writes": [
+    [
+     "\u001b[4G",
+     "function"
+    ]
+   ],
+   "cbCalls": [],
+   "cbSync": 0
+  },
+  {
+   "fn": "cursorTo",
+   "args": [
+    "$stream",
+    3,
+    7,
+    "$cb"
+   ],
+   "returned": "written",
+   "writes": [
+    [
+     "\u001b[8;4H",
+     "function"
+    ]
+   ],
+   "cbCalls": [],
+   "cbSync": 0
+  },
+  {
+   "fn": "cursorTo",
+   "args": [
+    "$stream",
+    {
+     "$": "NaN"
+    }
+   ],
+   "error": {
+    "name": "TypeError",
+    "code": "ERR_INVALID_ARG_VALUE",
+    "message": "The argument 'x' is invalid. Received NaN"
+   },
+   "writes": [],
+   "cbCalls": [],
+   "cbSync": 0
+  },
+  {
+   "fn": "cursorTo",
+   "args": [
+    "$stream",
+    1,
+    {
+     "$": "NaN"
+    }
+   ],
+   "error": {
+    "name": "TypeError",
+    "code": "ERR_INVALID_ARG_VALUE",
+    "message": "The argument 'y' is invalid. Received NaN"
+   },
+   "writes": [],
+   "cbCalls": [],
+   "cbSync": 0
+  },
+  {
+   "fn": "cursorTo",
+   "args": [
+    "$stream",
+    {
+     "$": "undefined"
+    },
+    4
+   ],
+   "error": {
+    "name": "TypeError",
+    "code": "ERR_INVALID_CURSOR_POS",
+    "message": "Cannot set cursor row without setting its column"
+   },
+   "writes": [],
+   "cbCalls": [],
+   "cbSync": 0
+  },
+  {
+   "fn": "cursorTo",
+   "args": [
+    "$stream",
+    "1",
+    4
+   ],
+   "error": {
+    "name": "TypeError",
+    "code": "ERR_INVALID_CURSOR_POS",
+    "message": "Cannot set cursor row without setting its column"
+   },
+   "writes": [],
+   "cbCalls": [],
+   "cbSync": 0
+  },
+  {
+   "fn": "cursorTo",
+   "args": [
+    "$stream",
+    "a",
+    "b"
+   ],
+   "returned": true,
+   "writes": [],
+   "cbCalls": [],
+   "cbSync": 0
+  },
+  {
+   "fn": "cursorTo",
+   "args": [
+    "$stream"
+   ],
+   "returned": true,
+   "writes": [],
+   "cbCalls": [],
+   "cbSync": 0
+  },
+  {
+   "fn": "cursorTo",
+   "args": [
+    "$stream",
+    {
+     "$": "undefined"
+    },
+    {
+     "$": "undefined"
+    },
+    "$cb"
+   ],
+   "returned": true,
+   "writes": [],
+   "cbCalls": [
+    [
+     null
+    ]
+   ],
+   "cbSync": 0
+  },
+  {
+   "fn": "cursorTo",
+   "args": [
+    "$stream",
+    "1"
+   ],
+   "returned": true,
+   "writes": [],
+   "cbCalls": [],
+   "cbSync": 0
+  },
+  {
+   "fn": "cursorTo",
+   "args": [
+    "$stream",
+    1,
+    "2"
+   ],
+   "returned": "written",
+   "writes": [
+    [
+     "\u001b[2G",
+     "undefined"
+    ]
+   ],
+   "cbCalls": [],
+   "cbSync": 0
+  },
+  {
+   "fn": "cursorTo",
+   "args": [
+    null,
+    1,
+    2
+   ],
+   "returned": true,
+   "writes": [],
+   "cbCalls": [],
+   "cbSync": 0
+  },
+  {
+   "fn": "cursorTo",
+   "args": [
+    {
+     "$": "undefined"
+    },
+    1,
+    2,
+    "$cb"
+   ],
+   "returned": true,
+   "writes": [],
+   "cbCalls": [
+    [
+     null
+    ]
+   ],
+   "cbSync": 0
+  },
+  {
+   "fn": "cursorTo",
+   "args": [
+    null,
+    1,
+    "$cb"
+   ],
+   "returned": true,
+   "writes": [],
+   "cbCalls": [
+    [
+     null
+    ]
+   ],
+   "cbSync": 0
+  },
+  {
+   "fn": "cursorTo",
+   "args": [
+    "$stream",
+    1,
+    2,
+    "notfn"
+   ],
+   "error": {
+    "name": "TypeError",
+    "code": "ERR_INVALID_ARG_TYPE",
+    "message": "The \"callback\" argument must be of type function. Received type string ('notfn')"
+   },
+   "writes": [],
+   "cbCalls": [],
+   "cbSync": 0
+  },
+  {
+   "fn": "cursorTo",
+   "args": [
+    "$stream",
+    1,
+    2,
+    null
+   ],
+   "error": {
+    "name": "TypeError",
+    "code": "ERR_INVALID_ARG_TYPE",
+    "message": "The \"callback\" argument must be of type function. Received null"
+   },
+   "writes": [],
+   "cbCalls": [],
+   "cbSync": 0
+  },
+  {
+   "fn": "cursorTo",
+   "args": [
+    null,
+    {
+     "$": "NaN"
+    }
+   ],
+   "error": {
+    "name": "TypeError",
+    "code": "ERR_INVALID_ARG_VALUE",
+    "message": "The argument 'x' is invalid. Received NaN"
+   },
+   "writes": [],
+   "cbCalls": [],
+   "cbSync": 0
+  },
+  {
+   "fn": "cursorTo",
+   "args": [
+    "$stream",
+    1.5,
+    -2
+   ],
+   "returned": "written",
+   "writes": [
+    [
+     "\u001b[-1;2.5H",
+     "undefined"
+    ]
+   ],
+   "cbCalls": [],
+   "cbSync": 0
+  },
+  {
+   "fn": "cursorTo",
+   "args": [
+    "$stream",
+    -1
+   ],
+   "returned": "written",
+   "writes": [
+    [
+     "\u001b[0G",
+     "undefined"
+    ]
+   ],
+   "cbCalls": [],
+   "cbSync": 0
+  },
+  {
+   "fn": "cursorTo",
+   "args": [
+    null,
+    {
+     "$": "undefined"
+    },
+    3
+   ],
+   "returned": true,
+   "writes": [],
+   "cbCalls": [],
+   "cbSync": 0
+  },
+  {
+   "fn": "moveCursor",
+   "args": [
+    "$stream",
+    1,
+    0
+   ],
+   "returned": "written",
+   "writes": [
+    [
+     "\u001b[1C",
+     "undefined"
+    ]
+   ],
+   "cbCalls": [],
+   "cbSync": 0
+  },
+  {
+   "fn": "moveCursor",
+   "args": [
+    "$stream",
+    -2,
+    0
+   ],
+   "returned": "written",
+   "writes": [
+    [
+     "\u001b[2D",
+     "undefined"
+    ]
+   ],
+   "cbCalls": [],
+   "cbSync": 0
+  },
+  {
+   "fn": "moveCursor",
+   "args": [
+    "$stream",
+    0,
+    3
+   ],
+   "returned": "written",
+   "writes": [
+    [
+     "\u001b[3B",
+     "undefined"
+    ]
+   ],
+   "cbCalls": [],
+   "cbSync": 0
+  },
+  {
+   "fn": "moveCursor",
+   "args": [
+    "$stream",
+    0,
+    -4
+   ],
+   "returned": "written",
+   "writes": [
+    [
+     "\u001b[4A",
+     "undefined"
+    ]
+   ],
+   "cbCalls": [],
+   "cbSync": 0
+  },
+  {
+   "fn": "moveCursor",
+   "args": [
+    "$stream",
+    2,
+    -3
+   ],
+   "returned": "written",
+   "writes": [
+    [
+     "\u001b[2C\u001b[3A",
+     "undefined"
+    ]
+   ],
+   "cbCalls": [],
+   "cbSync": 0
+  },
+  {
+   "fn": "moveCursor",
+   "args": [
+    "$stream",
+    -1,
+    1,
+    "$cb"
+   ],
+   "returned": "written",
+   "writes": [
+    [
+     "\u001b[1D\u001b[1B",
+     "function"
+    ]
+   ],
+   "cbCalls": [],
+   "cbSync": 0
+  },
+  {
+   "fn": "moveCursor",
+   "args": [
+    "$stream",
+    0,
+    0
+   ],
+   "returned": true,
+   "writes": [],
+   "cbCalls": [],
+   "cbSync": 0
+  },
+  {
+   "fn": "moveCursor",
+   "args": [
+    "$stream",
+    0,
+    0,
+    "$cb"
+   ],
+   "returned": true,
+   "writes": [],
+   "cbCalls": [
+    [
+     null
+    ]
+   ],
+   "cbSync": 0
+  },
+  {
+   "fn": "moveCursor",
+   "args": [
+    "$stream"
+   ],
+   "returned": true,
+   "writes": [],
+   "cbCalls": [],
+   "cbSync": 0
+  },
+  {
+   "fn": "moveCursor",
+   "args": [
+    null,
+    1,
+    1,
+    "$cb"
+   ],
+   "returned": true,
+   "writes": [],
+   "cbCalls": [
+    [
+     null
+    ]
+   ],
+   "cbSync": 0
+  },
+  {
+   "fn": "moveCursor",
+   "args": [
+    {
+     "$": "undefined"
+    },
+    1,
+    1
+   ],
+   "returned": true,
+   "writes": [],
+   "cbCalls": [],
+   "cbSync": 0
+  },
+  {
+   "fn": "moveCursor",
+   "args": [
+    "$stream",
+    1,
+    1,
+    5
+   ],
+   "error": {
+    "name": "TypeError",
+    "code": "ERR_INVALID_ARG_TYPE",
+    "message": "The \"callback\" argument must be of type function. Received type number (5)"
+   },
+   "writes": [],
+   "cbCalls": [],
+   "cbSync": 0
+  },
+  {
+   "fn": "moveCursor",
+   "args": [
+    "$stream",
+    "2",
+    "x"
+   ],
+   "returned": "written",
+   "writes": [
+    [
+     "\u001b[2C",
+     "undefined"
+    ]
+   ],
+   "cbCalls": [],
+   "cbSync": 0
+  },
+  {
+   "fn": "moveCursor",
+   "args": [
+    "$stream",
+    {
+     "$": "NaN"
+    },
+    1
+   ],
+   "returned": "written",
+   "writes": [
+    [
+     "\u001b[1B",
+     "undefined"
+    ]
+   ],
+   "cbCalls": [],
+   "cbSync": 0
+  },
+  {
+   "fn": "moveCursor",
+   "args": [
+    "$stream",
+    1.5,
+    {
+     "$": "undefined"
+    }
+   ],
+   "returned": "written",
+   "writes": [
+    [
+     "\u001b[1.5C",
+     "undefined"
+    ]
+   ],
+   "cbCalls": [],
+   "cbSync": 0
+  },
+  {
+   "fn": "moveCursor",
+   "args": [
+    "$stream",
+    "abc",
+    0
+   ],
+   "returned": "written",
+   "writes": [
+    [
+     "",
+     "undefined"
+    ]
+   ],
+   "cbCalls": [],
+   "cbSync": 0
+  },
+  {
+   "fn": "clearLine",
+   "args": [
+    "$stream",
+    -1
+   ],
+   "returned": "written",
+   "writes": [
+    [
+     "\u001b[1K",
+     "undefined"
+    ]
+   ],
+   "cbCalls": [],
+   "cbSync": 0
+  },
+  {
+   "fn": "clearLine",
+   "args": [
+    "$stream",
+    1
+   ],
+   "returned": "written",
+   "writes": [
+    [
+     "\u001b[0K",
+     "undefined"
+    ]
+   ],
+   "cbCalls": [],
+   "cbSync": 0
+  },
+  {
+   "fn": "clearLine",
+   "args": [
+    "$stream",
+    0
+   ],
+   "returned": "written",
+   "writes": [
+    [
+     "\u001b[2K",
+     "undefined"
+    ]
+   ],
+   "cbCalls": [],
+   "cbSync": 0
+  },
+  {
+   "fn": "clearLine",
+   "args": [
+    "$stream"
+   ],
+   "returned": "written",
+   "writes": [
+    [
+     "\u001b[2K",
+     "undefined"
+    ]
+   ],
+   "cbCalls": [],
+   "cbSync": 0
+  },
+  {
+   "fn": "clearLine",
+   "args": [
+    "$stream",
+    5,
+    "$cb"
+   ],
+   "returned": "written",
+   "writes": [
+    [
+     "\u001b[0K",
+     "function"
+    ]
+   ],
+   "cbCalls": [],
+   "cbSync": 0
+  },
+  {
+   "fn": "clearLine",
+   "args": [
+    "$stream",
+    "x"
+   ],
+   "returned": "written",
+   "writes": [
+    [
+     "\u001b[2K",
+     "undefined"
+    ]
+   ],
+   "cbCalls": [],
+   "cbSync": 0
+  },
+  {
+   "fn": "clearLine",
+   "args": [
+    null,
+    0,
+    "$cb"
+   ],
+   "returned": true,
+   "writes": [],
+   "cbCalls": [
+    [
+     null
+    ]
+   ],
+   "cbSync": 0
+  },
+  {
+   "fn": "clearLine",
+   "args": [
+    {
+     "$": "undefined"
+    },
+    0
+   ],
+   "returned": true,
+   "writes": [],
+   "cbCalls": [],
+   "cbSync": 0
+  },
+  {
+   "fn": "clearLine",
+   "args": [
+    "$stream",
+    0,
+    {}
+   ],
+   "error": {
+    "name": "TypeError",
+    "code": "ERR_INVALID_ARG_TYPE",
+    "message": "The \"callback\" argument must be of type function. Received an instance of Object"
+   },
+   "writes": [],
+   "cbCalls": [],
+   "cbSync": 0
+  },
+  {
+   "fn": "clearLine",
+   "args": [
+    "$stream",
+    "-1"
+   ],
+   "returned": "written",
+   "writes": [
+    [
+     "\u001b[1K",
+     "undefined"
+    ]
+   ],
+   "cbCalls": [],
+   "cbSync": 0
+  },
+  {
+   "fn": "clearScreenDown",
+   "args": [
+    "$stream"
+   ],
+   "returned": "written",
+   "writes": [
+    [
+     "\u001b[0J",
+     "undefined"
+    ]
+   ],
+   "cbCalls": [],
+   "cbSync": 0
+  },
+  {
+   "fn": "clearScreenDown",
+   "args": [
+    "$stream",
+    "$cb"
+   ],
+   "returned": "written",
+   "writes": [
+    [
+     "\u001b[0J",
+     "function"
+    ]
+   ],
+   "cbCalls": [],
+   "cbSync": 0
+  },
+  {
+   "fn": "clearScreenDown",
+   "args": [
+    null,
+    "$cb"
+   ],
+   "returned": true,
+   "writes": [],
+   "cbCalls": [
+    [
+     null
+    ]
+   ],
+   "cbSync": 0
+  },
+  {
+   "fn": "clearScreenDown",
+   "args": [
+    {
+     "$": "undefined"
+    }
+   ],
+   "returned": true,
+   "writes": [],
+   "cbCalls": [],
+   "cbSync": 0
+  },
+  {
+   "fn": "clearScreenDown",
+   "args": [
+    "$stream",
+    "x"
+   ],
+   "error": {
+    "name": "TypeError",
+    "code": "ERR_INVALID_ARG_TYPE",
+    "message": "The \"callback\" argument must be of type function. Received type string ('x')"
+   },
+   "writes": [],
+   "cbCalls": [],
+   "cbSync": 0
+  },
+  {
+   "fn": "clearScreenDown",
+   "args": [
+    "$stream",
+    null
+   ],
+   "error": {
+    "name": "TypeError",
+    "code": "ERR_INVALID_ARG_TYPE",
+    "message": "The \"callback\" argument must be of type function. Received null"
+   },
+   "writes": [],
+   "cbCalls": [],
+   "cbSync": 0
+  }
+ ],
+ "keys": [
+  {
+   "label": "a",
+   "chunks": [
+    "61"
+   ],
+   "events": [
+    {
+     "s": "a",
+     "keys": [
+      "sequence",
+      "name",
+      "ctrl",
+      "meta",
+      "shift"
+     ],
+     "key": {
+      "sequence": "a",
+      "name": "a",
+      "ctrl": false,
+      "meta": false,
+      "shift": false
+     }
+    }
+   ],
+   "completion": true
+  },
+  {
+   "label": "z",
+   "chunks": [
+    "7a"
+   ],
+   "events": [
+    {
+     "s": "z",
+     "keys": [
+      "sequence",
+      "name",
+      "ctrl",
+      "meta",
+      "shift"
+     ],
+     "key": {
+      "sequence": "z",
+      "name": "z",
+      "ctrl": false,
+      "meta": false,
+      "shift": false
+     }
+    }
+   ],
+   "completion": true
+  },
+  {
+   "label": "A",
+   "chunks": [
+    "41"
+   ],
+   "events": [
+    {
+     "s": "A",
+     "keys": [
+      "sequence",
+      "name",
+      "ctrl",
+      "meta",
+      "shift"
+     ],
+     "key": {
+      "sequence": "A",
+      "name": "a",
+      "ctrl": false,
+      "meta": false,
+      "shift": true
+     }
+    }
+   ],
+   "completion": true
+  },
+  {
+   "label": "Z",
+   "chunks": [
+    "5a"
+   ],
+   "events": [
+    {
+     "s": "Z",
+     "keys": [
+      "sequence",
+      "name",
+      "ctrl",
+      "meta",
+      "shift"
+     ],
+     "key": {
+      "sequence": "Z",
+      "name": "z",
+      "ctrl": false,
+      "meta": false,
+      "shift": true
+     }
+    }
+   ],
+   "completion": true
+  },
+  {
+   "label": "digit",
+   "chunks": [
+    "35"
+   ],
+   "events": [
+    {
+     "s": "5",
+     "keys": [
+      "sequence",
+      "name",
+      "ctrl",
+      "meta",
+      "shift"
+     ],
+     "key": {
+      "sequence": "5",
+      "name": "5",
+      "ctrl": false,
+      "meta": false,
+      "shift": false
+     }
+    }
+   ],
+   "completion": true
+  },
+  {
+   "label": "dot",
+   "chunks": [
+    "2e"
+   ],
+   "events": [
+    {
+     "s": ".",
+     "keys": [
+      "sequence",
+      "name",
+      "ctrl",
+      "meta",
+      "shift"
+     ],
+     "key": {
+      "sequence": ".",
+      "name": {
+       "$": "undefined"
+      },
+      "ctrl": false,
+      "meta": false,
+      "shift": false
+     }
+    }
+   ],
+   "completion": true
+  },
+  {
+   "label": "ctrl-a",
+   "chunks": [
+    "01"
+   ],
+   "events": [
+    {
+     "s": "\u0001",
+     "keys": [
+      "sequence",
+      "name",
+      "ctrl",
+      "meta",
+      "shift"
+     ],
+     "key": {
+      "sequence": "\u0001",
+      "name": "a",
+      "ctrl": true,
+      "meta": false,
+      "shift": false
+     }
+    }
+   ],
+   "completion": true
+  },
+  {
+   "label": "ctrl-c",
+   "chunks": [
+    "03"
+   ],
+   "events": [
+    {
+     "s": "\u0003",
+     "keys": [
+      "sequence",
+      "name",
+      "ctrl",
+      "meta",
+      "shift"
+     ],
+     "key": {
+      "sequence": "\u0003",
+      "name": "c",
+      "ctrl": true,
+      "meta": false,
+      "shift": false
+     }
+    }
+   ],
+   "completion": true
+  },
+  {
+   "label": "ctrl-d",
+   "chunks": [
+    "04"
+   ],
+   "events": [
+    {
+     "s": "\u0004",
+     "keys": [
+      "sequence",
+      "name",
+      "ctrl",
+      "meta",
+      "shift"
+     ],
+     "key": {
+      "sequence": "\u0004",
+      "name": "d",
+      "ctrl": true,
+      "meta": false,
+      "shift": false
+     }
+    }
+   ],
+   "completion": true
+  },
+  {
+   "label": "ctrl-z",
+   "chunks": [
+    "1a"
+   ],
+   "events": [
+    {
+     "s": "\u001a",
+     "keys": [
+      "sequence",
+      "name",
+      "ctrl",
+      "meta",
+      "shift"
+     ],
+     "key": {
+      "sequence": "\u001a",
+      "name": "z",
+      "ctrl": true,
+      "meta": false,
+      "shift": false
+     }
+    }
+   ],
+   "completion": true
+  },
+  {
+   "label": "ctrl-@",
+   "chunks": [
+    "00"
+   ],
+   "events": [
+    {
+     "s": "\u0000",
+     "keys": [
+      "sequence",
+      "name",
+      "ctrl",
+      "meta",
+      "shift"
+     ],
+     "key": {
+      "sequence": "\u0000",
+      "name": "`",
+      "ctrl": true,
+      "meta": false,
+      "shift": false
+     }
+    }
+   ],
+   "completion": true
+  },
+  {
+   "label": "return",
+   "chunks": [
+    "0d"
+   ],
+   "events": [
+    {
+     "s": "\r",
+     "keys": [
+      "sequence",
+      "name",
+      "ctrl",
+      "meta",
+      "shift"
+     ],
+     "key": {
+      "sequence": "\r",
+      "name": "return",
+      "ctrl": false,
+      "meta": false,
+      "shift": false
+     }
+    }
+   ],
+   "completion": true
+  },
+  {
+   "label": "enter",
+   "chunks": [
+    "0a"
+   ],
+   "events": [
+    {
+     "s": "\n",
+     "keys": [
+      "sequence",
+      "name",
+      "ctrl",
+      "meta",
+      "shift"
+     ],
+     "key": {
+      "sequence": "\n",
+      "name": "enter",
+      "ctrl": false,
+      "meta": false,
+      "shift": false
+     }
+    }
+   ],
+   "completion": true
+  },
+  {
+   "label": "tab",
+   "chunks": [
+    "09"
+   ],
+   "events": [
+    {
+     "s": "\t",
+     "keys": [
+      "sequence",
+      "name",
+      "ctrl",
+      "meta",
+      "shift"
+     ],
+     "key": {
+      "sequence": "\t",
+      "name": "tab",
+      "ctrl": false,
+      "meta": false,
+      "shift": false
+     }
+    }
+   ],
+   "completion": true
+  },
+  {
+   "label": "backspace",
+   "chunks": [
+    "7f"
+   ],
+   "events": [
+    {
+     "s": "\u007f",
+     "keys": [
+      "sequence",
+      "name",
+      "ctrl",
+      "meta",
+      "shift"
+     ],
+     "key": {
+      "sequence": "\u007f",
+      "name": "backspace",
+      "ctrl": false,
+      "meta": false,
+      "shift": false
+     }
+    }
+   ],
+   "completion": true
+  },
+  {
+   "label": "ctrl-h",
+   "chunks": [
+    "08"
+   ],
+   "events": [
+    {
+     "s": "\b",
+     "keys": [
+      "sequence",
+      "name",
+      "ctrl",
+      "meta",
+      "shift"
+     ],
+     "key": {
+      "sequence": "\b",
+      "name": "backspace",
+      "ctrl": false,
+      "meta": false,
+      "shift": false
+     }
+    }
+   ],
+   "completion": true
+  },
+  {
+   "label": "space",
+   "chunks": [
+    "20"
+   ],
+   "events": [
+    {
+     "s": " ",
+     "keys": [
+      "sequence",
+      "name",
+      "ctrl",
+      "meta",
+      "shift"
+     ],
+     "key": {
+      "sequence": " ",
+      "name": "space",
+      "ctrl": false,
+      "meta": false,
+      "shift": false
+     }
+    }
+   ],
+   "completion": true
+  },
+  {
+   "label": "up",
+   "chunks": [
+    "1b5b41"
+   ],
+   "events": [
+    {
+     "s": {
+      "$": "undefined"
+     },
+     "keys": [
+      "sequence",
+      "name",
+      "ctrl",
+      "meta",
+      "shift",
+      "code"
+     ],
+     "key": {
+      "sequence": "\u001b[A",
+      "name": "up",
+      "ctrl": false,
+      "meta": false,
+      "shift": false,
+      "code": "[A"
+     }
+    }
+   ],
+   "completion": true
+  },
+  {
+   "label": "down",
+   "chunks": [
+    "1b5b42"
+   ],
+   "events": [
+    {
+     "s": {
+      "$": "undefined"
+     },
+     "keys": [
+      "sequence",
+      "name",
+      "ctrl",
+      "meta",
+      "shift",
+      "code"
+     ],
+     "key": {
+      "sequence": "\u001b[B",
+      "name": "down",
+      "ctrl": false,
+      "meta": false,
+      "shift": false,
+      "code": "[B"
+     }
+    }
+   ],
+   "completion": true
+  },
+  {
+   "label": "right",
+   "chunks": [
+    "1b5b43"
+   ],
+   "events": [
+    {
+     "s": {
+      "$": "undefined"
+     },
+     "keys": [
+      "sequence",
+      "name",
+      "ctrl",
+      "meta",
+      "shift",
+      "code"
+     ],
+     "key": {
+      "sequence": "\u001b[C",
+      "name": "right",
+      "ctrl": false,
+      "meta": false,
+      "shift": false,
+      "code": "[C"
+     }
+    }
+   ],
+   "completion": true
+  },
+  {
+   "label": "left",
+   "chunks": [
+    "1b5b44"
+   ],
+   "events": [
+    {
+     "s": {
+      "$": "undefined"
+     },
+     "keys": [
+      "sequence",
+      "name",
+      "ctrl",
+      "meta",
+      "shift",
+      "code"
+     ],
+     "key": {
+      "sequence": "\u001b[D",
+      "name": "left",
+      "ctrl": false,
+      "meta": false,
+      "shift": false,
+      "code": "[D"
+     }
+    }
+   ],
+   "completion": true
+  },
+  {
+   "label": "clear",
+   "chunks": [
+    "1b5b45"
+   ],
+   "events": [
+    {
+     "s": {
+      "$": "undefined"
+     },
+     "keys": [
+      "sequence",
+      "name",
+      "ctrl",
+      "meta",
+      "shift",
+      "code"
+     ],
+     "key": {
+      "sequence": "\u001b[E",
+      "name": "clear",
+      "ctrl": false,
+      "meta": false,
+      "shift": false,
+      "code": "[E"
+     }
+    }
+   ],
+   "completion": true
+  },
+  {
+   "label": "home",
+   "chunks": [
+    "1b5b48"
+   ],
+   "events": [
+    {
+     "s": {
+      "$": "undefined"
+     },
+     "keys": [
+      "sequence",
+      "name",
+      "ctrl",
+      "meta",
+      "shift",
+      "code"
+     ],
+     "key": {
+      "sequence": "\u001b[H",
+      "name": "home",
+      "ctrl": false,
+      "meta": false,
+      "shift": false,
+      "code": "[H"
+     }
+    }
+   ],
+   "completion": true
+  },
+  {
+   "label": "end",
+   "chunks": [
+    "1b5b46"
+   ],
+   "events": [
+    {
+     "s": {
+      "$": "undefined"
+     },
+     "keys": [
+      "sequence",
+      "name",
+      "ctrl",
+      "meta",
+      "shift",
+      "code"
+     ],
+     "key": {
+      "sequence": "\u001b[F",
+      "name": "end",
+      "ctrl": false,
+      "meta": false,
+      "shift": false,
+      "code": "[F"
+     }
+    }
+   ],
+   "completion": true
+  },
+  {
+   "label": "home~",
+   "chunks": [
+    "1b5b317e"
+   ],
+   "events": [
+    {
+     "s": {
+      "$": "undefined"
+     },
+     "keys": [
+      "sequence",
+      "name",
+      "ctrl",
+      "meta",
+      "shift",
+      "code"
+     ],
+     "key": {
+      "sequence": "\u001b[1~",
+      "name": "home",
+      "ctrl": false,
+      "meta": false,
+      "shift": false,
+      "code": "[1~"
+     }
+    }
+   ],
+   "completion": true
+  },
+  {
+   "label": "end~",
+   "chunks": [
+    "1b5b347e"
+   ],
+   "events": [
+    {
+     "s": {
+      "$": "undefined"
+     },
+     "keys": [
+      "sequence",
+      "name",
+      "ctrl",
+      "meta",
+      "shift",
+      "code"
+     ],
+     "key": {
+      "sequence": "\u001b[4~",
+      "name": "end",
+      "ctrl": false,
+      "meta": false,
+      "shift": false,
+      "code": "[4~"
+     }
+    }
+   ],
+   "completion": true
+  },
+  {
+   "label": "insert",
+   "chunks": [
+    "1b5b327e"
+   ],
+   "events": [
+    {
+     "s": {
+      "$": "undefined"
+     },
+     "keys": [
+      "sequence",
+      "name",
+      "ctrl",
+      "meta",
+      "shift",
+      "code"
+     ],
+     "key": {
+      "sequence": "\u001b[2~",
+      "name": "insert",
+      "ctrl": false,
+      "meta": false,
+      "shift": false,
+      "code": "[2~"
+     }
+    }
+   ],
+   "completion": true
+  },
+  {
+   "label": "delete",
+   "chunks": [
+    "1b5b337e"
+   ],
+   "events": [
+    {
+     "s": {
+      "$": "undefined"
+     },
+     "keys": [
+      "sequence",
+      "name",
+      "ctrl",
+      "meta",
+      "shift",
+      "code"
+     ],
+     "key": {
+      "sequence": "\u001b[3~",
+      "name": "delete",
+      "ctrl": false,
+      "meta": false,
+      "shift": false,
+      "code": "[3~"
+     }
+    }
+   ],
+   "completion": true
+  },
+  {
+   "label": "pageup",
+   "chunks": [
+    "1b5b357e"
+   ],
+   "events": [
+    {
+     "s": {
+      "$": "undefined"
+     },
+     "keys": [
+      "sequence",
+      "name",
+      "ctrl",
+      "meta",
+      "shift",
+      "code"
+     ],
+     "key": {
+      "sequence": "\u001b[5~",
+      "name": "pageup",
+      "ctrl": false,
+      "meta": false,
+      "shift": false,
+      "code": "[5~"
+     }
+    }
+   ],
+   "completion": true
+  },
+  {
+   "label": "pagedown",
+   "chunks": [
+    "1b5b367e"
+   ],
+   "events": [
+    {
+     "s": {
+      "$": "undefined"
+     },
+     "keys": [
+      "sequence",
+      "name",
+      "ctrl",
+      "meta",
+      "shift",
+      "code"
+     ],
+     "key": {
+      "sequence": "\u001b[6~",
+      "name": "pagedown",
+      "ctrl": false,
+      "meta": false,
+      "shift": false,
+      "code": "[6~"
+     }
+    }
+   ],
+   "completion": true
+  },
+  {
+   "label": "home-rxvt",
+   "chunks": [
+    "1b5b377e"
+   ],
+   "events": [
+    {
+     "s": {
+      "$": "undefined"
+     },
+     "keys": [
+      "sequence",
+      "name",
+      "ctrl",
+      "meta",
+      "shift",
+      "code"
+     ],
+     "key": {
+      "sequence": "\u001b[7~",
+      "name": "home",
+      "ctrl": false,
+      "meta": false,
+      "shift": false,
+      "code": "[7~"
+     }
+    }
+   ],
+   "completion": true
+  },
+  {
+   "label": "end-rxvt",
+   "chunks": [
+    "1b5b387e"
+   ],
+   "events": [
+    {
+     "s": {
+      "$": "undefined"
+     },
+     "keys": [
+      "sequence",
+      "name",
+      "ctrl",
+      "meta",
+      "shift",
+      "code"
+     ],
+     "key": {
+      "sequence": "\u001b[8~",
+      "name": "end",
+      "ctrl": false,
+      "meta": false,
+      "shift": false,
+      "code": "[8~"
+     }
+    }
+   ],
+   "completion": true
+  },
+  {
+   "label": "O-up",
+   "chunks": [
+    "1b4f41"
+   ],
+   "events": [
+    {
+     "s": {
+      "$": "undefined"
+     },
+     "keys": [
+      "sequence",
+      "name",
+      "ctrl",
+      "meta",
+      "shift",
+      "code"
+     ],
+     "key": {
+      "sequence": "\u001bOA",
+      "name": "up",
+      "ctrl": false,
+      "meta": false,
+      "shift": false,
+      "code": "OA"
+     }
+    }
+   ],
+   "completion": true
+  },
+  {
+   "label": "O-home",
+   "chunks": [
+    "1b4f48"
+   ],
+   "events": [
+    {
+     "s": {
+      "$": "undefined"
+     },
+     "keys": [
+      "sequence",
+      "name",
+      "ctrl",
+      "meta",
+      "shift",
+      "code"
+     ],
+     "key": {
+      "sequence": "\u001bOH",
+      "name": "home",
+      "ctrl": false,
+      "meta": false,
+      "shift": false,
+      "code": "OH"
+     }
+    }
+   ],
+   "completion": true
+  },
+  {
+   "label": "O-end",
+   "chunks": [
+    "1b4f46"
+   ],
+   "events": [
+    {
+     "s": {
+      "$": "undefined"
+     },
+     "keys": [
+      "sequence",
+      "name",
+      "ctrl",
+      "meta",
+      "shift",
+      "code"
+     ],
+     "key": {
+      "sequence": "\u001bOF",
+      "name": "end",
+      "ctrl": false,
+      "meta": false,
+      "shift": false,
+      "code": "OF"
+     }
+    }
+   ],
+   "completion": true
+  },
+  {
+   "label": "f1",
+   "chunks": [
+    "1b4f50"
+   ],
+   "events": [
+    {
+     "s": {
+      "$": "undefined"
+     },
+     "keys": [
+      "sequence",
+      "name",
+      "ctrl",
+      "meta",
+      "shift",
+      "code"
+     ],
+     "key": {
+      "sequence": "\u001bOP",
+      "name": "f1",
+      "ctrl": false,
+      "meta": false,
+      "shift": false,
+      "code": "OP"
+     }
+    }
+   ],
+   "completion": true
+  },
+  {
+   "label": "f2",
+   "chunks": [
+    "1b4f51"
+   ],
+   "events": [
+    {
+     "s": {
+      "$": "undefined"
+     },
+     "keys": [
+      "sequence",
+      "name",
+      "ctrl",
+      "meta",
+      "shift",
+      "code"
+     ],
+     "key": {
+      "sequence": "\u001bOQ",
+      "name": "f2",
+      "ctrl": false,
+      "meta": false,
+      "shift": false,
+      "code": "OQ"
+     }
+    }
+   ],
+   "completion": true
+  },
+  {
+   "label": "f3",
+   "chunks": [
+    "1b4f52"
+   ],
+   "events": [
+    {
+     "s": {
+      "$": "undefined"
+     },
+     "keys": [
+      "sequence",
+      "name",
+      "ctrl",
+      "meta",
+      "shift",
+      "code"
+     ],
+     "key": {
+      "sequence": "\u001bOR",
+      "name": "f3",
+      "ctrl": false,
+      "meta": false,
+      "shift": false,
+      "code": "OR"
+     }
+    }
+   ],
+   "completion": true
+  },
+  {
+   "label": "f4",
+   "chunks": [
+    "1b4f53"
+   ],
+   "events": [
+    {
+     "s": {
+      "$": "undefined"
+     },
+     "keys": [
+      "sequence",
+      "name",
+      "ctrl",
+      "meta",
+      "shift",
+      "code"
+     ],
+     "key": {
+      "sequence": "\u001bOS",
+      "name": "f4",
+      "ctrl": false,
+      "meta": false,
+      "shift": false,
+      "code": "OS"
+     }
+    }
+   ],
+   "completion": true
+  },
+  {
+   "label": "f1~",
+   "chunks": [
+    "1b5b31317e"
+   ],
+   "events": [
+    {
+     "s": {
+      "$": "undefined"
+     },
+     "keys": [
+      "sequence",
+      "name",
+      "ctrl",
+      "meta",
+      "shift",
+      "code"
+     ],
+     "key": {
+      "sequence": "\u001b[11~",
+      "name": "f1",
+      "ctrl": false,
+      "meta": false,
+      "shift": false,
+      "code": "[11~"
+     }
+    }
+   ],
+   "completion": true
+  },
+  {
+   "label": "f2~",
+   "chunks": [
+    "1b5b31327e"
+   ],
+   "events": [
+    {
+     "s": {
+      "$": "undefined"
+     },
+     "keys": [
+      "sequence",
+      "name",
+      "ctrl",
+      "meta",
+      "shift",
+      "code"
+     ],
+     "key": {
+      "sequence": "\u001b[12~",
+      "name": "f2",
+      "ctrl": false,
+      "meta": false,
+      "shift": false,
+      "code": "[12~"
+     }
+    }
+   ],
+   "completion": true
+  },
+  {
+   "label": "f3~",
+   "chunks": [
+    "1b5b31337e"
+   ],
+   "events": [
+    {
+     "s": {
+      "$": "undefined"
+     },
+     "keys": [
+      "sequence",
+      "name",
+      "ctrl",
+      "meta",
+      "shift",
+      "code"
+     ],
+     "key": {
+      "sequence": "\u001b[13~",
+      "name": "f3",
+      "ctrl": false,
+      "meta": false,
+      "shift": false,
+      "code": "[13~"
+     }
+    }
+   ],
+   "completion": true
+  },
+  {
+   "label": "f4~",
+   "chunks": [
+    "1b5b31347e"
+   ],
+   "events": [
+    {
+     "s": {
+      "$": "undefined"
+     },
+     "keys": [
+      "sequence",
+      "name",
+      "ctrl",
+      "meta",
+      "shift",
+      "code"
+     ],
+     "key": {
+      "sequence": "\u001b[14~",
+      "name": "f4",
+      "ctrl": false,
+      "meta": false,
+      "shift": false,
+      "code": "[14~"
+     }
+    }
+   ],
+   "completion": true
+  },
+  {
+   "label": "f1[[",
+   "chunks": [
+    "1b5b5b41"
+   ],
+   "events": [
+    {
+     "s": {
+      "$": "undefined"
+     },
+     "keys": [
+      "sequence",
+      "name",
+      "ctrl",
+      "meta",
+      "shift",
+      "code"
+     ],
+     "key": {
+      "sequence": "\u001b[[A",
+      "name": "f1",
+      "ctrl": false,
+      "meta": false,
+      "shift": false,
+      "code": "[[A"
+     }
+    }
+   ],
+   "completion": true
+  },
+  {
+   "label": "f5[[",
+   "chunks": [
+    "1b5b5b45"
+   ],
+   "events": [
+    {
+     "s": {
+      "$": "undefined"
+     },
+     "keys": [
+      "sequence",
+      "name",
+      "ctrl",
+      "meta",
+      "shift",
+      "code"
+     ],
+     "key": {
+      "sequence": "\u001b[[E",
+      "name": "f5",
+      "ctrl": false,
+      "meta": false,
+      "shift": false,
+      "code": "[[E"
+     }
+    }
+   ],
+   "completion": true
+  },
+  {
+   "label": "f5",
+   "chunks": [
+    "1b5b31357e"
+   ],
+   "events": [
+    {
+     "s": {
+      "$": "undefined"
+     },
+     "keys": [
+      "sequence",
+      "name",
+      "ctrl",
+      "meta",
+      "shift",
+      "code"
+     ],
+     "key": {
+      "sequence": "\u001b[15~",
+      "name": "f5",
+      "ctrl": false,
+      "meta": false,
+      "shift": false,
+      "code": "[15~"
+     }
+    }
+   ],
+   "completion": true
+  },
+  {
+   "label": "f6",
+   "chunks": [
+    "1b5b31377e"
+   ],
+   "events": [
+    {
+     "s": {
+      "$": "undefined"
+     },
+     "keys": [
+      "sequence",
+      "name",
+      "ctrl",
+      "meta",
+      "shift",
+      "code"
+     ],
+     "key": {
+      "sequence": "\u001b[17~",
+      "name": "f6",
+      "ctrl": false,
+      "meta": false,
+      "shift": false,
+      "code": "[17~"
+     }
+    }
+   ],
+   "completion": true
+  },
+  {
+   "label": "f7",
+   "chunks": [
+    "1b5b31387e"
+   ],
+   "events": [
+    {
+     "s": {
+      "$": "undefined"
+     },
+     "keys": [
+      "sequence",
+      "name",
+      "ctrl",
+      "meta",
+      "shift",
+      "code"
+     ],
+     "key": {
+      "sequence": "\u001b[18~",
+      "name": "f7",
+      "ctrl": false,
+      "meta": false,
+      "shift": false,
+      "code": "[18~"
+     }
+    }
+   ],
+   "completion": true
+  },
+  {
+   "label": "f8",
+   "chunks": [
+    "1b5b31397e"
+   ],
+   "events": [
+    {
+     "s": {
+      "$": "undefined"
+     },
+     "keys": [
+      "sequence",
+      "name",
+      "ctrl",
+      "meta",
+      "shift",
+      "code"
+     ],
+     "key": {
+      "sequence": "\u001b[19~",
+      "name": "f8",
+      "ctrl": false,
+      "meta": false,
+      "shift": false,
+      "code": "[19~"
+     }
+    }
+   ],
+   "completion": true
+  },
+  {
+   "label": "f9",
+   "chunks": [
+    "1b5b32307e"
+   ],
+   "events": [
+    {
+     "s": {
+      "$": "undefined"
+     },
+     "keys": [
+      "sequence",
+      "name",
+      "ctrl",
+      "meta",
+      "shift",
+      "code"
+     ],
+     "key": {
+      "sequence": "\u001b[20~",
+      "name": "f9",
+      "ctrl": false,
+      "meta": false,
+      "shift": false,
+      "code": "[20~"
+     }
+    }
+   ],
+   "completion": true
+  },
+  {
+   "label": "f10",
+   "chunks": [
+    "1b5b32317e"
+   ],
+   "events": [
+    {
+     "s": {
+      "$": "undefined"
+     },
+     "keys": [
+      "sequence",
+      "name",
+      "ctrl",
+      "meta",
+      "shift",
+      "code"
+     ],
+     "key": {
+      "sequence": "\u001b[21~",
+      "name": "f10",
+      "ctrl": false,
+      "meta": false,
+      "shift": false,
+      "code": "[21~"
+     }
+    }
+   ],
+   "completion": true
+  },
+  {
+   "label": "f11",
+   "chunks": [
+    "1b5b32337e"
+   ],
+   "events": [
+    {
+     "s": {
+      "$": "undefined"
+     },
+     "keys": [
+      "sequence",
+      "name",
+      "ctrl",
+      "meta",
+      "shift",
+      "code"
+     ],
+     "key": {
+      "sequence": "\u001b[23~",
+      "name": "f11",
+      "ctrl": false,
+      "meta": false,
+      "shift": false,
+      "code": "[23~"
+     }
+    }
+   ],
+   "completion": true
+  },
+  {
+   "label": "f12",
+   "chunks": [
+    "1b5b32347e"
+   ],
+   "events": [
+    {
+     "s": {
+      "$": "undefined"
+     },
+     "keys": [
+      "sequence",
+      "name",
+      "ctrl",
+      "meta",
+      "shift",
+      "code"
+     ],
+     "key": {
+      "sequence": "\u001b[24~",
+      "name": "f12",
+      "ctrl": false,
+      "meta": false,
+      "shift": false,
+      "code": "[24~"
+     }
+    }
+   ],
+   "completion": true
+  },
+  {
+   "label": "f1-xterm-mod",
+   "chunks": [
+    "1b5b313b3250"
+   ],
+   "events": [
+    {
+     "s": {
+      "$": "undefined"
+     },
+     "keys": [
+      "sequence",
+      "name",
+      "ctrl",
+      "meta",
+      "shift",
+      "code"
+     ],
+     "key": {
+      "sequence": "\u001b[1;2P",
+      "name": "f1",
+      "ctrl": false,
+      "meta": false,
+      "shift": true,
+      "code": "[P"
+     }
+    }
+   ],
+   "completion": true
+  },
+  {
+   "label": "shift-up",
+   "chunks": [
+    "1b5b313b3241"
+   ],
+   "events": [
+    {
+     "s": {
+      "$": "undefined"
+     },
+     "keys": [
+      "sequence",
+      "name",
+      "ctrl",
+      "meta",
+      "shift",
+      "code"
+     ],
+     "key": {
+      "sequence": "\u001b[1;2A",
+      "name": "up",
+      "ctrl": false,
+      "meta": false,
+      "shift": true,
+      "code": "[A"
+     }
+    }
+   ],
+   "completion": true
+  },
+  {
+   "label": "meta-up",
+   "chunks": [
+    "1b5b313b3341"
+   ],
+   "events": [
+    {
+     "s": {
+      "$": "undefined"
+     },
+     "keys": [
+      "sequence",
+      "name",
+      "ctrl",
+      "meta",
+      "shift",
+      "code"
+     ],
+     "key": {
+      "sequence": "\u001b[1;3A",
+      "name": "up",
+      "ctrl": false,
+      "meta": true,
+      "shift": false,
+      "code": "[A"
+     }
+    }
+   ],
+   "completion": true
+  },
+  {
+   "label": "ctrl-up",
+   "chunks": [
+    "1b5b313b3541"
+   ],
+   "events": [
+    {
+     "s": {
+      "$": "undefined"
+     },
+     "keys": [
+      "sequence",
+      "name",
+      "ctrl",
+      "meta",
+      "shift",
+      "code"
+     ],
+     "key": {
+      "sequence": "\u001b[1;5A",
+      "name": "up",
+      "ctrl": true,
+      "meta": false,
+      "shift": false,
+      "code": "[A"
+     }
+    }
+   ],
+   "completion": true
+  },
+  {
+   "label": "ctrl-shift-right",
+   "chunks": [
+    "1b5b313b3643"
+   ],
+   "events": [
+    {
+     "s": {
+      "$": "undefined"
+     },
+     "keys": [
+      "sequence",
+      "name",
+      "ctrl",
+      "meta",
+      "shift",
+      "code"
+     ],
+     "key": {
+      "sequence": "\u001b[1;6C",
+      "name": "right",
+      "ctrl": true,
+      "meta": false,
+      "shift": true,
+      "code": "[C"
+     }
+    }
+   ],
+   "completion": true
+  },
+  {
+   "label": "meta-ctrl-left",
+   "chunks": [
+    "1b5b313b3744"
+   ],
+   "events": [
+    {
+     "s": {
+      "$": "undefined"
+     },
+     "keys": [
+      "sequence",
+      "name",
+      "ctrl",
+      "meta",
+      "shift",
+      "code"
+     ],
+     "key": {
+      "sequence": "\u001b[1;7D",
+      "name": "left",
+      "ctrl": true,
+      "meta": true,
+      "shift": false,
+      "code": "[D"
+     }
+    }
+   ],
+   "completion": true
+  },
+  {
+   "label": "all-down",
+   "chunks": [
+    "1b5b313b3842"
+   ],
+   "events": [
+    {
+     "s": {
+      "$": "undefined"
+     },
+     "keys": [
+      "sequence",
+      "name",
+      "ctrl",
+      "meta",
+      "shift",
+      "code"
+     ],
+     "key": {
+      "sequence": "\u001b[1;8B",
+      "name": "down",
+      "ctrl": true,
+      "meta": true,
+      "shift": true,
+      "code": "[B"
+     }
+    }
+   ],
+   "completion": true
+  },
+  {
+   "label": "ralt-up",
+   "chunks": [
+    "1b5b313b3941"
+   ],
+   "events": [
+    {
+     "s": {
+      "$": "undefined"
+     },
+     "keys": [
+      "sequence",
+      "name",
+      "ctrl",
+      "meta",
+      "shift",
+      "code"
+     ],
+     "key": {
+      "sequence": "\u001b[1;9A",
+      "name": "up",
+      "ctrl": false,
+      "meta": true,
+      "shift": false,
+      "code": "[A"
+     }
+    }
+   ],
+   "completion": true
+  },
+  {
+   "label": "ctrl-f12",
+   "chunks": [
+    "1b5b32343b357e"
+   ],
+   "events": [
+    {
+     "s": {
+      "$": "undefined"
+     },
+     "keys": [
+      "sequence",
+      "name",
+      "ctrl",
+      "meta",
+      "shift",
+      "code"
+     ],
+     "key": {
+      "sequence": "\u001b[24;5~",
+      "name": "f12",
+      "ctrl": true,
+      "meta": false,
+      "shift": false,
+      "code": "[24~"
+     }
+    }
+   ],
+   "completion": true
+  },
+  {
+   "label": "shift-delete",
+   "chunks": [
+    "1b5b333b327e"
+   ],
+   "events": [
+    {
+     "s": {
+      "$": "undefined"
+     },
+     "keys": [
+      "sequence",
+      "name",
+      "ctrl",
+      "meta",
+      "shift",
+      "code"
+     ],
+     "key": {
+      "sequence": "\u001b[3;2~",
+      "name": "delete",
+      "ctrl": false,
+      "meta": false,
+      "shift": true,
+      "code": "[3~"
+     }
+    }
+   ],
+   "completion": true
+  },
+  {
+   "label": "ctrl-home",
+   "chunks": [
+    "1b5b313b3548"
+   ],
+   "events": [
+    {
+     "s": {
+      "$": "undefined"
+     },
+     "keys": [
+      "sequence",
+      "name",
+      "ctrl",
+      "meta",
+      "shift",
+      "code"
+     ],
+     "key": {
+      "sequence": "\u001b[1;5H",
+      "name": "home",
+      "ctrl": true,
+      "meta": false,
+      "shift": false,
+      "code": "[H"
+     }
+    }
+   ],
+   "completion": true
+  },
+  {
+   "label": "mod-short",
+   "chunks": [
+    "1b5b3541"
+   ],
+   "events": [
+    {
+     "s": {
+      "$": "undefined"
+     },
+     "keys": [
+      "sequence",
+      "name",
+      "ctrl",
+      "meta",
+      "shift",
+      "code"
+     ],
+     "key": {
+      "sequence": "\u001b[5A",
+      "name": "up",
+      "ctrl": true,
+      "meta": false,
+      "shift": false,
+      "code": "[A"
+     }
+    }
+   ],
+   "completion": true
+  },
+  {
+   "label": "O-mod",
+   "chunks": [
+    "1b4f3541"
+   ],
+   "events": [
+    {
+     "s": {
+      "$": "undefined"
+     },
+     "keys": [
+      "sequence",
+      "name",
+      "ctrl",
+      "meta",
+      "shift",
+      "code"
+     ],
+     "key": {
+      "sequence": "\u001bO5A",
+      "name": "up",
+      "ctrl": true,
+      "meta": false,
+      "shift": false,
+      "code": "OA"
+     }
+    }
+   ],
+   "completion": true
+  },
+  {
+   "label": "rxvt-shift-up",
+   "chunks": [
+    "1b5b61"
+   ],
+   "events": [
+    {
+     "s": {
+      "$": "undefined"
+     },
+     "keys": [
+      "sequence",
+      "name",
+      "ctrl",
+      "meta",
+      "shift",
+      "code"
+     ],
+     "key": {
+      "sequence": "\u001b[a",
+      "name": "up",
+      "ctrl": false,
+      "meta": false,
+      "shift": true,
+      "code": "[a"
+     }
+    }
+   ],
+   "completion": true
+  },
+  {
+   "label": "rxvt-ctrl-up",
+   "chunks": [
+    "1b4f61"
+   ],
+   "events": [
+    {
+     "s": {
+      "$": "undefined"
+     },
+     "keys": [
+      "sequence",
+      "name",
+      "ctrl",
+      "meta",
+      "shift",
+      "code"
+     ],
+     "key": {
+      "sequence": "\u001bOa",
+      "name": "up",
+      "ctrl": true,
+      "meta": false,
+      "shift": false,
+      "code": "Oa"
+     }
+    }
+   ],
+   "completion": true
+  },
+  {
+   "label": "rxvt-shift-insert",
+   "chunks": [
+    "1b5b3224"
+   ],
+   "events": [
+    {
+     "s": {
+      "$": "undefined"
+     },
+     "keys": [
+      "sequence",
+      "name",
+      "ctrl",
+      "meta",
+      "shift",
+      "code"
+     ],
+     "key": {
+      "sequence": "\u001b[2$",
+      "name": "insert",
+      "ctrl": false,
+      "meta": false,
+      "shift": true,
+      "code": "[2$"
+     }
+    }
+   ],
+   "completion": true
+  },
+  {
+   "label": "rxvt-ctrl-pageup",
+   "chunks": [
+    "1b5b355e"
+   ],
+   "events": [
+    {
+     "s": {
+      "$": "undefined"
+     },
+     "keys": [
+      "sequence",
+      "name",
+      "ctrl",
+      "meta",
+      "shift",
+      "code"
+     ],
+     "key": {
+      "sequence": "\u001b[5^",
+      "name": "pageup",
+      "ctrl": true,
+      "meta": false,
+      "shift": false,
+      "code": "[5^"
+     }
+    }
+   ],
+   "completion": true
+  },
+  {
+   "label": "shift-tab",
+   "chunks": [
+    "1b5b5a"
+   ],
+   "events": [
+    {
+     "s": {
+      "$": "undefined"
+     },
+     "keys": [
+      "sequence",
+      "name",
+      "ctrl",
+      "meta",
+      "shift",
+      "code"
+     ],
+     "key": {
+      "sequence": "\u001b[Z",
+      "name": "tab",
+      "ctrl": false,
+      "meta": false,
+      "shift": true,
+      "code": "[Z"
+     }
+    }
+   ],
+   "completion": true
+  },
+  {
+   "label": "paste-start",
+   "chunks": [
+    "1b5b3230307e"
+   ],
+   "events": [
+    {
+     "s": {
+      "$": "undefined"
+     },
+     "keys": [
+      "sequence",
+      "name",
+      "ctrl",
+      "meta",
+      "shift",
+      "code"
+     ],
+     "key": {
+      "sequence": "\u001b[200~",
+      "name": "paste-start",
+      "ctrl": false,
+      "meta": false,
+      "shift": false,
+      "code": "[200~"
+     }
+    }
+   ],
+   "completion": true
+  },
+  {
+   "label": "paste-end",
+   "chunks": [
+    "1b5b3230317e"
+   ],
+   "events": [
+    {
+     "s": {
+      "$": "undefined"
+     },
+     "keys": [
+      "sequence",
+      "name",
+      "ctrl",
+      "meta",
+      "shift",
+      "code"
+     ],
+     "key": {
+      "sequence": "\u001b[201~",
+      "name": "paste-end",
+      "ctrl": false,
+      "meta": false,
+      "shift": false,
+      "code": "[201~"
+     }
+    }
+   ],
+   "completion": true
+  },
+  {
+   "label": "unknown-csi",
+   "chunks": [
+    "1b5b39397e"
+   ],
+   "events": [
+    {
+     "s": {
+      "$": "undefined"
+     },
+     "keys": [
+      "sequence",
+      "name",
+      "ctrl",
+      "meta",
+      "shift",
+      "code"
+     ],
+     "key": {
+      "sequence": "\u001b[99~",
+      "name": "undefined",
+      "ctrl": false,
+      "meta": false,
+      "shift": false,
+      "code": "[99~"
+     }
+    }
+   ],
+   "completion": true
+  },
+  {
+   "label": "unknown-letter",
+   "chunks": [
+    "1b5b58"
+   ],
+   "events": [
+    {
+     "s": {
+      "$": "undefined"
+     },
+     "keys": [
+      "sequence",
+      "name",
+      "ctrl",
+      "meta",
+      "shift",
+      "code"
+     ],
+     "key": {
+      "sequence": "\u001b[X",
+      "name": "undefined",
+      "ctrl": false,
+      "meta": false,
+      "shift": false,
+      "code": "[X"
+     }
+    }
+   ],
+   "completion": true
+  },
+  {
+   "label": "meta-a",
+   "chunks": [
+    "1b61"
+   ],
+   "events": [
+    {
+     "s": {
+      "$": "undefined"
+     },
+     "keys": [
+      "sequence",
+      "name",
+      "ctrl",
+      "meta",
+      "shift"
+     ],
+     "key": {
+      "sequence": "\u001ba",
+      "name": "a",
+      "ctrl": false,
+      "meta": true,
+      "shift": false
+     }
+    }
+   ],
+   "completion": true
+  },
+  {
+   "label": "meta-A",
+   "chunks": [
+    "1b41"
+   ],
+   "events": [
+    {
+     "s": {
+      "$": "undefined"
+     },
+     "keys": [
+      "sequence",
+      "name",
+      "ctrl",
+      "meta",
+      "shift"
+     ],
+     "key": {
+      "sequence": "\u001bA",
+      "name": "a",
+      "ctrl": false,
+      "meta": true,
+      "shift": true
+     }
+    }
+   ],
+   "completion": true
+  },
+  {
+   "label": "meta-return",
+   "chunks": [
+    "1b0d"
+   ],
+   "events": [
+    {
+     "s": {
+      "$": "undefined"
+     },
+     "keys": [
+      "sequence",
+      "name",
+      "ctrl",
+      "meta",
+      "shift"
+     ],
+     "key": {
+      "sequence": "\u001b\r",
+      "name": "return",
+      "ctrl": false,
+      "meta": true,
+      "shift": false
+     }
+    }
+   ],
+   "completion": true
+  },
+  {
+   "label": "meta-enter",
+   "chunks": [
+    "1b0a"
+   ],
+   "events": [
+    {
+     "s": {
+      "$": "undefined"
+     },
+     "keys": [
+      "sequence",
+      "name",
+      "ctrl",
+      "meta",
+      "shift"
+     ],
+     "key": {
+      "sequence": "\u001b\n",
+      "name": "enter",
+      "ctrl": false,
+      "meta": true,
+      "shift": false
+     }
+    }
+   ],
+   "completion": true
+  },
+  {
+   "label": "meta-tab",
+   "chunks": [
+    "1b09"
+   ],
+   "events": [
+    {
+     "s": {
+      "$": "undefined"
+     },
+     "keys": [
+      "sequence",
+      "name",
+      "ctrl",
+      "meta",
+      "shift"
+     ],
+     "key": {
+      "sequence": "\u001b\t",
+      "name": "tab",
+      "ctrl": false,
+      "meta": true,
+      "shift": false
+     }
+    }
+   ],
+   "completion": true
+  },
+  {
+   "label": "meta-backspace",
+   "chunks": [
+    "1b7f"
+   ],
+   "events": [
+    {
+     "s": {
+      "$": "undefined"
+     },
+     "keys": [
+      "sequence",
+      "name",
+      "ctrl",
+      "meta",
+      "shift"
+     ],
+     "key": {
+      "sequence": "\u001b\u007f",
+      "name": "backspace",
+      "ctrl": false,
+      "meta": true,
+      "shift": false
+     }
+    }
+   ],
+   "completion": true
+  },
+  {
+   "label": "meta-space",
+   "chunks": [
+    "1b20"
+   ],
+   "events": [
+    {
+     "s": {
+      "$": "undefined"
+     },
+     "keys": [
+      "sequence",
+      "name",
+      "ctrl",
+      "meta",
+      "shift"
+     ],
+     "key": {
+      "sequence": "\u001b ",
+      "name": "space",
+      "ctrl": false,
+      "meta": true,
+      "shift": false
+     }
+    }
+   ],
+   "completion": true
+  },
+  {
+   "label": "meta-dot",
+   "chunks": [
+    "1b2e"
+   ],
+   "events": [
+    {
+     "s": {
+      "$": "undefined"
+     },
+     "keys": [
+      "sequence",
+      "name",
+      "ctrl",
+      "meta",
+      "shift"
+     ],
+     "key": {
+      "sequence": "\u001b.",
+      "name": {
+       "$": "undefined"
+      },
+      "ctrl": false,
+      "meta": true,
+      "shift": false
+     }
+    }
+   ],
+   "completion": true
+  },
+  {
+   "label": "meta-ctrl-a",
+   "chunks": [
+    "1b01"
+   ],
+   "events": [
+    {
+     "s": {
+      "$": "undefined"
+     },
+     "keys": [
+      "sequence",
+      "name",
+      "ctrl",
+      "meta",
+      "shift"
+     ],
+     "key": {
+      "sequence": "\u001b\u0001",
+      "name": {
+       "$": "undefined"
+      },
+      "ctrl": false,
+      "meta": true,
+      "shift": false
+     }
+    }
+   ],
+   "completion": true
+  },
+  {
+   "label": "esc-esc",
+   "chunks": [
+    "1b1b"
+   ],
+   "events": [
+    {
+     "s": {
+      "$": "undefined"
+     },
+     "keys": [
+      "sequence",
+      "name",
+      "ctrl",
+      "meta",
+      "shift"
+     ],
+     "key": {
+      "sequence": "\u001b\u001b",
+      "name": "escape",
+      "ctrl": false,
+      "meta": true,
+      "shift": false
+     }
+    }
+   ],
+   "completion": true
+  },
+  {
+   "label": "esc-esc-[A",
+   "chunks": [
+    "1b1b5b41"
+   ],
+   "events": [
+    {
+     "s": {
+      "$": "undefined"
+     },
+     "keys": [
+      "sequence",
+      "name",
+      "ctrl",
+      "meta",
+      "shift",
+      "code"
+     ],
+     "key": {
+      "sequence": "\u001b\u001b[A",
+      "name": "up",
+      "ctrl": false,
+      "meta": false,
+      "shift": false,
+      "code": "[A"
+     }
+    }
+   ],
+   "completion": true
+  },
+  {
+   "label": "esc-esc-OA",
+   "chunks": [
+    "1b1b4f41"
+   ],
+   "events": [
+    {
+     "s": {
+      "$": "undefined"
+     },
+     "keys": [
+      "sequence",
+      "name",
+      "ctrl",
+      "meta",
+      "shift",
+      "code"
+     ],
+     "key": {
+      "sequence": "\u001b\u001bOA",
+      "name": "up",
+      "ctrl": false,
+      "meta": false,
+      "shift": false,
+      "code": "OA"
+     }
+    }
+   ],
+   "completion": true
+  },
+  {
+   "label": "esc-esc-a",
+   "chunks": [
+    "1b1b61"
+   ],
+   "events": [
+    {
+     "s": {
+      "$": "undefined"
+     },
+     "keys": [
+      "sequence",
+      "name",
+      "ctrl",
+      "meta",
+      "shift"
+     ],
+     "key": {
+      "sequence": "\u001b\u001ba",
+      "name": "a",
+      "ctrl": false,
+      "meta": true,
+      "shift": false
+     }
+    }
+   ],
+   "completion": true
+  },
+  {
+   "label": "paste",
+   "chunks": [
+    "68656c6c6f20576f726c640d0a"
+   ],
+   "events": [
+    {
+     "s": "h",
+     "keys": [
+      "sequence",
+      "name",
+      "ctrl",
+      "meta",
+      "shift"
+     ],
+     "key": {
+      "sequence": "h",
+      "name": "h",
+      "ctrl": false,
+      "meta": false,
+      "shift": false
+     }
+    },
+    {
+     "s": "e",
+     "keys": [
+      "sequence",
+      "name",
+      "ctrl",
+      "meta",
+      "shift"
+     ],
+     "key": {
+      "sequence": "e",
+      "name": "e",
+      "ctrl": false,
+      "meta": false,
+      "shift": false
+     }
+    },
+    {
+     "s": "l",
+     "keys": [
+      "sequence",
+      "name",
+      "ctrl",
+      "meta",
+      "shift"
+     ],
+     "key": {
+      "sequence": "l",
+      "name": "l",
+      "ctrl": false,
+      "meta": false,
+      "shift": false
+     }
+    },
+    {
+     "s": "l",
+     "keys": [
+      "sequence",
+      "name",
+      "ctrl",
+      "meta",
+      "shift"
+     ],
+     "key": {
+      "sequence": "l",
+      "name": "l",
+      "ctrl": false,
+      "meta": false,
+      "shift": false
+     }
+    },
+    {
+     "s": "o",
+     "keys": [
+      "sequence",
+      "name",
+      "ctrl",
+      "meta",
+      "shift"
+     ],
+     "key": {
+      "sequence": "o",
+      "name": "o",
+      "ctrl": false,
+      "meta": false,
+      "shift": false
+     }
+    },
+    {
+     "s": " ",
+     "keys": [
+      "sequence",
+      "name",
+      "ctrl",
+      "meta",
+      "shift"
+     ],
+     "key": {
+      "sequence": " ",
+      "name": "space",
+      "ctrl": false,
+      "meta": false,
+      "shift": false
+     }
+    },
+    {
+     "s": "W",
+     "keys": [
+      "sequence",
+      "name",
+      "ctrl",
+      "meta",
+      "shift"
+     ],
+     "key": {
+      "sequence": "W",
+      "name": "w",
+      "ctrl": false,
+      "meta": false,
+      "shift": true
+     }
+    },
+    {
+     "s": "o",
+     "keys": [
+      "sequence",
+      "name",
+      "ctrl",
+      "meta",
+      "shift"
+     ],
+     "key": {
+      "sequence": "o",
+      "name": "o",
+      "ctrl": false,
+      "meta": false,
+      "shift": false
+     }
+    },
+    {
+     "s": "r",
+     "keys": [
+      "sequence",
+      "name",
+      "ctrl",
+      "meta",
+      "shift"
+     ],
+     "key": {
+      "sequence": "r",
+      "name": "r",
+      "ctrl": false,
+      "meta": false,
+      "shift": false
+     }
+    },
+    {
+     "s": "l",
+     "keys": [
+      "sequence",
+      "name",
+      "ctrl",
+      "meta",
+      "shift"
+     ],
+     "key": {
+      "sequence": "l",
+      "name": "l",
+      "ctrl": false,
+      "meta": false,
+      "shift": false
+     }
+    },
+    {
+     "s": "d",
+     "keys": [
+      "sequence",
+      "name",
+      "ctrl",
+      "meta",
+      "shift"
+     ],
+     "key": {
+      "sequence": "d",
+      "name": "d",
+      "ctrl": false,
+      "meta": false,
+      "shift": false
+     }
+    },
+    {
+     "s": "\r",
+     "keys": [
+      "sequence",
+      "name",
+      "ctrl",
+      "meta",
+      "shift"
+     ],
+     "key": {
+      "sequence": "\r",
+      "name": "return",
+      "ctrl": false,
+      "meta": false,
+      "shift": false
+     }
+    },
+    {
+     "s": "\n",
+     "keys": [
+      "sequence",
+      "name",
+      "ctrl",
+      "meta",
+      "shift"
+     ],
+     "key": {
+      "sequence": "\n",
+      "name": "enter",
+      "ctrl": false,
+      "meta": false,
+      "shift": false
+     }
+    }
+   ],
+   "completion": true
+  },
+  {
+   "label": "mixed",
+   "chunks": [
+    "611b5b41621b4f5063"
+   ],
+   "events": [
+    {
+     "s": "a",
+     "keys": [
+      "sequence",
+      "name",
+      "ctrl",
+      "meta",
+      "shift"
+     ],
+     "key": {
+      "sequence": "a",
+      "name": "a",
+      "ctrl": false,
+      "meta": false,
+      "shift": false
+     }
+    },
+    {
+     "s": {
+      "$": "undefined"
+     },
+     "keys": [
+      "sequence",
+      "name",
+      "ctrl",
+      "meta",
+      "shift",
+      "code"
+     ],
+     "key": {
+      "sequence": "\u001b[A",
+      "name": "up",
+      "ctrl": false,
+      "meta": false,
+      "shift": false,
+      "code": "[A"
+     }
+    },
+    {
+     "s": "b",
+     "keys": [
+      "sequence",
+      "name",
+      "ctrl",
+      "meta",
+      "shift"
+     ],
+     "key": {
+      "sequence": "b",
+      "name": "b",
+      "ctrl": false,
+      "meta": false,
+      "shift": false
+     }
+    },
+    {
+     "s": {
+      "$": "undefined"
+     },
+     "keys": [
+      "sequence",
+      "name",
+      "ctrl",
+      "meta",
+      "shift",
+      "code"
+     ],
+     "key": {
+      "sequence": "\u001bOP",
+      "name": "f1",
+      "ctrl": false,
+      "meta": false,
+      "shift": false,
+      "code": "OP"
+     }
+    },
+    {
+     "s": "c",
+     "keys": [
+      "sequence",
+      "name",
+      "ctrl",
+      "meta",
+      "shift"
+     ],
+     "key": {
+      "sequence": "c",
+      "name": "c",
+      "ctrl": false,
+      "meta": false,
+      "shift": false
+     }
+    }
+   ],
+   "completion": true
+  },
+  {
+   "label": "split-escape",
+   "chunks": [
+    "1b",
+    "5b",
+    "41"
+   ],
+   "events": [
+    {
+     "s": {
+      "$": "undefined"
+     },
+     "keys": [
+      "sequence",
+      "name",
+      "ctrl",
+      "meta",
+      "shift",
+      "code"
+     ],
+     "key": {
+      "sequence": "\u001b[A",
+      "name": "up",
+      "ctrl": false,
+      "meta": false,
+      "shift": false,
+      "code": "[A"
+     }
+    }
+   ],
+   "completion": true
+  },
+  {
+   "label": "split-escape-2",
+   "chunks": [
+    "1b5b31",
+    "3b35",
+    "43"
+   ],
+   "events": [
+    {
+     "s": {
+      "$": "undefined"
+     },
+     "keys": [
+      "sequence",
+      "name",
+      "ctrl",
+      "meta",
+      "shift",
+      "code"
+     ],
+     "key": {
+      "sequence": "\u001b[1;5C",
+      "name": "right",
+      "ctrl": true,
+      "meta": false,
+      "shift": false,
+      "code": "[C"
+     }
+    }
+   ],
+   "completion": true
+  },
+  {
+   "label": "unicode",
+   "chunks": [
+    "c3a9"
+   ],
+   "events": [
+    {
+     "s": "\u00e9",
+     "keys": [
+      "sequence",
+      "name",
+      "ctrl",
+      "meta",
+      "shift"
+     ],
+     "key": {
+      "sequence": "\u00e9",
+      "name": {
+       "$": "undefined"
+      },
+      "ctrl": false,
+      "meta": false,
+      "shift": false
+     }
+    }
+   ],
+   "completion": true
+  },
+  {
+   "label": "cjk",
+   "chunks": [
+    "e697a5e69cac"
+   ],
+   "events": [
+    {
+     "s": "\u65e5",
+     "keys": [
+      "sequence",
+      "name",
+      "ctrl",
+      "meta",
+      "shift"
+     ],
+     "key": {
+      "sequence": "\u65e5",
+      "name": {
+       "$": "undefined"
+      },
+      "ctrl": false,
+      "meta": false,
+      "shift": false
+     }
+    },
+    {
+     "s": "\u672c",
+     "keys": [
+      "sequence",
+      "name",
+      "ctrl",
+      "meta",
+      "shift"
+     ],
+     "key": {
+      "sequence": "\u672c",
+      "name": {
+       "$": "undefined"
+      },
+      "ctrl": false,
+      "meta": false,
+      "shift": false
+     }
+    }
+   ],
+   "completion": true
+  },
+  {
+   "label": "emoji",
+   "chunks": [
+    "f09f9880"
+   ],
+   "events": [
+    {
+     "s": "\ud83d\ude00",
+     "keys": [
+      "sequence",
+      "name",
+      "ctrl",
+      "meta",
+      "shift"
+     ],
+     "key": {
+      "sequence": "\ud83d\ude00",
+      "name": {
+       "$": "undefined"
+      },
+      "ctrl": false,
+      "meta": false,
+      "shift": false
+     }
+    }
+   ],
+   "completion": true
+  },
+  {
+   "label": "emoji-in-text",
+   "chunks": [
+    "61f09f988062"
+   ],
+   "events": [
+    {
+     "s": "a",
+     "keys": [
+      "sequence",
+      "name",
+      "ctrl",
+      "meta",
+      "shift"
+     ],
+     "key": {
+      "sequence": "a",
+      "name": "a",
+      "ctrl": false,
+      "meta": false,
+      "shift": false
+     }
+    },
+    {
+     "s": "\ud83d\ude00",
+     "keys": [
+      "sequence",
+      "name",
+      "ctrl",
+      "meta",
+      "shift"
+     ],
+     "key": {
+      "sequence": "\ud83d\ude00",
+      "name": {
+       "$": "undefined"
+      },
+      "ctrl": false,
+      "meta": false,
+      "shift": false
+     }
+    },
+    {
+     "s": "b",
+     "keys": [
+      "sequence",
+      "name",
+      "ctrl",
+      "meta",
+      "shift"
+     ],
+     "key": {
+      "sequence": "b",
+      "name": "b",
+      "ctrl": false,
+      "meta": false,
+      "shift": false
+     }
+    }
+   ],
+   "completion": true
+  },
+  {
+   "label": "empty",
+   "chunks": [
+    ""
+   ],
+   "events": [],
+   "completion": {
+    "$": "undefined"
+   }
+  },
+  {
+   "label": "broken-then-key",
+   "chunks": [
+    "1b5b313b",
+    "78"
+   ],
+   "events": [
+    {
+     "s": {
+      "$": "undefined"
+     },
+     "keys": [
+      "sequence",
+      "name",
+      "ctrl",
+      "meta",
+      "shift",
+      "code"
+     ],
+     "key": {
+      "sequence": "\u001b[1;x",
+      "name": "undefined",
+      "ctrl": false,
+      "meta": false,
+      "shift": false,
+      "code": "[1;x"
+     }
+    }
+   ],
+   "completion": true
+  },
+  {
+   "label": "three-digit-not-paste",
+   "chunks": [
+    "1b5b3132337e"
+   ],
+   "events": [
+    {
+     "s": {
+      "$": "undefined"
+     },
+     "keys": [
+      "sequence",
+      "name",
+      "ctrl",
+      "meta",
+      "shift",
+      "code"
+     ],
+     "key": {
+      "sequence": "\u001b[123~",
+      "name": "undefined",
+      "ctrl": false,
+      "meta": false,
+      "shift": false,
+      "code": "[123~"
+     }
+    }
+   ],
+   "completion": true
+  },
+  {
+   "label": "four-digit",
+   "chunks": [
+    "1b5b313233347e78"
+   ],
+   "events": [
+    {
+     "s": {
+      "$": "undefined"
+     },
+     "keys": [
+      "sequence",
+      "name",
+      "ctrl",
+      "meta",
+      "shift",
+      "code"
+     ],
+     "key": {
+      "sequence": "\u001b[1234",
+      "name": "undefined",
+      "ctrl": false,
+      "meta": false,
+      "shift": false,
+      "code": "[1234"
+     }
+    },
+    {
+     "s": "~",
+     "keys": [
+      "sequence",
+      "name",
+      "ctrl",
+      "meta",
+      "shift"
+     ],
+     "key": {
+      "sequence": "~",
+      "name": {
+       "$": "undefined"
+      },
+      "ctrl": false,
+      "meta": false,
+      "shift": false
+     }
+    },
+    {
+     "s": "x",
+     "keys": [
+      "sequence",
+      "name",
+      "ctrl",
+      "meta",
+      "shift"
+     ],
+     "key": {
+      "sequence": "x",
+      "name": "x",
+      "ctrl": false,
+      "meta": false,
+      "shift": false
+     }
+    }
+   ],
+   "completion": true
+  },
+  {
+   "label": "utf8-split-euro",
+   "chunks": [
+    "e2",
+    "82ac"
+   ],
+   "events": [
+    {
+     "s": "\u20ac",
+     "keys": [
+      "sequence",
+      "name",
+      "ctrl",
+      "meta",
+      "shift"
+     ],
+     "key": {
+      "sequence": "\u20ac",
+      "name": {
+       "$": "undefined"
+      },
+      "ctrl": false,
+      "meta": false,
+      "shift": false
+     }
+    }
+   ],
+   "completion": true
+  },
+  {
+   "label": "utf8-split-emoji-3",
+   "chunks": [
+    "f0",
+    "9f98",
+    "80"
+   ],
+   "events": [
+    {
+     "s": "\ud83d\ude00",
+     "keys": [
+      "sequence",
+      "name",
+      "ctrl",
+      "meta",
+      "shift"
+     ],
+     "key": {
+      "sequence": "\ud83d\ude00",
+      "name": {
+       "$": "undefined"
+      },
+      "ctrl": false,
+      "meta": false,
+      "shift": false
+     }
+    }
+   ],
+   "completion": true
+  },
+  {
+   "label": "utf8-split-with-ascii",
+   "chunks": [
+    "61e282",
+    "ac62"
+   ],
+   "events": [
+    {
+     "s": "a",
+     "keys": [
+      "sequence",
+      "name",
+      "ctrl",
+      "meta",
+      "shift"
+     ],
+     "key": {
+      "sequence": "a",
+      "name": "a",
+      "ctrl": false,
+      "meta": false,
+      "shift": false
+     }
+    },
+    {
+     "s": "\u20ac",
+     "keys": [
+      "sequence",
+      "name",
+      "ctrl",
+      "meta",
+      "shift"
+     ],
+     "key": {
+      "sequence": "\u20ac",
+      "name": {
+       "$": "undefined"
+      },
+      "ctrl": false,
+      "meta": false,
+      "shift": false
+     }
+    },
+    {
+     "s": "b",
+     "keys": [
+      "sequence",
+      "name",
+      "ctrl",
+      "meta",
+      "shift"
+     ],
+     "key": {
+      "sequence": "b",
+      "name": "b",
+      "ctrl": false,
+      "meta": false,
+      "shift": false
+     }
+    }
+   ],
+   "completion": true
+  }
+ ],
+ "keyStrings": [
+  {
+   "s": "x",
+   "keys": [
+    "sequence",
+    "name",
+    "ctrl",
+    "meta",
+    "shift"
+   ],
+   "key": {
+    "sequence": "x",
+    "name": "x",
+    "ctrl": false,
+    "meta": false,
+    "shift": false
+   }
+  },
+  {
+   "s": {
+    "$": "undefined"
+   },
+   "keys": [
+    "sequence",
+    "name",
+    "ctrl",
+    "meta",
+    "shift",
+    "code"
+   ],
+   "key": {
+    "sequence": "\u001b[B",
+    "name": "down",
+    "ctrl": false,
+    "meta": false,
+    "shift": false,
+    "code": "[B"
+   }
+  },
+  {
+   "s": "y",
+   "keys": [
+    "sequence",
+    "name",
+    "ctrl",
+    "meta",
+    "shift"
+   ],
+   "key": {
+    "sequence": "y",
+    "name": "y",
+    "ctrl": false,
+    "meta": false,
+    "shift": false
+   }
+  }
+ ],
+ "escapeTimeout": [
+  {
+   "chunks": [
+    "1b"
+   ],
+   "waits": [
+    700
+   ],
+   "counts": [
+    0,
+    1
+   ],
+   "events": [
+    {
+     "s": {
+      "$": "undefined"
+     },
+     "keys": [
+      "sequence",
+      "name",
+      "ctrl",
+      "meta",
+      "shift"
+     ],
+     "key": {
+      "sequence": "\u001b",
+      "name": "escape",
+      "ctrl": false,
+      "meta": true,
+      "shift": false
+     }
+    }
+   ]
+  },
+  {
+   "chunks": [
+    "1b",
+    "61"
+   ],
+   "waits": [
+    100,
+    10
+   ],
+   "counts": [
+    0,
+    0,
+    1,
+    1
+   ],
+   "events": [
+    {
+     "s": {
+      "$": "undefined"
+     },
+     "keys": [
+      "sequence",
+      "name",
+      "ctrl",
+      "meta",
+      "shift"
+     ],
+     "key": {
+      "sequence": "\u001ba",
+      "name": "a",
+      "ctrl": false,
+      "meta": true,
+      "shift": false
+     }
+    }
+   ]
+  },
+  {
+   "chunks": [
+    "1b",
+    "61"
+   ],
+   "waits": [
+    700,
+    10
+   ],
+   "counts": [
+    0,
+    1,
+    2,
+    2
+   ],
+   "events": [
+    {
+     "s": {
+      "$": "undefined"
+     },
+     "keys": [
+      "sequence",
+      "name",
+      "ctrl",
+      "meta",
+      "shift"
+     ],
+     "key": {
+      "sequence": "\u001b",
+      "name": "escape",
+      "ctrl": false,
+      "meta": true,
+      "shift": false
+     }
+    },
+    {
+     "s": "a",
+     "keys": [
+      "sequence",
+      "name",
+      "ctrl",
+      "meta",
+      "shift"
+     ],
+     "key": {
+      "sequence": "a",
+      "name": "a",
+      "ctrl": false,
+      "meta": false,
+      "shift": false
+     }
+    }
+   ]
+  },
+  {
+   "chunks": [
+    "1b"
+   ],
+   "waits": [
+    200
+   ],
+   "counts": [
+    0,
+    1
+   ],
+   "events": [
+    {
+     "s": {
+      "$": "undefined"
+     },
+     "keys": [
+      "sequence",
+      "name",
+      "ctrl",
+      "meta",
+      "shift"
+     ],
+     "key": {
+      "sequence": "\u001b",
+      "name": "escape",
+      "ctrl": false,
+      "meta": true,
+      "shift": false
+     }
+    }
+   ]
+  },
+  {
+   "chunks": [
+    "1b5b",
+    "41"
+   ],
+   "waits": [
+    700,
+    10
+   ],
+   "counts": [
+    0,
+    0,
+    1,
+    1
+   ],
+   "events": [
+    {
+     "s": {
+      "$": "undefined"
+     },
+     "keys": [
+      "sequence",
+      "name",
+      "ctrl",
+      "meta",
+      "shift",
+      "code"
+     ],
+     "key": {
+      "sequence": "\u001b[A",
+      "name": "up",
+      "ctrl": false,
+      "meta": false,
+      "shift": false,
+      "code": "[A"
+     }
+    }
+   ]
+  },
+  {
+   "chunks": [
+    "611b"
+   ],
+   "waits": [
+    200
+   ],
+   "counts": [
+    1,
+    2
+   ],
+   "events": [
+    {
+     "s": "a",
+     "keys": [
+      "sequence",
+      "name",
+      "ctrl",
+      "meta",
+      "shift"
+     ],
+     "key": {
+      "sequence": "a",
+      "name": "a",
+      "ctrl": false,
+      "meta": false,
+      "shift": false
+     }
+    },
+    {
+     "s": {
+      "$": "undefined"
+     },
+     "keys": [
+      "sequence",
+      "name",
+      "ctrl",
+      "meta",
+      "shift"
+     ],
+     "key": {
+      "sequence": "\u001b",
+      "name": "escape",
+      "ctrl": false,
+      "meta": true,
+      "shift": false
+     }
+    }
+   ]
+  },
+  {
+   "chunks": [
+    "1b1b"
+   ],
+   "waits": [
+    200
+   ],
+   "counts": [
+    0,
+    1
+   ],
+   "events": [
+    {
+     "s": {
+      "$": "undefined"
+     },
+     "keys": [
+      "sequence",
+      "name",
+      "ctrl",
+      "meta",
+      "shift"
+     ],
+     "key": {
+      "sequence": "\u001b\u001b",
+      "name": "escape",
+      "ctrl": false,
+      "meta": true,
+      "shift": false
+     }
+    }
+   ]
+  },
+  {
+   "chunks": [
+    "1b",
+    "1b"
+   ],
+   "waits": [
+    10,
+    200
+   ],
+   "counts": [
+    0,
+    0,
+    0,
+    1
+   ],
+   "events": [
+    {
+     "s": {
+      "$": "undefined"
+     },
+     "keys": [
+      "sequence",
+      "name",
+      "ctrl",
+      "meta",
+      "shift"
+     ],
+     "key": {
+      "sequence": "\u001b\u001b",
+      "name": "escape",
+      "ctrl": false,
+      "meta": true,
+      "shift": false
+     }
+    }
+   ]
+  }
+ ],
+ "keypressListeners": {
+  "ret": {
+   "$": "undefined"
+  },
+  "afterInstall": {
+   "data": 0,
+   "newListener": 1
+  },
+  "afterKeypress": {
+   "data": 1,
+   "newListener": 0
+  },
+  "twice": {
+   "data": 1,
+   "newListener": 0
+  },
+  "afterRemoveAndData": {
+   "data": 0,
+   "newListener": 1
+  },
+  "reattached": [
+   "b"
+  ],
+  "symbols": [
+   "Symbol(keypress-decoder)",
+   "Symbol(escape-decoder)"
+  ],
+  "preexisting": {
+   "data": 1,
+   "newListener": 0
+  },
+  "thrown": "boom",
+  "afterThrow": [
+   "a",
+   "c"
+  ],
+  "errors": [
+   {
+    "error": {
+     "name": "TypeError",
+     "code": {
+      "$": "undefined"
+     },
+     "message": "Cannot read properties of undefined (reading 'Symbol(keypress-decoder)')"
+    }
+   },
+   {
+    "error": {
+     "name": "TypeError",
+     "code": {
+      "$": "undefined"
+     },
+     "message": "Cannot read properties of null (reading 'Symbol(keypress-decoder)')"
+    }
+   },
+   {
+    "error": {
+     "name": "TypeError",
+     "code": {
+      "$": "undefined"
+     },
+     "message": "Cannot read properties of undefined (reading 'Symbol(keypress-decoder)')"
+    }
+   },
+   {
+    "error": {
+     "name": "TypeError",
+     "code": {
+      "$": "undefined"
+     },
+     "message": "Cannot create property 'Symbol(keypress-decoder)' on number '5'"
+    }
+   }
+  ]
+ },
+ "readlineClass": [
+  {
+   "seq": [
+    [
+     "cursorTo",
+     0
+    ]
+   ],
+   "steps": [
+    {
+     "chain": true
+    }
+   ],
+   "before": [],
+   "writes": [
+    "\u001b[1G"
+   ],
+   "commitResult": null,
+   "secondCommit": [
+    ""
+   ]
+  },
+  {
+   "seq": [
+    [
+     "cursorTo",
+     3,
+     4
+    ]
+   ],
+   "steps": [
+    {
+     "chain": true
+    }
+   ],
+   "before": [],
+   "writes": [
+    "\u001b[5;4H"
+   ],
+   "commitResult": null,
+   "secondCommit": [
+    ""
+   ]
+  },
+  {
+   "seq": [
+    [
+     "cursorTo",
+     1,
+     {
+      "$": "undefined"
+     }
+    ]
+   ],
+   "steps": [
+    {
+     "chain": true
+    }
+   ],
+   "before": [],
+   "writes": [
+    "\u001b[2G"
+   ],
+   "commitResult": null,
+   "secondCommit": [
+    ""
+   ]
+  },
+  {
+   "seq": [
+    [
+     "cursorTo",
+     1,
+     null
+    ]
+   ],
+   "steps": [
+    {
+     "chain": true
+    }
+   ],
+   "before": [],
+   "writes": [
+    "\u001b[2G"
+   ],
+   "commitResult": null,
+   "secondCommit": [
+    ""
+   ]
+  },
+  {
+   "seq": [
+    [
+     "moveCursor",
+     1,
+     -1
+    ]
+   ],
+   "steps": [
+    {
+     "chain": true
+    }
+   ],
+   "before": [],
+   "writes": [
+    "\u001b[1C\u001b[1A"
+   ],
+   "commitResult": null,
+   "secondCommit": [
+    ""
+   ]
+  },
+  {
+   "seq": [
+    [
+     "moveCursor",
+     -3,
+     2
+    ]
+   ],
+   "steps": [
+    {
+     "chain": true
+    }
+   ],
+   "before": [],
+   "writes": [
+    "\u001b[3D\u001b[2B"
+   ],
+   "commitResult": null,
+   "secondCommit": [
+    ""
+   ]
+  },
+  {
+   "seq": [
+    [
+     "moveCursor",
+     0,
+     0
+    ]
+   ],
+   "steps": [
+    {
+     "chain": true
+    }
+   ],
+   "before": [],
+   "writes": [
+    ""
+   ],
+   "commitResult": null,
+   "secondCommit": [
+    ""
+   ]
+  },
+  {
+   "seq": [
+    [
+     "clearLine",
+     -1
+    ]
+   ],
+   "steps": [
+    {
+     "chain": true
+    }
+   ],
+   "before": [],
+   "writes": [
+    "\u001b[1K"
+   ],
+   "commitResult": null,
+   "secondCommit": [
+    ""
+   ]
+  },
+  {
+   "seq": [
+    [
+     "clearLine",
+     0
+    ]
+   ],
+   "steps": [
+    {
+     "chain": true
+    }
+   ],
+   "before": [],
+   "writes": [
+    "\u001b[2K"
+   ],
+   "commitResult": null,
+   "secondCommit": [
+    ""
+   ]
+  },
+  {
+   "seq": [
+    [
+     "clearLine",
+     1
+    ]
+   ],
+   "steps": [
+    {
+     "chain": true
+    }
+   ],
+   "before": [],
+   "writes": [
+    "\u001b[0K"
+   ],
+   "commitResult": null,
+   "secondCommit": [
+    ""
+   ]
+  },
+  {
+   "seq": [
+    [
+     "clearScreenDown"
+    ]
+   ],
+   "steps": [
+    {
+     "chain": true
+    }
+   ],
+   "before": [],
+   "writes": [
+    "\u001b[0J"
+   ],
+   "commitResult": null,
+   "secondCommit": [
+    ""
+   ]
+  },
+  {
+   "seq": [
+    [
+     "cursorTo",
+     0,
+     0
+    ],
+    [
+     "clearScreenDown"
+    ],
+    [
+     "moveCursor",
+     2,
+     2
+    ],
+    [
+     "clearLine",
+     0
+    ]
+   ],
+   "steps": [
+    {
+     "chain": true
+    },
+    {
+     "chain": true
+    },
+    {
+     "chain": true
+    },
+    {
+     "chain": true
+    }
+   ],
+   "before": [],
+   "writes": [
+    "\u001b[1;1H\u001b[0J\u001b[2C\u001b[2B\u001b[2K"
+   ],
+   "commitResult": null,
+   "secondCommit": [
+    ""
+   ]
+  },
+  {
+   "seq": [
+    [
+     "clearLine",
+     1
+    ],
+    [
+     "rollback"
+    ],
+    [
+     "cursorTo",
+     9
+    ]
+   ],
+   "steps": [
+    {
+     "chain": true
+    },
+    {
+     "chain": true
+    },
+    {
+     "chain": true
+    }
+   ],
+   "before": [],
+   "writes": [
+    "\u001b[10G"
+   ],
+   "commitResult": null,
+   "secondCommit": [
+    ""
+   ]
+  },
+  {
+   "seq": [],
+   "steps": [],
+   "before": [],
+   "writes": [
+    ""
+   ],
+   "commitResult": null,
+   "secondCommit": [
+    ""
+   ]
+  },
+  {
+   "seq": [
+    [
+     "cursorTo",
+     "1"
+    ]
+   ],
+   "steps": [
+    {
+     "error": {
+      "name": "TypeError",
+      "code": "ERR_INVALID_ARG_TYPE",
+      "message": "The \"x\" argument must be of type number. Received type string ('1')"
+     }
+    }
+   ],
+   "before": [],
+   "writes": [
+    ""
+   ],
+   "commitResult": null,
+   "secondCommit": [
+    ""
+   ]
+  },
+  {
+   "seq": [
+    [
+     "cursorTo",
+     1.5
+    ]
+   ],
+   "steps": [
+    {
+     "error": {
+      "name": "RangeError",
+      "code": "ERR_OUT_OF_RANGE",
+      "message": "The value of \"x\" is out of range. It must be an integer. Received 1.5"
+     }
+    }
+   ],
+   "before": [],
+   "writes": [
+    ""
+   ],
+   "commitResult": null,
+   "secondCommit": [
+    ""
+   ]
+  },
+  {
+   "seq": [
+    [
+     "cursorTo",
+     1,
+     "2"
+    ]
+   ],
+   "steps": [
+    {
+     "error": {
+      "name": "TypeError",
+      "code": "ERR_INVALID_ARG_TYPE",
+      "message": "The \"y\" argument must be of type number. Received type string ('2')"
+     }
+    }
+   ],
+   "before": [],
+   "writes": [
+    ""
+   ],
+   "commitResult": null,
+   "secondCommit": [
+    ""
+   ]
+  },
+  {
+   "seq": [
+    [
+     "cursorTo"
+    ]
+   ],
+   "steps": [
+    {
+     "error": {
+      "name": "TypeError",
+      "code": "ERR_INVALID_ARG_TYPE",
+      "message": "The \"x\" argument must be of type number. Received undefined"
+     }
+    }
+   ],
+   "before": [],
+   "writes": [
+    ""
+   ],
+   "commitResult": null,
+   "secondCommit": [
+    ""
+   ]
+  },
+  {
+   "seq": [
+    [
+     "cursorTo",
+     {
+      "$": "NaN"
+     }
+    ]
+   ],
+   "steps": [
+    {
+     "error": {
+      "name": "RangeError",
+      "code": "ERR_OUT_OF_RANGE",
+      "message": "The value of \"x\" is out of range. It must be an integer. Received NaN"
+     }
+    }
+   ],
+   "before": [],
+   "writes": [
+    ""
+   ],
+   "commitResult": null,
+   "secondCommit": [
+    ""
+   ]
+  },
+  {
+   "seq": [
+    [
+     "moveCursor",
+     1
+    ]
+   ],
+   "steps": [
+    {
+     "error": {
+      "name": "TypeError",
+      "code": "ERR_INVALID_ARG_TYPE",
+      "message": "The \"dy\" argument must be of type number. Received undefined"
+     }
+    }
+   ],
+   "before": [],
+   "writes": [
+    ""
+   ],
+   "commitResult": null,
+   "secondCommit": [
+    ""
+   ]
+  },
+  {
+   "seq": [
+    [
+     "moveCursor",
+     "1",
+     0
+    ]
+   ],
+   "steps": [
+    {
+     "error": {
+      "name": "TypeError",
+      "code": "ERR_INVALID_ARG_TYPE",
+      "message": "The \"dx\" argument must be of type number. Received type string ('1')"
+     }
+    }
+   ],
+   "before": [],
+   "writes": [
+    ""
+   ],
+   "commitResult": null,
+   "secondCommit": [
+    ""
+   ]
+  },
+  {
+   "seq": [
+    [
+     "moveCursor",
+     0,
+     1.5
+    ]
+   ],
+   "steps": [
+    {
+     "error": {
+      "name": "RangeError",
+      "code": "ERR_OUT_OF_RANGE",
+      "message": "The value of \"dy\" is out of range. It must be an integer. Received 1.5"
+     }
+    }
+   ],
+   "before": [],
+   "writes": [
+    ""
+   ],
+   "commitResult": null,
+   "secondCommit": [
+    ""
+   ]
+  },
+  {
+   "seq": [
+    [
+     "moveCursor",
+     {
+      "$": "undefined"
+     },
+     {
+      "$": "undefined"
+     }
+    ]
+   ],
+   "steps": [
+    {
+     "chain": true
+    }
+   ],
+   "before": [],
+   "writes": [
+    ""
+   ],
+   "commitResult": null,
+   "secondCommit": [
+    ""
+   ]
+  },
+  {
+   "seq": [
+    [
+     "moveCursor",
+     0,
+     "a"
+    ]
+   ],
+   "steps": [
+    {
+     "error": {
+      "name": "TypeError",
+      "code": "ERR_INVALID_ARG_TYPE",
+      "message": "The \"dy\" argument must be of type number. Received type string ('a')"
+     }
+    }
+   ],
+   "before": [],
+   "writes": [
+    ""
+   ],
+   "commitResult": null,
+   "secondCommit": [
+    ""
+   ]
+  },
+  {
+   "seq": [
+    [
+     "clearLine",
+     2
+    ]
+   ],
+   "steps": [
+    {
+     "error": {
+      "name": "RangeError",
+      "code": "ERR_OUT_OF_RANGE",
+      "message": "The value of \"dir\" is out of range. It must be >= -1 && <= 1. Received 2"
+     }
+    }
+   ],
+   "before": [],
+   "writes": [
+    ""
+   ],
+   "commitResult": null,
+   "secondCommit": [
+    ""
+   ]
+  },
+  {
+   "seq": [
+    [
+     "clearLine",
+     -2
+    ]
+   ],
+   "steps": [
+    {
+     "error": {
+      "name": "RangeError",
+      "code": "ERR_OUT_OF_RANGE",
+      "message": "The value of \"dir\" is out of range. It must be >= -1 && <= 1. Received -2"
+     }
+    }
+   ],
+   "before": [],
+   "writes": [
+    ""
+   ],
+   "commitResult": null,
+   "secondCommit": [
+    ""
+   ]
+  },
+  {
+   "seq": [
+    [
+     "clearLine",
+     "0"
+    ]
+   ],
+   "steps": [
+    {
+     "error": {
+      "name": "TypeError",
+      "code": "ERR_INVALID_ARG_TYPE",
+      "message": "The \"dir\" argument must be of type number. Received type string ('0')"
+     }
+    }
+   ],
+   "before": [],
+   "writes": [
+    ""
+   ],
+   "commitResult": null,
+   "secondCommit": [
+    ""
+   ]
+  },
+  {
+   "seq": [
+    [
+     "clearLine"
+    ]
+   ],
+   "steps": [
+    {
+     "error": {
+      "name": "TypeError",
+      "code": "ERR_INVALID_ARG_TYPE",
+      "message": "The \"dir\" argument must be of type number. Received undefined"
+     }
+    }
+   ],
+   "before": [],
+   "writes": [
+    ""
+   ],
+   "commitResult": null,
+   "secondCommit": [
+    ""
+   ]
+  },
+  {
+   "seq": [
+    [
+     "clearLine",
+     0.5
+    ]
+   ],
+   "steps": [
+    {
+     "error": {
+      "name": "RangeError",
+      "code": "ERR_OUT_OF_RANGE",
+      "message": "The value of \"dir\" is out of range. It must be an integer. Received 0.5"
+     }
+    }
+   ],
+   "before": [],
+   "writes": [
+    ""
+   ],
+   "commitResult": null,
+   "secondCommit": [
+    ""
+   ]
+  },
+  {
+   "seq": [
+    [
+     "cursorTo",
+     -1,
+     -5
+    ]
+   ],
+   "steps": [
+    {
+     "chain": true
+    }
+   ],
+   "before": [],
+   "writes": [
+    "\u001b[-4;0H"
+   ],
+   "commitResult": null,
+   "secondCommit": [
+    ""
+   ]
+  }
+ ],
+ "autoCommit": {
+  "chain": true,
+  "sync": [],
+  "afterTick": [
+   "\u001b[3;2H",
+   "\u001b[1C\u001b[1B",
+   "\u001b[2K",
+   "\u001b[0J"
+  ],
+  "afterCommit": [
+   "\u001b[3;2H",
+   "\u001b[1C\u001b[1B",
+   "\u001b[2K",
+   "\u001b[0J",
+   ""
+  ]
+ },
+ "readlineCtorErrors": [
+  {
+   "args": [],
+   "error": {
+    "name": "TypeError",
+    "code": "ERR_INVALID_ARG_TYPE",
+    "message": "The \"stream\" argument must be an instance of Writable. Received undefined"
+   }
+  },
+  {
+   "args": [
+    null
+   ],
+   "error": {
+    "name": "TypeError",
+    "code": "ERR_INVALID_ARG_TYPE",
+    "message": "The \"stream\" argument must be an instance of Writable. Received null"
+   }
+  },
+  {
+   "args": [
+    {}
+   ],
+   "error": {
+    "name": "TypeError",
+    "code": "ERR_INVALID_ARG_TYPE",
+    "message": "The \"stream\" argument must be an instance of Writable. Received an instance of Object"
+   }
+  },
+  {
+   "args": [
+    {}
+   ],
+   "error": {
+    "name": "TypeError",
+    "code": "ERR_INVALID_ARG_TYPE",
+    "message": "The \"stream\" argument must be an instance of Writable. Received an instance of Object"
+   }
+  },
+  {
+   "args": [
+    "s"
+   ],
+   "error": {
+    "name": "TypeError",
+    "code": "ERR_INVALID_ARG_TYPE",
+    "message": "The \"stream\" argument must be an instance of Writable. Received type string ('s')"
+   }
+  },
+  {
+   "args": [
+    "$w",
+    {
+     "autoCommit": "yes"
+    }
+   ],
+   "error": {
+    "name": "TypeError",
+    "code": "ERR_INVALID_ARG_TYPE",
+    "message": "The \"options.autoCommit\" property must be of type boolean. Received type string ('yes')"
+   }
+  },
+  {
+   "args": [
+    "$w",
+    {
+     "autoCommit": 1
+    }
+   ],
+   "error": {
+    "name": "TypeError",
+    "code": "ERR_INVALID_ARG_TYPE",
+    "message": "The \"options.autoCommit\" property must be of type boolean. Received type number (1)"
+   }
+  },
+  {
+   "args": [
+    "$w",
+    {
+     "autoCommit": null
+    }
+   ],
+   "ok": true
+  },
+  {
+   "args": [
+    "$w",
+    null
+   ],
+   "ok": true
+  },
+  {
+   "args": [
+    "$w",
+    5
+   ],
+   "ok": true
+  },
+  {
+   "args": [
+    "$ended"
+   ],
+   "error": {
+    "name": "TypeError",
+    "code": "ERR_INVALID_ARG_TYPE",
+    "message": "The \"stream\" argument must be an instance of Writable. Received an instance of Writable"
+   }
+  },
+  {
+   "args": [
+    "$destroyed"
+   ],
+   "error": {
+    "name": "TypeError",
+    "code": "ERR_INVALID_ARG_TYPE",
+    "message": "The \"stream\" argument must be an instance of Writable. Received an instance of Writable"
+   }
+  },
+  {
+   "args": [
+    "$fake"
+   ],
+   "ok": true
+  },
+  {
+   "args": [
+    "$fakeNoOn"
+   ],
+   "error": {
+    "name": "TypeError",
+    "code": "ERR_INVALID_ARG_TYPE",
+    "message": "The \"stream\" argument must be an instance of Writable. Received an instance of Object"
+   }
+  },
+  {
+   "args": [
+    "$emitter"
+   ],
+   "error": {
+    "name": "TypeError",
+    "code": "ERR_INVALID_ARG_TYPE",
+    "message": "The \"stream\" argument must be an instance of Writable. Received an instance of EventEmitter"
+   }
+  },
+  {
+   "args": [
+    "$pass"
+   ],
+   "ok": true
+  }
+ ],
+ "promisesInterface": {
+  "instance": [
+   true,
+   false,
+   true
+  ],
+  "isPromise": true,
+  "answer": "Ada",
+  "writes": [
+   "name? "
+  ],
+  "abort": {
+   "name": "AbortError",
+   "code": "ABORT_ERR",
+   "message": "The operation was aborted",
+   "cause": "AbortError",
+   "causeIsReason": true,
+   "isError": true,
+   "ctor": "AbortError"
+  },
+  "linesAfterAbort": [
+   "after-abort"
+  ],
+  "preAborted": {
+   "name": "AbortError",
+   "code": "ABORT_ERR",
+   "message": "The operation was aborted",
+   "causeMsg": "custom"
+  },
+  "writesAfterPreAbort": [
+   "name? ",
+   "q2 ",
+   "\r\n"
+  ],
+  "badSignal": {
+   "name": "TypeError",
+   "code": "ERR_INVALID_ARG_TYPE",
+   "message": "The \"options.signal\" property must be an instance of AbortSignal. Received an instance of Object"
+  },
+  "badSignal2": {
+   "name": "TypeError",
+   "code": "ERR_INVALID_ARG_TYPE",
+   "message": "The \"options.signal\" property must be an instance of AbortSignal. Received type string ('x')"
+  },
+  "nullOptions": "five",
+  "writesAll": [
+   "name? ",
+   "q2 ",
+   "\r\n",
+   "q5 "
+  ],
+  "answered6": "six",
+  "afterAnswerAbortOk": true,
+  "pendingAfterClose": "pending",
+  "afterClose": {
+   "name": "Error",
+   "code": "ERR_USE_AFTER_CLOSE",
+   "message": "readline was closed"
+  },
+  "questionLength": 1,
+  "questionName": "question"
+ }
+}

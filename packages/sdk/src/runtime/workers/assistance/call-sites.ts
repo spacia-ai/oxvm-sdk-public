@@ -47,6 +47,13 @@ class CallSite {
 const LOCATION = /^(.*):(\d+):(\d+)$/u, EVALUATED = /^(.*) line \d+ > (?:eval|Function)$/u;
 const SCRIPT_CODE = new Set(["global code", "module code", "eval code"]);
 
+/** SpiderMonkey names a function by the path of functions around it (`outer/inner`, `outer/<` for one without a
+ * name, `outer/inner<` for one defined inside); V8 gives the function's own name, or none. */
+function functionName(label: string): string | null {
+  const own = label.slice(label.lastIndexOf("/") + 1).replace(/[<*]+$/u, "");
+  return own === "" ? null : own;
+}
+
 function parseFrame(text: string): Frame {
   const at = text.indexOf("@");
   let label = at < 0 ? "" : text.slice(0, at);
@@ -54,7 +61,7 @@ function parseFrame(text: string): Frame {
   const asynchronous = label.startsWith("async*");
   if (asynchronous) label = label.slice("async*".length);
   let evaluated = label === "eval code";
-  const name = label === "" || SCRIPT_CODE.has(label) ? null : label;
+  const name = label === "" || SCRIPT_CODE.has(label) ? null : functionName(label);
   if (place === "[native code]") return { name, file: null, line: null, column: null, native: true, evaluated, asynchronous };
   const location = LOCATION.exec(place);
   if (location === null) return { name, file: place === "" ? null : place, line: null, column: null, native: false, evaluated, asynchronous };
@@ -90,7 +97,10 @@ function nativeCallSites(constructor: object, capture: unknown): boolean {
 /** Node programs read their callers through V8's stack API: `Error.captureStackTrace` with `Error.prepareStackTrace`
  * and `Error.stackTraceLimit` (the `depd` package under Express does). SpiderMonkey and JavaScriptCore have none of
  * it, so in those realms `captureStackTrace` is served here from the engine's stack text. A V8 realm is left alone.
- * Not covered: the `stack` an engine attaches to an error it creates itself never passes through `prepareStackTrace`. */
+ * Where `stack` is an accessor on `Error.prototype` (SpiderMonkey), reading it goes through `Error.prepareStackTrace`
+ * too, as in V8: the runtime's formatter gives the text Node programs expect, and a formatter the program installed
+ * receives call sites. With no `prepareStackTrace` at all the engine's own text is returned untouched.
+ * Not covered: an engine that stores `stack` on each error (JavaScriptCore) never passes through here. */
 export function installCallSites(realmValue: unknown): () => void {
   const constructorValue = record(realmValue, "call-site realm")["Error"];
   if (typeof constructorValue !== "function") throw new TypeError("Realm has no Error constructor");
@@ -99,6 +109,7 @@ export function installCallSites(realmValue: unknown): () => void {
   if (nativeCallSites(constructor, previousCapture?.value)) return () => undefined;
   const previousLimit = Object.getOwnPropertyDescriptor(constructor, "stackTraceLimit");
   if (previousLimit === undefined) Object.defineProperty(constructor, "stackTraceLimit", { configurable: true, enumerable: true, writable: true, value: 10 });
+  const stackReader = installStackReader(constructor);
   const captureStackTrace = (target: unknown, constructorOpt?: unknown): void => {
     if ((typeof target !== "object" || target === null) && typeof target !== "function") throw new TypeError("Invalid argument");
     // SpiderMonkey cuts its stack text at `Error.stackTraceLimit`, and this function's own frames would use the
@@ -106,7 +117,8 @@ export function installCallSites(realmValue: unknown): () => void {
     const limit: unknown = Reflect.get(constructor, "stackTraceLimit");
     Reflect.set(constructor, "stackTraceLimit", Infinity);
     let raw: unknown;
-    try { raw = Reflect.get(Reflect.construct(constructorValue, []), "stack"); }
+    // The engine's text, not what a program's formatter makes of it: that formatter is called below, once.
+    try { const probe: unknown = Reflect.construct(constructorValue, []); raw = typeof probe === "object" && probe !== null ? stackReader.raw(probe) : undefined; }
     finally { Reflect.set(constructor, "stackTraceLimit", limit); }
     // The first line is this function's own frame.
     let frames = (typeof raw === "string" ? raw.split("\n") : []).filter(line => line !== "").slice(1).map(parseFrame);
@@ -121,8 +133,44 @@ export function installCallSites(realmValue: unknown): () => void {
   };
   Object.defineProperty(constructor, "captureStackTrace", { configurable: true, writable: true, value: captureStackTrace });
   return () => {
+    stackReader.restore();
     if (previousCapture === undefined) Reflect.deleteProperty(constructor, "captureStackTrace");
     else Object.defineProperty(constructor, "captureStackTrace", previousCapture);
     if (previousLimit === undefined) Reflect.deleteProperty(constructor, "stackTraceLimit");
   };
+}
+
+/** `Error.prepareStackTrace`'s result for an error's own stack text, computed once per error as V8 computes it once. */
+function installStackReader(constructor: object): { readonly raw: (error: object) => unknown; readonly restore: () => void } {
+  const untouched = { raw: (error: object): unknown => Reflect.get(error, "stack"), restore: (): void => undefined };
+  const prototype: unknown = Reflect.get(constructor, "prototype");
+  if (typeof prototype !== "object" || prototype === null) return untouched;
+  const previous = Object.getOwnPropertyDescriptor(prototype, "stack");
+  if (previous === undefined || previous.configurable !== true) return untouched;
+  const read: unknown = Reflect.get(previous, "get"), write: unknown = Reflect.get(previous, "set");
+  if (typeof read !== "function") return untouched;
+  const formatted = new WeakMap<object, { readonly value: unknown }>();
+  Object.defineProperty(prototype, "stack", {
+    configurable: true, enumerable: previous.enumerable ?? false,
+    get(this: unknown): unknown {
+      const raw: unknown = Reflect.apply(read, this, []);
+      if (typeof this !== "object" || this === null || typeof raw !== "string") return raw;
+      const done = formatted.get(this);
+      if (done !== undefined) return done.value;
+      const prepare: unknown = Reflect.get(constructor, "prepareStackTrace");
+      if (typeof prepare !== "function") return raw;
+      const limit: unknown = Reflect.get(constructor, "stackTraceLimit");
+      const sites = raw.split("\n").filter(line => line !== "").slice(0, typeof limit === "number" && limit > 0 ? Math.floor(limit) : 0).map(line => new CallSite(parseFrame(line)));
+      // Kept before the formatter runs: a formatter that reads the stack of the error it is formatting gets text.
+      formatted.set(this, { value: raw });
+      const value: unknown = Reflect.apply(prepare, constructor, [this, sites]);
+      formatted.set(this, { value });
+      return value;
+    },
+    set(this: unknown, value: unknown): void {
+      if (typeof this === "object" && this !== null) formatted.delete(this);
+      if (typeof write === "function") Reflect.apply(write, this, [value]);
+    },
+  });
+  return { raw: (error): unknown => Reflect.apply(read, error, []), restore: () => { Object.defineProperty(prototype, "stack", previous); } };
 }

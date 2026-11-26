@@ -1,0 +1,748 @@
+{
+ "node": "v24.18.1",
+ "recorder": "// Recorder for the node-files-*.controls.json files. Every scenario is the body of an async function of\n// (fs, h) that the test runs again, unchanged, against the emulated fs. Run with Node 24.18.1 on a tmpfs\n// (its readdir order is the byte order the file service's readdir has):\n//   docker run --rm --tmpfs /work -v \"$PWD\":/w:ro node:24.18.1-alpine node /w/record.cjs /w/sc/<set> > node-files-<set>.controls.json\nconst fs = require(\"fs\"), path = require(\"path\"), util = require(\"util\");\nconst dir = process.argv[2], out = {};\nfunction describe(e) {\n  if (!(e instanceof Error)) return { thrown: String(e) };\n  const d = { name: e.name, ctor: e.constructor.name, message: e.message };\n  for (const k of [\"code\", \"errno\", \"syscall\", \"path\", \"dest\"]) if (e[k] !== undefined) d[k] = e[k];\n  return d;\n}\nfunction helpers(warnings) {\n  return {\n    Buffer, custom: util.promisify.custom, warnings, err: describe,\n    attempt(fn) { try { return { ok: fn() }; } catch (e) { return { error: describe(e) }; } },\n    async attemptAsync(fn) { try { return { ok: await fn() }; } catch (e) { return { error: describe(e) }; } },\n    turn: () => new Promise(resolve => setImmediate(resolve)),\n    // Long enough for several polls of a 20 ms stat watcher; the replay fires its timer instead.\n    wait: () => new Promise(resolve => setTimeout(resolve, 150)),\n    dirent: d => d === null ? null : [Buffer.isBuffer(d.name) ? { hex: d.name.toString(\"hex\") } : d.name, Buffer.isBuffer(d.parentPath) ? { hex: d.parentPath.toString(\"hex\") } : d.parentPath,\n      d.isDirectory() ? \"dir\" : d.isSymbolicLink() ? \"link\" : d.isFile() ? \"file\" : \"other\"],\n    fn: f => typeof f === \"function\" ? [f.name, f.length] : typeof f,\n  };\n}\n(async () => {\n  for (const file of fs.readdirSync(dir).sort()) {\n    for (const name of fs.readdirSync(\"/work\")) fs.rmSync(\"/work/\" + name, { recursive: true, force: true });\n    process.chdir(\"/work\");\n    const warnings = [], onWarning = w => warnings.push([w.name, w.message]);\n    process.on(\"warning\", onWarning);\n    const source = fs.readFileSync(path.join(dir, file), \"utf8\");\n    const result = await new Function(\"fs\", \"h\", \"return (async () => {\" + source + \"\\n})()\")(fs, helpers(warnings));\n    process.off(\"warning\", onWarning);\n    out[file.replace(/\\.js$/, \"\")] = { source, result: JSON.parse(JSON.stringify(result)) };\n  }\n  console.log(JSON.stringify({ node: process.version, recorder: fs.readFileSync(__filename, \"utf8\"), scenarios: out }, null, 1));\n})();\n",
+ "scenarios": {
+  "api": {
+   "source": "fs.writeFileSync(\"f\", \"x\");\nconst out = { shapes: [h.fn(fs.watchFile), h.fn(fs.unwatchFile)] }, noop = () => {}, other = () => {};\nconst w = fs.watchFile(\"f\", noop);\nconst proto = Object.getPrototypeOf(w);\nout.watcher = { ctor: w.constructor.name, ctorShape: h.fn(w.constructor), keys: Object.keys(w), methods: Object.getOwnPropertyNames(proto).map(k => [k, h.fn(proto[k])]), emitter: typeof w.on === \"function\" && typeof w.listenerCount === \"function\",\n  ref: w.ref() === w, unref: w.unref() === w, refAgain: w.ref() === w, start: h.attempt(() => w.start()), listeners: w.listenerCount(\"change\") };\nout.sameWatcher = [fs.watchFile(\"f\", other) === w, fs.watchFile(\"/work/f\", { interval: 1 }, other) === w, fs.watchFile(\"./f\", noop) === w, w.listenerCount(\"change\")];\nconst stops = []; w.on(\"stop\", function () { stops.push([arguments.length, this === w]); });\nout.unwatchOne = [fs.unwatchFile(\"f\", other), w.listenerCount(\"change\"), stops.length];\nout.unwatchUnknownListener = [fs.unwatchFile(\"f\", () => {}), w.listenerCount(\"change\")];\nout.unwatchAll = [fs.unwatchFile(\"f\"), w.listenerCount(\"change\"), stops.length]; await h.turn(); out.stopEvent = stops.slice();\nout.unwatchAgain = h.attempt(() => fs.unwatchFile(\"f\")); out.unwatchUnknown = h.attempt(() => fs.unwatchFile(\"never-watched\", noop));\nout.fresh = fs.watchFile(\"f\", noop) !== w; out.stopMethod = h.attempt(() => { const again = fs.watchFile(\"f\", noop); const r = again.stop(); return [r, again.stop()]; }); fs.unwatchFile(\"f\");\nout.afterStop = fs.watchFile(\"f\", noop) !== w; fs.unwatchFile(\"f\");\nconst quiet = fs.watchFile(\"f\", { persistent: false, interval: 20 }, noop); out.notPersistent = quiet.constructor.name; fs.unwatchFile(\"f\");\nout.errors = { noListener: h.attempt(() => fs.watchFile(\"f\")), optionsOnly: h.attempt(() => fs.watchFile(\"f\", {})), listenerText: h.attempt(() => fs.watchFile(\"f\", {}, \"x\")), pathType: h.attempt(() => fs.watchFile(5, noop)), nul: h.attempt(() => fs.watchFile(\"a\\0\", noop)),\n  intervalText: h.attempt(() => fs.watchFile(\"g1\", { interval: \"5\" }, noop)), intervalNegative: h.attempt(() => fs.watchFile(\"g2\", { interval: -1 }, noop)), intervalFloat: h.attempt(() => fs.watchFile(\"g3\", { interval: 1.5 }, noop)),\n  intervalBig: h.attempt(() => fs.watchFile(\"g4\", { interval: 2 ** 32 }, noop)), intervalZero: h.attempt(() => { fs.watchFile(\"g5\", { interval: 0 }, noop); fs.unwatchFile(\"g5\"); return true; }),\n  nullOptions: h.attempt(() => fs.watchFile(\"g6\", null, noop)), numberOptions: h.attempt(() => fs.watchFile(\"g7\", 5, noop)), unwatchType: h.attempt(() => fs.unwatchFile(5)), url: h.attempt(() => { const u = fs.watchFile(new URL(\"file:///work/f\"), noop); fs.unwatchFile(\"f\"); return u.constructor.name; }),\n  buffer: h.attempt(() => { const u = fs.watchFile(h.Buffer.from(\"f\"), noop); fs.unwatchFile(h.Buffer.from(\"f\")); return u.listenerCount(\"change\"); }) };\nout.leftovers = [\"g1\", \"g2\", \"g3\", \"g4\", \"g6\", \"g7\"].map(n => h.attempt(() => { const again = fs.watchFile(n, noop); const count = again.listenerCount(\"change\"); fs.unwatchFile(n); return count; }));\nreturn out;\n",
+   "result": {
+    "shapes": [
+     [
+      "watchFile",
+      3
+     ],
+     [
+      "unwatchFile",
+      2
+     ]
+    ],
+    "watcher": {
+     "ctor": "StatWatcher",
+     "ctorShape": [
+      "StatWatcher",
+      1
+     ],
+     "keys": [
+      "_events",
+      "_eventsCount",
+      "_maxListeners",
+      "_handle"
+     ],
+     "methods": [
+      [
+       "constructor",
+       [
+        "StatWatcher",
+        1
+       ]
+      ],
+      [
+       "start",
+       [
+        "",
+        0
+       ]
+      ],
+      [
+       "stop",
+       [
+        "",
+        0
+       ]
+      ],
+      [
+       "ref",
+       [
+        "",
+        0
+       ]
+      ],
+      [
+       "unref",
+       [
+        "",
+        0
+       ]
+      ]
+     ],
+     "emitter": true,
+     "ref": true,
+     "unref": true,
+     "refAgain": true,
+     "start": {},
+     "listeners": 1
+    },
+    "sameWatcher": [
+     true,
+     true,
+     true,
+     4
+    ],
+    "unwatchOne": [
+     null,
+     3,
+     0
+    ],
+    "unwatchUnknownListener": [
+     null,
+     3
+    ],
+    "unwatchAll": [
+     null,
+     0,
+     0
+    ],
+    "stopEvent": [
+     [
+      0,
+      true
+     ]
+    ],
+    "unwatchAgain": {},
+    "unwatchUnknown": {},
+    "fresh": true,
+    "stopMethod": {
+     "ok": [
+      null,
+      null
+     ]
+    },
+    "afterStop": true,
+    "notPersistent": "StatWatcher",
+    "errors": {
+     "noListener": {
+      "error": {
+       "name": "TypeError",
+       "ctor": "TypeError",
+       "message": "The \"listener\" argument must be of type function. Received undefined",
+       "code": "ERR_INVALID_ARG_TYPE"
+      }
+     },
+     "optionsOnly": {
+      "error": {
+       "name": "TypeError",
+       "ctor": "TypeError",
+       "message": "The \"listener\" argument must be of type function. Received undefined",
+       "code": "ERR_INVALID_ARG_TYPE"
+      }
+     },
+     "listenerText": {
+      "error": {
+       "name": "TypeError",
+       "ctor": "TypeError",
+       "message": "The \"listener\" argument must be of type function. Received type string ('x')",
+       "code": "ERR_INVALID_ARG_TYPE"
+      }
+     },
+     "pathType": {
+      "error": {
+       "name": "TypeError",
+       "ctor": "TypeError",
+       "message": "The \"path\" argument must be of type string or an instance of Buffer or URL. Received type number (5)",
+       "code": "ERR_INVALID_ARG_TYPE"
+      }
+     },
+     "nul": {
+      "error": {
+       "name": "TypeError",
+       "ctor": "TypeError",
+       "message": "The argument 'path' must be a string, Uint8Array, or URL without null bytes. Received 'a\\x00'",
+       "code": "ERR_INVALID_ARG_VALUE"
+      }
+     },
+     "intervalText": {
+      "error": {
+       "name": "TypeError",
+       "ctor": "TypeError",
+       "message": "The \"interval\" argument must be of type number. Received type string ('5')",
+       "code": "ERR_INVALID_ARG_TYPE"
+      }
+     },
+     "intervalNegative": {
+      "error": {
+       "name": "RangeError",
+       "ctor": "RangeError",
+       "message": "The value of \"interval\" is out of range. It must be >= 0 && <= 4294967295. Received -1",
+       "code": "ERR_OUT_OF_RANGE"
+      }
+     },
+     "intervalFloat": {
+      "error": {
+       "name": "RangeError",
+       "ctor": "RangeError",
+       "message": "The value of \"interval\" is out of range. It must be an integer. Received 1.5",
+       "code": "ERR_OUT_OF_RANGE"
+      }
+     },
+     "intervalBig": {
+      "error": {
+       "name": "RangeError",
+       "ctor": "RangeError",
+       "message": "The value of \"interval\" is out of range. It must be >= 0 && <= 4294967295. Received 4294967296",
+       "code": "ERR_OUT_OF_RANGE"
+      }
+     },
+     "intervalZero": {
+      "ok": true
+     },
+     "nullOptions": {
+      "error": {
+       "name": "TypeError",
+       "ctor": "TypeError",
+       "message": "The \"listener\" argument must be of type function. Received null",
+       "code": "ERR_INVALID_ARG_TYPE"
+      }
+     },
+     "numberOptions": {
+      "error": {
+       "name": "TypeError",
+       "ctor": "TypeError",
+       "message": "The \"listener\" argument must be of type function. Received type number (5)",
+       "code": "ERR_INVALID_ARG_TYPE"
+      }
+     },
+     "unwatchType": {
+      "error": {
+       "name": "TypeError",
+       "ctor": "TypeError",
+       "message": "The \"path\" argument must be of type string or an instance of Buffer or URL. Received type number (5)",
+       "code": "ERR_INVALID_ARG_TYPE"
+      }
+     },
+     "url": {
+      "ok": "StatWatcher"
+     },
+     "buffer": {
+      "error": {
+       "name": "TypeError",
+       "ctor": "TypeError",
+       "message": "The \"paths[0]\" argument must be of type string. Received an instance of Buffer",
+       "code": "ERR_INVALID_ARG_TYPE"
+      }
+     }
+    },
+    "leftovers": [
+     {
+      "ok": 1
+     },
+     {
+      "ok": 1
+     },
+     {
+      "ok": 1
+     },
+     {
+      "ok": 1
+     },
+     {
+      "ok": 1
+     },
+     {
+      "ok": 1
+     }
+    ]
+   }
+  },
+  "sequence": {
+   "source": "const brief = s => [s.isDirectory() ? \"dir\" : typeof s.size === \"bigint\" ? \"big:\" + s.size : s.size, (Number(s.mode) & 0o170000).toString(8), Number(s.mode) & 0o777, Number(s.mtimeMs) === 0 ? 0 : \"set\", Number(s.ino) === 0 ? 0 : \"ino\", s.atime instanceof Date ? (s.atime.getTime() === 0 ? 0 : \"date\") : typeof s.atime, s.isFile(), s.constructor.name, Object.keys(s).join()];\nconst out = {}, events = [];\nconst take = () => events.splice(0);\nconst listener = function (curr, prev) { events.push([brief(curr), brief(prev), arguments.length, this === watcher]); };\nconst watcher = fs.watchFile(\"late.txt\", { interval: 20 }, listener);\nout.immediately = take(); await h.wait(); out.missingAtStart = take();\nawait h.wait(); out.stillMissing = take();\nfs.writeFileSync(\"late.txt\", \"abc\"); await h.wait(); out.created = take();\nawait h.wait(); out.unchanged = take();\nfs.writeFileSync(\"late.txt\", \"abcdef\"); await h.wait(); out.modified = take();\nfs.chmodSync(\"late.txt\", 0o600); await h.wait(); out.chmod = take();\nfs.unlinkSync(\"late.txt\"); await h.wait(); out.deleted = take();\nawait h.wait(); out.stillDeleted = take();\nfs.writeFileSync(\"late.txt\", \"x\"); await h.wait(); out.recreated = take();\nfs.unwatchFile(\"late.txt\"); fs.writeFileSync(\"late.txt\", \"after\"); await h.wait(); out.afterUnwatch = take();\nfs.writeFileSync(\"there.txt\", \"12345\");\nconst existing = fs.watchFile(\"/work/there.txt\", { interval: 20, bigint: true }, (curr, prev) => events.push([brief(curr), brief(prev)]));\nawait h.wait(); out.existingAtStart = take();\nfs.appendFileSync(\"there.txt\", \"6\"); await h.wait(); out.existingAppended = take();\nfs.renameSync(\"there.txt\", \"moved.txt\"); await h.wait(); out.existingRenamedAway = take();\nfs.unwatchFile(\"there.txt\"); out.sameAfterRelative = existing === watcher;\nfs.mkdirSync(\"dir\"); fs.watchFile(\"dir\", { interval: 20 }, (curr, prev) => events.push([brief(curr), brief(prev)])); await h.wait();\nfs.writeFileSync(\"dir/inside\", \"\"); await h.wait(); out.directory = take(); fs.unwatchFile(\"dir\");\nreturn out;\n",
+   "result": {
+    "immediately": [],
+    "missingAtStart": [
+     [
+      [
+       0,
+       "0",
+       0,
+       0,
+       0,
+       0,
+       false,
+       "Stats",
+       "dev,mode,nlink,uid,gid,rdev,blksize,ino,size,blocks,atimeMs,mtimeMs,ctimeMs,birthtimeMs,atime"
+      ],
+      [
+       0,
+       "0",
+       0,
+       0,
+       0,
+       0,
+       false,
+       "Stats",
+       "dev,mode,nlink,uid,gid,rdev,blksize,ino,size,blocks,atimeMs,mtimeMs,ctimeMs,birthtimeMs,atime"
+      ],
+      2,
+      true
+     ]
+    ],
+    "stillMissing": [],
+    "created": [
+     [
+      [
+       3,
+       "100000",
+       420,
+       "set",
+       "ino",
+       "date",
+       true,
+       "Stats",
+       "dev,mode,nlink,uid,gid,rdev,blksize,ino,size,blocks,atimeMs,mtimeMs,ctimeMs,birthtimeMs,atime"
+      ],
+      [
+       0,
+       "0",
+       0,
+       0,
+       0,
+       0,
+       false,
+       "Stats",
+       "dev,mode,nlink,uid,gid,rdev,blksize,ino,size,blocks,atimeMs,mtimeMs,ctimeMs,birthtimeMs,atime"
+      ],
+      2,
+      true
+     ]
+    ],
+    "unchanged": [],
+    "modified": [
+     [
+      [
+       6,
+       "100000",
+       420,
+       "set",
+       "ino",
+       "date",
+       true,
+       "Stats",
+       "dev,mode,nlink,uid,gid,rdev,blksize,ino,size,blocks,atimeMs,mtimeMs,ctimeMs,birthtimeMs,atime"
+      ],
+      [
+       3,
+       "100000",
+       420,
+       "set",
+       "ino",
+       "date",
+       true,
+       "Stats",
+       "dev,mode,nlink,uid,gid,rdev,blksize,ino,size,blocks,atimeMs,mtimeMs,ctimeMs,birthtimeMs,atime"
+      ],
+      2,
+      true
+     ]
+    ],
+    "chmod": [
+     [
+      [
+       6,
+       "100000",
+       384,
+       "set",
+       "ino",
+       "date",
+       true,
+       "Stats",
+       "dev,mode,nlink,uid,gid,rdev,blksize,ino,size,blocks,atimeMs,mtimeMs,ctimeMs,birthtimeMs,atime"
+      ],
+      [
+       6,
+       "100000",
+       420,
+       "set",
+       "ino",
+       "date",
+       true,
+       "Stats",
+       "dev,mode,nlink,uid,gid,rdev,blksize,ino,size,blocks,atimeMs,mtimeMs,ctimeMs,birthtimeMs,atime"
+      ],
+      2,
+      true
+     ]
+    ],
+    "deleted": [
+     [
+      [
+       0,
+       "0",
+       0,
+       0,
+       0,
+       0,
+       false,
+       "Stats",
+       "dev,mode,nlink,uid,gid,rdev,blksize,ino,size,blocks,atimeMs,mtimeMs,ctimeMs,birthtimeMs,atime"
+      ],
+      [
+       6,
+       "100000",
+       384,
+       "set",
+       "ino",
+       "date",
+       true,
+       "Stats",
+       "dev,mode,nlink,uid,gid,rdev,blksize,ino,size,blocks,atimeMs,mtimeMs,ctimeMs,birthtimeMs,atime"
+      ],
+      2,
+      true
+     ]
+    ],
+    "stillDeleted": [],
+    "recreated": [
+     [
+      [
+       1,
+       "100000",
+       420,
+       "set",
+       "ino",
+       "date",
+       true,
+       "Stats",
+       "dev,mode,nlink,uid,gid,rdev,blksize,ino,size,blocks,atimeMs,mtimeMs,ctimeMs,birthtimeMs,atime"
+      ],
+      [
+       6,
+       "100000",
+       384,
+       "set",
+       "ino",
+       "date",
+       true,
+       "Stats",
+       "dev,mode,nlink,uid,gid,rdev,blksize,ino,size,blocks,atimeMs,mtimeMs,ctimeMs,birthtimeMs,atime"
+      ],
+      2,
+      true
+     ]
+    ],
+    "afterUnwatch": [],
+    "existingAtStart": [],
+    "existingAppended": [
+     [
+      [
+       "big:6",
+       "100000",
+       420,
+       "set",
+       "ino",
+       "date",
+       true,
+       "BigIntStats",
+       "dev,mode,nlink,uid,gid,rdev,blksize,ino,size,blocks,atimeMs,mtimeMs,ctimeMs,birthtimeMs,atimeNs,mtimeNs,ctimeNs,birthtimeNs,atime"
+      ],
+      [
+       "big:5",
+       "100000",
+       420,
+       "set",
+       "ino",
+       "date",
+       true,
+       "BigIntStats",
+       "dev,mode,nlink,uid,gid,rdev,blksize,ino,size,blocks,atimeMs,mtimeMs,ctimeMs,birthtimeMs,atimeNs,mtimeNs,ctimeNs,birthtimeNs,atime"
+      ]
+     ]
+    ],
+    "existingRenamedAway": [
+     [
+      [
+       "big:0",
+       "0",
+       0,
+       0,
+       0,
+       0,
+       false,
+       "BigIntStats",
+       "dev,mode,nlink,uid,gid,rdev,blksize,ino,size,blocks,atimeMs,mtimeMs,ctimeMs,birthtimeMs,atimeNs,mtimeNs,ctimeNs,birthtimeNs,atime"
+      ],
+      [
+       "big:6",
+       "100000",
+       420,
+       "set",
+       "ino",
+       "date",
+       true,
+       "BigIntStats",
+       "dev,mode,nlink,uid,gid,rdev,blksize,ino,size,blocks,atimeMs,mtimeMs,ctimeMs,birthtimeMs,atimeNs,mtimeNs,ctimeNs,birthtimeNs,atime"
+      ]
+     ]
+    ],
+    "sameAfterRelative": false,
+    "directory": [
+     [
+      [
+       "dir",
+       "40000",
+       493,
+       "set",
+       "ino",
+       "date",
+       false,
+       "Stats",
+       "dev,mode,nlink,uid,gid,rdev,blksize,ino,size,blocks,atimeMs,mtimeMs,ctimeMs,birthtimeMs,atime"
+      ],
+      [
+       "dir",
+       "40000",
+       493,
+       "set",
+       "ino",
+       "date",
+       false,
+       "Stats",
+       "dev,mode,nlink,uid,gid,rdev,blksize,ino,size,blocks,atimeMs,mtimeMs,ctimeMs,birthtimeMs,atime"
+      ]
+     ]
+    ]
+   }
+  },
+  "watch-events": {
+   "source": "fs.writeFileSync(\"f\", \"x\"); fs.mkdirSync(\"d\");\nconst out = {};\nconst events = fs.promises.watch(\"d\"); const next = events.next(); await h.turn(); fs.writeFileSync(\"d/new.txt\", \"1\");\nconst got = await next; out.event = [got.done, Object.keys(got.value), Object.getPrototypeOf(got.value) === null, got.value.eventType, got.value.filename]; out.returned = await events.return(); out.afterReturn = await events.next();\nconst hex = fs.promises.watch(\"d\", { encoding: \"hex\" }); const nh = hex.next(); await h.turn(); fs.writeFileSync(\"d/b.txt\", \"1\"); out.hexEvent = (await nh).value.filename; await hex.return();\nconst queued = fs.promises.watch(\"d\", { maxQueue: 1, overflow: \"error\" }); const nq = queued.next(); await h.turn(); for (let i = 0; i < 5; i++) fs.writeFileSync(\"d/q\" + i, \"1\"); await h.wait();\nout.overflowError = [await h.attemptAsync(async () => (await nq).value && \"event\"), await h.attemptAsync(() => queued.next()), await queued.next()];\nconst ignoring = fs.promises.watch(\"d\", { maxQueue: 1 }); const ni = ignoring.next(); await h.turn(); for (let i = 0; i < 5; i++) fs.writeFileSync(\"d/i\" + i, \"1\"); await h.wait(); await ni; await ignoring.return();\nconst filtered = fs.promises.watch(\"d\", { ignore: [\"*.log\", /^skip/, n => n === \"fn.txt\"] }); const nf = filtered.next(); await h.turn(); for (const n of [\"a.log\", \"skipped\", \"fn.txt\", \"kept.txt\"]) fs.writeFileSync(\"d/\" + n, \"1\"); out.ignored = (await nf).value.filename; await filtered.return();\nawait h.turn(); out.warnings = h.warnings.slice();\nreturn out;\n",
+   "result": {
+    "event": [
+     false,
+     [
+      "eventType",
+      "filename"
+     ],
+     true,
+     "rename",
+     "new.txt"
+    ],
+    "returned": {
+     "done": true
+    },
+    "afterReturn": {
+     "done": true
+    },
+    "hexEvent": "6e65772e747874",
+    "overflowError": [
+     {
+      "ok": "event"
+     },
+     {
+      "error": {
+       "name": "Error",
+       "ctor": "Error",
+       "message": "fs.watch() queued more than 1 events",
+       "code": "ERR_FS_WATCH_QUEUE_OVERFLOW"
+      }
+     },
+     {
+      "done": true
+     }
+    ],
+    "ignored": "kept.txt",
+    "warnings": [
+     [
+      "Warning",
+      "fs.watch maxQueue exceeded"
+     ],
+     [
+      "Warning",
+      "fs.watch maxQueue exceeded"
+     ],
+     [
+      "Warning",
+      "fs.watch maxQueue exceeded"
+     ],
+     [
+      "Warning",
+      "fs.watch maxQueue exceeded"
+     ],
+     [
+      "Warning",
+      "fs.watch maxQueue exceeded"
+     ],
+     [
+      "Warning",
+      "fs.watch maxQueue exceeded"
+     ],
+     [
+      "Warning",
+      "fs.watch maxQueue exceeded"
+     ],
+     [
+      "Warning",
+      "fs.watch maxQueue exceeded"
+     ]
+    ]
+   }
+  },
+  "watch": {
+   "source": "fs.writeFileSync(\"f\", \"x\"); fs.mkdirSync(\"d\");\nconst out = { shape: h.fn(fs.promises.watch) };\nconst first = async (...args) => { const it = fs.promises.watch(...args); try { return await h.attemptAsync(() => it.next()); } finally { await it.return(); } };\nconst it0 = fs.promises.watch(\"f\"); out.iterator = [Object.prototype.toString.call(it0), it0[Symbol.asyncIterator]() === it0]; out.returnUnstarted = await it0.return(\"r\");\nout.errors = { pathType: await first(5), optionsNull: await first(\"f\", null), optionsText: await first(\"f\", \"utf8\"), persistent: await first(\"f\", { persistent: \"x\" }), recursive: await first(\"f\", { recursive: \"x\" }), recursiveNull: null,\n  maxQueueText: await first(\"f\", { maxQueue: \"x\" }), maxQueueFloat: await first(\"f\", { maxQueue: 1.5 }), overflow: await first(\"f\", { overflow: \"x\" }), signal: await first(\"f\", { signal: {} }), encoding: await first(\"f\", { encoding: \"nope\" }),\n  ignoreNumber: await first(\"f\", { ignore: 5 }), ignoreMixed: await first(\"f\", { ignore: [\"a\", 5] }), missing: await first(\"nope\"), missingFilename: await (async () => { try { await fs.promises.watch(\"nope\").next(); } catch (e) { return e.filename; } })(), nul: await first(\"a\\0\") };\nconst aborted = AbortSignal.abort(); out.preAborted = await first(\"f\", { signal: aborted });\nconst withReason = new AbortController(); withReason.abort(new RangeError(\"why\"));\nout.preAbortedCause = await (async () => { try { await fs.promises.watch(\"f\", { signal: withReason.signal }).next(); } catch (e) { return [e.name, e.code, e.message, e.cause instanceof RangeError, e.cause && e.cause.message, e.constructor.name]; } })();\nconst controller = new AbortController(); const waiting = fs.promises.watch(\"f\", { signal: controller.signal }); const pending = h.attemptAsync(() => waiting.next()); await h.turn(); controller.abort();\nout.abortedWhileWaiting = await pending; out.afterAbort = await waiting.next();\nout.bufferEncoding = await first(\"d\", { encoding: \"buffer\" });\nreturn out;\n",
+   "result": {
+    "shape": [
+     "_watch",
+     1
+    ],
+    "iterator": [
+     "[object AsyncGenerator]",
+     true
+    ],
+    "returnUnstarted": {
+     "value": "r",
+     "done": true
+    },
+    "errors": {
+     "pathType": {
+      "error": {
+       "name": "TypeError",
+       "ctor": "TypeError",
+       "message": "The \"path\" argument must be of type string or an instance of Buffer or URL. Received type number (5)",
+       "code": "ERR_INVALID_ARG_TYPE"
+      }
+     },
+     "optionsNull": {
+      "error": {
+       "name": "TypeError",
+       "ctor": "TypeError",
+       "message": "The \"options\" argument must be of type object. Received null",
+       "code": "ERR_INVALID_ARG_TYPE"
+      }
+     },
+     "optionsText": {
+      "error": {
+       "name": "TypeError",
+       "ctor": "TypeError",
+       "message": "The \"options\" argument must be of type object. Received type string ('utf8')",
+       "code": "ERR_INVALID_ARG_TYPE"
+      }
+     },
+     "persistent": {
+      "error": {
+       "name": "TypeError",
+       "ctor": "TypeError",
+       "message": "The \"options.persistent\" property must be of type boolean. Received type string ('x')",
+       "code": "ERR_INVALID_ARG_TYPE"
+      }
+     },
+     "recursive": {
+      "error": {
+       "name": "TypeError",
+       "ctor": "TypeError",
+       "message": "The \"options.recursive\" property must be of type boolean. Received type string ('x')",
+       "code": "ERR_INVALID_ARG_TYPE"
+      }
+     },
+     "recursiveNull": null,
+     "maxQueueText": {
+      "error": {
+       "name": "TypeError",
+       "ctor": "TypeError",
+       "message": "The \"options.maxQueue\" property must be of type number. Received type string ('x')",
+       "code": "ERR_INVALID_ARG_TYPE"
+      }
+     },
+     "maxQueueFloat": {
+      "error": {
+       "name": "RangeError",
+       "ctor": "RangeError",
+       "message": "The value of \"options.maxQueue\" is out of range. It must be an integer. Received 1.5",
+       "code": "ERR_OUT_OF_RANGE"
+      }
+     },
+     "overflow": {
+      "error": {
+       "name": "TypeError",
+       "ctor": "TypeError",
+       "message": "The property 'options.overflow' must be one of: 'ignore', 'error'. Received 'x'",
+       "code": "ERR_INVALID_ARG_VALUE"
+      }
+     },
+     "signal": {
+      "error": {
+       "name": "TypeError",
+       "ctor": "TypeError",
+       "message": "The \"options.signal\" property must be an instance of AbortSignal. Received an instance of Object",
+       "code": "ERR_INVALID_ARG_TYPE"
+      }
+     },
+     "encoding": {
+      "error": {
+       "name": "TypeError",
+       "ctor": "TypeError",
+       "message": "The argument 'encoding' is invalid encoding. Received 'nope'",
+       "code": "ERR_INVALID_ARG_VALUE"
+      }
+     },
+     "ignoreNumber": {
+      "error": {
+       "name": "TypeError",
+       "ctor": "TypeError",
+       "message": "The \"options.ignore\" property must be one of type string or function or an instance of RegExp. Received type number (5)",
+       "code": "ERR_INVALID_ARG_TYPE"
+      }
+     },
+     "ignoreMixed": {
+      "error": {
+       "name": "TypeError",
+       "ctor": "TypeError",
+       "message": "The \"options.ignore[1]\" property must be one of type string or function or an instance of RegExp. Received type number (5)",
+       "code": "ERR_INVALID_ARG_TYPE"
+      }
+     },
+     "missing": {
+      "error": {
+       "name": "Error",
+       "ctor": "Error",
+       "message": "ENOENT: no such file or directory, watch 'nope'",
+       "code": "ENOENT",
+       "errno": -2,
+       "syscall": "watch",
+       "path": "nope"
+      }
+     },
+     "missingFilename": "nope",
+     "nul": {
+      "error": {
+       "name": "TypeError",
+       "ctor": "TypeError",
+       "message": "The argument 'path' must be a string, Uint8Array, or URL without null bytes. Received 'a\\x00'",
+       "code": "ERR_INVALID_ARG_VALUE"
+      }
+     }
+    },
+    "preAborted": {
+     "error": {
+      "name": "AbortError",
+      "ctor": "AbortError",
+      "message": "The operation was aborted",
+      "code": "ABORT_ERR"
+     }
+    },
+    "preAbortedCause": [
+     "AbortError",
+     "ABORT_ERR",
+     "The operation was aborted",
+     true,
+     "why",
+     "AbortError"
+    ],
+    "abortedWhileWaiting": {
+     "error": {
+      "name": "AbortError",
+      "ctor": "AbortError",
+      "message": "The operation was aborted",
+      "code": "ABORT_ERR"
+     }
+    },
+    "afterAbort": {
+     "done": true
+    },
+    "bufferEncoding": {
+     "error": {
+      "name": "TypeError",
+      "ctor": "TypeError",
+      "message": "The argument 'encoding' is invalid encoding. Received 'buffer'",
+      "code": "ERR_INVALID_ARG_VALUE"
+     }
+    }
+   }
+  }
+ }
+}

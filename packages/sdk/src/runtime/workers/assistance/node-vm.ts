@@ -1,4 +1,6 @@
 import { VMError } from "../../errors.ts";
+import { invalidArgType } from "./node-arg-type.ts";
+import { nodeUtil } from "./node-util.ts";
 
 type Evaluate = (source: string, filename: string) => unknown;
 export type EvaluateContext = (source: string, context: object, filename: string) => unknown;
@@ -46,7 +48,21 @@ export interface NodeVm {
   readonly runInContext: (source: unknown, context?: unknown, options?: unknown) => unknown;
   readonly runInNewContext: (source: unknown, context?: unknown, options?: unknown) => unknown;
   readonly compileFunction: (...args: unknown[]) => never;
+  readonly createScript: (code: unknown, options?: unknown) => VmScript;
+  readonly measureMemory: (options?: unknown) => Promise<never>;
+  readonly constants: Readonly<{ USE_MAIN_CONTEXT_DEFAULT_LOADER: symbol; DONT_CONTEXTIFY: symbol }>;
 }
+
+const inspect = (value: unknown, options?: { readonly depth: number }): string => nodeUtil.inspect(value, options);
+/** Node's `validateOneOf` for a property of the options object. */
+function oneOf(value: unknown, name: string, allowed: readonly string[]): void {
+  if (typeof value === "string" && allowed.includes(value)) return;
+  throw Object.assign(new TypeError(`The property '${name}' must be one of: ${allowed.map(item => `'${item}'`).join(", ")}. Received ${inspect(value)}`), { code: "ERR_INVALID_ARG_VALUE" });
+}
+/** Symbols Node hands out for `importModuleDynamically` and `vm.createContext`; one pair per process. */
+const vmConstants: NodeVm["constants"] = Object.freeze({
+  __proto__: null, USE_MAIN_CONTEXT_DEFAULT_LOADER: Symbol("vm_dynamic_import_main_context_default"), DONT_CONTEXTIFY: Symbol("vm_context_no_contextify"),
+});
 
 export function createNodeVm(evaluate: Evaluate, evaluateContext?: EvaluateContext): NodeVm {
   const filenameOf = (options: unknown): string => {
@@ -98,5 +114,15 @@ export function createNodeVm(evaluate: Evaluate, evaluateContext?: EvaluateConte
       return new Script(source, options).runInNewContext(context);
     },
     compileFunction: refuse("compileFunction"),
+    createScript(code: unknown, options?: unknown): VmScript { return new Script(code, options); },
+    // The realm has no V8 heap measurement: after Node's own validation the promise rejects as Node's does when a context cannot be measured.
+    measureMemory(options: unknown = {}): Promise<never> {
+      if (options === null || typeof options !== "object" || Array.isArray(options)) throw invalidArgType("options", "object", options, inspect);
+      const mode: unknown = Reflect.get(options, "mode") ?? "summary", execution: unknown = Reflect.get(options, "execution") ?? "default";
+      oneOf(mode, "options.mode", ["summary", "detailed"]);
+      oneOf(execution, "options.execution", ["default", "eager"]);
+      return Promise.reject(Object.assign(new Error("context used is not initialized"), { code: "ERR_CONTEXT_NOT_INITIALIZED" }));
+    },
+    constants: vmConstants,
   });
 }

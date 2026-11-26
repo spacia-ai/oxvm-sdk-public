@@ -1,0 +1,1851 @@
+{
+ "//": "Recorded from Node.js v24.18.1 (node:24.18.1-alpine); the command is the first line of `recorder`.",
+ "recorder": "// docker run --rm -e NODE_PATH=/workspace/global:/workspace/nope -e HOME=/workspace/home -e NODE_DISABLE_COMPILE_CACHE=1 -v \"$PWD/rec-api.js:/rec.js:ro\" node:24.18.1-alpine node /rec.js\nconst Module = require(\"module\"), fs = require(\"fs\"), path = require(\"path\");\nconst tree = {\n  files: {\n    \"/workspace/app/package.json\": '{\"name\":\"app\",\"version\":\"1.0.0\"}', \"/workspace/app/main.js\": 'module.exports=\"main\";', \"/workspace/app/lib/util.js\": 'module.exports=\"util\";',\n    \"/workspace/app/lib/data.json\": '{\"a\":1}', \"/workspace/app/lib/index.js\": 'module.exports=\"libindex\";', \"/workspace/app/sub/deep/x.js\": 'module.exports=\"deep\";',\n    \"/workspace/app/node_modules/main-pkg/package.json\": '{\"name\":\"main-pkg\",\"main\":\"lib/entry\"}', \"/workspace/app/node_modules/main-pkg/lib/entry.js\": 'module.exports=\"main-pkg\";',\n    \"/workspace/app/node_modules/main-pkg/other.js\": 'module.exports=\"other\";',\n    \"/workspace/app/node_modules/exports-pkg/package.json\": '{\"name\":\"exports-pkg\",\"exports\":{\".\":{\"require\":\"./dist/cjs.js\",\"import\":\"./dist/esm.mjs\"},\"./feature\":\"./dist/feature.js\",\"./package.json\":\"./package.json\"}}',\n    \"/workspace/app/node_modules/exports-pkg/dist/cjs.js\": 'module.exports=\"exports-cjs\";', \"/workspace/app/node_modules/exports-pkg/dist/esm.mjs\": 'export default \"exports-esm\";',\n    \"/workspace/app/node_modules/exports-pkg/dist/feature.js\": 'module.exports=\"feature\";', \"/workspace/app/node_modules/exports-pkg/dist/hidden.js\": 'module.exports=\"hidden\";',\n    \"/workspace/app/node_modules/index-pkg/index.js\": 'module.exports=\"index-pkg\";',\n    \"/workspace/app/node_modules/nested/package.json\": '{\"name\":\"nested\",\"main\":\"n.js\"}', \"/workspace/app/node_modules/nested/n.js\": 'module.exports=require(\"inner\");',\n    \"/workspace/app/node_modules/nested/node_modules/inner/package.json\": '{\"name\":\"inner\",\"version\":\"2.0.0\"}', \"/workspace/app/node_modules/nested/node_modules/inner/index.js\": 'module.exports=\"inner\";',\n    \"/workspace/app/node_modules/@scope/scoped/package.json\": '{\"name\":\"@scope/scoped\",\"main\":\"s.js\"}', \"/workspace/app/node_modules/@scope/scoped/s.js\": 'module.exports=\"scoped\";',\n    \"/workspace/linked-src/package.json\": '{\"name\":\"linked\",\"main\":\"l.js\"}', \"/workspace/linked-src/l.js\": 'module.exports=\"linked\";',\n    \"/workspace/global/np-pkg/index.js\": 'module.exports=\"np\";', \"/workspace/home/.node_modules/home-pkg/index.js\": 'module.exports=\"home\";',\n    \"/workspace/pre/p.js\": \"globalThis.__preloaded = { id: module.parent.id, filename: module.parent.filename, paths: module.parent.paths, loaded: module.parent.loaded };\",\n  },\n  links: { \"/workspace/app/node_modules/linked\": \"/workspace/linked-src\" },\n};\nfor (const [file, text] of Object.entries(tree.files)) { fs.mkdirSync(path.dirname(file), { recursive: true }); fs.writeFileSync(file, text); }\nfor (const [link, target] of Object.entries(tree.links)) fs.symlinkSync(target, link);\nprocess.chdir(\"/workspace/app\");\nconst U = \"<undefined>\";\nconst out = { tree, cwd: process.cwd(), execPath: process.execPath, env: { NODE_PATH: process.env.NODE_PATH, HOME: process.env.HOME } };\nconst plain = v => v === undefined ? U : v;\nfunction run(f) { try { return { value: plain(f()) }; } catch (e) { return { error: { name: e.constructor.name, code: e.code === undefined ? null : e.code, message: e.message } }; } }\nout.globalPaths = Module.globalPaths;\nout.shapes = {};\nfor (const n of [\"_findPath\", \"_initPaths\", \"_preloadModules\", \"_resolveLookupPaths\", \"enableCompileCache\", \"findPackageJSON\", \"flushCompileCache\", \"getCompileCacheDir\", \"register\", \"registerHooks\", \"runMain\", \"stripTypeScriptTypes\", \"syncBuiltinESMExports\"]) {\n  const d = Object.getOwnPropertyDescriptor(Module, n); out.shapes[n] = { name: d.value.name, length: d.value.length, enumerable: d.enumerable, writable: d.writable, configurable: d.configurable };\n}\nout.wrap = { wrapper: Module.wrapper, wrapped: Module.wrap(\"X\"), enumerable: [Object.getOwnPropertyDescriptor(Module, \"wrap\").enumerable, Object.getOwnPropertyDescriptor(Module, \"wrapper\").enumerable] };\nconst P = \"/workspace/app\";\nconst parents = { parent: { id: P + \"/main.js\", filename: P + \"/main.js\", paths: Module._nodeModulePaths(P) }, undefined: U, null: null, nopaths: { id: P + \"/main.js\", filename: P + \"/main.js\" }, emptypaths: { id: \"a\", filename: \"/a/b.js\", paths: [] }, repl: { id: \"<repl>\", filename: null, paths: [\"/r/node_modules\"] }, noid: { filename: \"/q/w.js\", paths: [\"/q/node_modules\"] }, nofilename: { id: \"x\", paths: [\"/q/node_modules\"] }, empty: {} };\nout.parents = parents;\nconst real = name => parents[name] === U ? undefined : parents[name];\nout.lookups = [[\"./x\", \"parent\"], [\"../x\", \"parent\"], [\".\", \"parent\"], [\"..\", \"parent\"], [\"./\", \"parent\"], [\".hidden\", \"parent\"], [\"..hidden\", \"parent\"], [\"x\", \"parent\"], [\"@s/x\", \"parent\"], [\"/abs/x\", \"parent\"],\n  [\"fs\", \"parent\"], [\"node:fs\", \"parent\"], [\"node:nope\", \"parent\"], [\"./x\", \"undefined\"], [\"x\", \"undefined\"], [\"./x\", \"null\"], [\"x\", \"null\"], [\"./x\", \"nopaths\"], [\"x\", \"nopaths\"], [\"x\", \"emptypaths\"],\n  [\"./x\", \"repl\"], [\"x\", \"repl\"], [\"./x\", \"noid\"], [\"./x\", \"nofilename\"], [\"\", \"parent\"], [\"x\", \"empty\"], [5, \"parent\"], [null, \"parent\"], [U, \"parent\"],\n].map(([request, parent]) => ({ request, parent, ...run(() => Module._resolveLookupPaths(request === U ? undefined : request, real(parent))) }));\nout.lookupIdentity = { same: Module._resolveLookupPaths(\"x\", undefined) === Module._resolveLookupPaths(\"x\", undefined), copy: Module._resolveLookupPaths(\"x\", undefined) !== Module.globalPaths };\nconst saved = { HOME: process.env.HOME, NODE_PATH: process.env.NODE_PATH };\nout.initPaths = [{ HOME: \"/h\", NODE_PATH: \"/a:/b\" }, { HOME: \"/h\" }, { NODE_PATH: \"/a::/b:\" }, {}, { HOME: \"\", NODE_PATH: \"\" }, { HOME: \"rel\", NODE_PATH: \"rel:/abs/\" }].map(env => {\n  delete process.env.HOME; delete process.env.NODE_PATH; Object.assign(process.env, env);\n  const before = Module.globalPaths, result = Module._initPaths();\n  return { env, result: plain(result), globalPaths: [...Module.globalPaths], replaced: before !== Module.globalPaths, lookup: Module._resolveLookupPaths(\"x\", undefined) };\n});\nModule.globalPaths.push(\"/mutated\"); out.mutatedLookup = Module._resolveLookupPaths(\"x\", undefined);\ndelete process.env.HOME; delete process.env.NODE_PATH; Object.assign(process.env, saved); Module._initPaths();\nconst nm = [P + \"/node_modules\"];\nout.finds = [[P + \"/main.js\", []], [P + \"/main\", []], [P + \"/lib\", []], [P + \"/lib/\", []], [P + \"/lib/data\", []], [P + \"/nope\", []], [P + \"/main.js/\", []],\n  [\"./main\", [P]], [\"./lib/util.js\", [P]], [\"../main\", [P + \"/lib\"]], [\"../app/main\", [P + \"/lib\"]], [\"./nope\", [P]], [\"./main\", [\"/workspace/nope\", P]], [\"./main\", []], [\"./main\", null], [\"./main\", U], [\"./main\", P],\n  [\"main-pkg\", nm], [\"main-pkg/other\", nm], [\"main-pkg/lib/entry.js\", nm], [\"exports-pkg\", nm], [\"exports-pkg/feature\", nm], [\"exports-pkg/package.json\", nm], [\"index-pkg\", nm], [\"nested\", nm], [\"inner\", nm], [\"inner\", [P + \"/node_modules/nested/node_modules\"]],\n  [\"@scope/scoped\", nm], [\"linked\", nm], [\"linked/l.js\", nm], [\"np-pkg\", [\"/workspace/nope\", \"/workspace/global\"]], [\"main\", [P]], [\"lib\", [P]], [\"fs\", nm], [\"\", [P]], [\".\", [P + \"/lib\"]], [\"..\", [P + \"/lib\"]], [\"./\", [P + \"/lib\"]], [\"./main\", [\".\"]],\n  [\"exports-pkg/hidden\", nm], [\"./x\", [5]], [\"x\", [P, 5]], [5, [\"/workspace\"]], [U, [\"/workspace\"]],\n].map(([request, paths]) => ({ request, paths, ...run(() => Module._findPath(request === U ? undefined : request, paths === U ? undefined : paths, false)) }));\nout.pathCache = { entries: Object.keys(Module._pathCache).filter(k => k.includes(\"/workspace\")).map(k => [k, Module._pathCache[k]]), nullPrototype: Object.getPrototypeOf(Module._pathCache) === null };\nModule._pathCache[\"./poison\\x00\" + P] = \"/poisoned.js\"; out.pathCache.poisoned = Module._findPath(\"./poison\", [P]);\nconst M = P + \"/main.js\";\nout.findPackageJSON = [[\"main-pkg\", M], [\"main-pkg\", \"file://\" + M], [\"main-pkg/other\", M], [\"exports-pkg\", M], [\"exports-pkg/feature\", M], [\"exports-pkg/hidden\", M], [\"index-pkg\", M], [\"nested\", M], [\"inner\", M], [\"inner\", P + \"/node_modules/nested/n.js\"],\n  [\"@scope/scoped\", M], [\"linked\", M], [\"nope\", M], [\"fs\", M], [\"node:fs\", M], [\"main-pkg\", P + \"/\"], [\"main-pkg\", P], [\"main-pkg\", P + \"/sub/deep/x.js\"], [\"app\", M], [\"main-pkg\", U], [\"main-pkg\", \"rel/x.js\"], [\"main-pkg\", \"http://a/b\"],\n  [\"./lib/util.js\", M], [\"./nope.js\", M], [\"..\", P + \"/lib/util.js\"], [\".\", P + \"/lib/util.js\"], [\"./\", P + \"/lib/util.js\"], [\"../main.js\", P + \"/lib/util.js\"], [P + \"/lib/util.js\", U], [P + \"/lib/util.js\", \"/elsewhere/x.js\"], [\"./x\", U],\n  [\"file://\" + P + \"/lib/util.js\", U], [\"file://\" + P + \"/node_modules/nested/node_modules/inner/index.js\", U], [P + \"/node_modules/exports-pkg\", \"/x/y.js\"], [P + \"/node_modules/exports-pkg/\", \"/x/y.js\"], [P + \"/node_modules/index-pkg/index.js\", \"/x/y.js\"],\n  [P + \"/node_modules/linked/l.js\", \"/x/y.js\"], [\"/workspace/global/np-pkg/index.js\", \"/x/y.js\"], [\"http://x/y\", U], [\"x\", 5], [\"x\", null], [\"x\", {}], [5, U],\n].map(([specifier, base]) => ({ specifier, base, ...run(() => base === U ? Module.findPackageJSON(specifier) : Module.findPackageJSON(specifier, base)) }));\nout.findPackageJSONOther = { none: run(() => Module.findPackageJSON()), symbol: run(() => Module.findPackageJSON(Symbol(\"s\"))), url: run(() => Module.findPackageJSON(new URL(\"file://\" + P + \"/lib/util.js\"))), baseUrl: run(() => Module.findPackageJSON(\"main-pkg\", new URL(\"file://\" + M))) };\nconst C = Module.constants;\nout.constants = { value: C, frozen: [Object.isFrozen(C), Object.isFrozen(C.compileCacheStatus)], nullPrototype: [Object.getPrototypeOf(C) === null, Object.getPrototypeOf(C.compileCacheStatus) === null] };\nconst arg = a => a.map(x => x === undefined ? U : x);\nout.compileCache = {\n  enable: [[], [\"/tmp/cc\"], [undefined], [5], [null], [{}], [\"\"], [\"rel\"], [{ directory: 5 }], [{ directory: \"/tmp/x\" }], [true]].map(a => ({ args: arg(a), ...run(() => Module.enableCompileCache(...a)) })),\n  directory: run(() => Module.getCompileCacheDir()),\n  flush: [[], [true], [false], [undefined], [5], [\"x\"], [null]].map(a => ({ args: arg(a), ...run(() => Module.flushCompileCache(...a)) })),\n};\nout.register = [[], [5], [null], [{}], [\"./x.mjs\", 5], [\"./x.mjs\", \"notaurl\"], [\"./x.mjs\", { parentURL: 5 }], [\"./x.mjs\", \"file:///workspace/app/\", { transferList: 5 }], [\"./x.mjs\", { transferList: 5 }], [\"./x.mjs\", \"file:///workspace/app/\", { transferList: null }]].map(a => ({ args: arg(a), ...run(() => Module.register(...a)) }));\nout.registerHooks = [[], [5], [null], [\"x\"], [{}], [{ resolve: 5 }], [{ load: \"x\" }], [{ resolve: null }], [{ resolve: \"fn\", load: 5 }]].map(a => ({ args: arg(a), ...run(() => {\n  const r = Module.registerHooks(...a.map(x => x && x.resolve === \"fn\" ? { ...x, resolve() {} } : x));\n  return { keys: Object.keys(r), prototype: Object.getPrototypeOf(r).constructor.name, name: r.deregister.name, length: r.deregister.length, own: Object.hasOwn(r, \"deregister\"), result: plain(r.deregister()), again: plain(r.deregister()) };\n}) }));\nout.sync = [run(() => Module.syncBuiltinESMExports()), run(() => Module.syncBuiltinESMExports(1, 2))];\nout.preload = [[undefined], [null], [[]], [\"./lib/util\"], [5], [{}], [[\"./lib/util.js\", \"main-pkg\"]], [[5]], [[\"/workspace/pre/p.js\"]]].map(a => ({ args: arg(a), ...run(() => Module._preloadModules(...a)) }));\nout.preloaded = globalThis.__preloaded;\nout.runMainErrors = [[5], [null], [{}]].map(a => ({ args: arg(a), ...run(() => Module.runMain(...a)) }));\nprocess.stdout.write(JSON.stringify(out, null, 1));\n",
+ "tree": {
+  "files": {
+   "/workspace/app/package.json": "{\"name\":\"app\",\"version\":\"1.0.0\"}",
+   "/workspace/app/main.js": "module.exports=\"main\";",
+   "/workspace/app/lib/util.js": "module.exports=\"util\";",
+   "/workspace/app/lib/data.json": "{\"a\":1}",
+   "/workspace/app/lib/index.js": "module.exports=\"libindex\";",
+   "/workspace/app/sub/deep/x.js": "module.exports=\"deep\";",
+   "/workspace/app/node_modules/main-pkg/package.json": "{\"name\":\"main-pkg\",\"main\":\"lib/entry\"}",
+   "/workspace/app/node_modules/main-pkg/lib/entry.js": "module.exports=\"main-pkg\";",
+   "/workspace/app/node_modules/main-pkg/other.js": "module.exports=\"other\";",
+   "/workspace/app/node_modules/exports-pkg/package.json": "{\"name\":\"exports-pkg\",\"exports\":{\".\":{\"require\":\"./dist/cjs.js\",\"import\":\"./dist/esm.mjs\"},\"./feature\":\"./dist/feature.js\",\"./package.json\":\"./package.json\"}}",
+   "/workspace/app/node_modules/exports-pkg/dist/cjs.js": "module.exports=\"exports-cjs\";",
+   "/workspace/app/node_modules/exports-pkg/dist/esm.mjs": "export default \"exports-esm\";",
+   "/workspace/app/node_modules/exports-pkg/dist/feature.js": "module.exports=\"feature\";",
+   "/workspace/app/node_modules/exports-pkg/dist/hidden.js": "module.exports=\"hidden\";",
+   "/workspace/app/node_modules/index-pkg/index.js": "module.exports=\"index-pkg\";",
+   "/workspace/app/node_modules/nested/package.json": "{\"name\":\"nested\",\"main\":\"n.js\"}",
+   "/workspace/app/node_modules/nested/n.js": "module.exports=require(\"inner\");",
+   "/workspace/app/node_modules/nested/node_modules/inner/package.json": "{\"name\":\"inner\",\"version\":\"2.0.0\"}",
+   "/workspace/app/node_modules/nested/node_modules/inner/index.js": "module.exports=\"inner\";",
+   "/workspace/app/node_modules/@scope/scoped/package.json": "{\"name\":\"@scope/scoped\",\"main\":\"s.js\"}",
+   "/workspace/app/node_modules/@scope/scoped/s.js": "module.exports=\"scoped\";",
+   "/workspace/linked-src/package.json": "{\"name\":\"linked\",\"main\":\"l.js\"}",
+   "/workspace/linked-src/l.js": "module.exports=\"linked\";",
+   "/workspace/global/np-pkg/index.js": "module.exports=\"np\";",
+   "/workspace/home/.node_modules/home-pkg/index.js": "module.exports=\"home\";",
+   "/workspace/pre/p.js": "globalThis.__preloaded = { id: module.parent.id, filename: module.parent.filename, paths: module.parent.paths, loaded: module.parent.loaded };"
+  },
+  "links": {
+   "/workspace/app/node_modules/linked": "/workspace/linked-src"
+  }
+ },
+ "cwd": "/workspace/app",
+ "execPath": "/usr/local/bin/node",
+ "env": {
+  "NODE_PATH": "/workspace/global:/workspace/nope",
+  "HOME": "/workspace/home"
+ },
+ "globalPaths": [
+  "/workspace/global",
+  "/workspace/nope",
+  "/workspace/home/.node_modules",
+  "/workspace/home/.node_libraries",
+  "/usr/local/lib/node"
+ ],
+ "shapes": {
+  "_findPath": {
+   "name": "",
+   "length": 3,
+   "enumerable": true,
+   "writable": true,
+   "configurable": true
+  },
+  "_initPaths": {
+   "name": "",
+   "length": 0,
+   "enumerable": true,
+   "writable": true,
+   "configurable": true
+  },
+  "_preloadModules": {
+   "name": "",
+   "length": 1,
+   "enumerable": true,
+   "writable": true,
+   "configurable": true
+  },
+  "_resolveLookupPaths": {
+   "name": "",
+   "length": 2,
+   "enumerable": true,
+   "writable": true,
+   "configurable": true
+  },
+  "enableCompileCache": {
+   "name": "enableCompileCache",
+   "length": 1,
+   "enumerable": true,
+   "writable": true,
+   "configurable": true
+  },
+  "findPackageJSON": {
+   "name": "findPackageJSON",
+   "length": 1,
+   "enumerable": true,
+   "writable": true,
+   "configurable": true
+  },
+  "flushCompileCache": {
+   "name": "flushCompileCache",
+   "length": 0,
+   "enumerable": true,
+   "writable": true,
+   "configurable": true
+  },
+  "getCompileCacheDir": {
+   "name": "getCompileCacheDir",
+   "length": 0,
+   "enumerable": true,
+   "writable": true,
+   "configurable": true
+  },
+  "register": {
+   "name": "register",
+   "length": 1,
+   "enumerable": true,
+   "writable": true,
+   "configurable": true
+  },
+  "registerHooks": {
+   "name": "registerHooks",
+   "length": 1,
+   "enumerable": true,
+   "writable": true,
+   "configurable": true
+  },
+  "runMain": {
+   "name": "executeUserEntryPoint",
+   "length": 0,
+   "enumerable": true,
+   "writable": true,
+   "configurable": true
+  },
+  "stripTypeScriptTypes": {
+   "name": "stripTypeScriptTypes",
+   "length": 1,
+   "enumerable": true,
+   "writable": true,
+   "configurable": true
+  },
+  "syncBuiltinESMExports": {
+   "name": "syncBuiltinESMExports",
+   "length": 0,
+   "enumerable": true,
+   "writable": true,
+   "configurable": true
+  }
+ },
+ "wrap": {
+  "wrapper": [
+   "(function (exports, require, module, __filename, __dirname) { ",
+   "\n});"
+  ],
+  "wrapped": "(function (exports, require, module, __filename, __dirname) { X\n});",
+  "enumerable": [
+   false,
+   false
+  ]
+ },
+ "parents": {
+  "parent": {
+   "id": "/workspace/app/main.js",
+   "filename": "/workspace/app/main.js",
+   "paths": [
+    "/workspace/app/node_modules",
+    "/workspace/node_modules",
+    "/node_modules"
+   ]
+  },
+  "undefined": "<undefined>",
+  "null": null,
+  "nopaths": {
+   "id": "/workspace/app/main.js",
+   "filename": "/workspace/app/main.js"
+  },
+  "emptypaths": {
+   "id": "a",
+   "filename": "/a/b.js",
+   "paths": []
+  },
+  "repl": {
+   "id": "<repl>",
+   "filename": null,
+   "paths": [
+    "/r/node_modules"
+   ]
+  },
+  "noid": {
+   "filename": "/q/w.js",
+   "paths": [
+    "/q/node_modules"
+   ]
+  },
+  "nofilename": {
+   "id": "x",
+   "paths": [
+    "/q/node_modules"
+   ]
+  },
+  "empty": {}
+ },
+ "lookups": [
+  {
+   "request": "./x",
+   "parent": "parent",
+   "value": [
+    "/workspace/app"
+   ]
+  },
+  {
+   "request": "../x",
+   "parent": "parent",
+   "value": [
+    "/workspace/app"
+   ]
+  },
+  {
+   "request": ".",
+   "parent": "parent",
+   "value": [
+    "/workspace/app"
+   ]
+  },
+  {
+   "request": "..",
+   "parent": "parent",
+   "value": [
+    "/workspace/app"
+   ]
+  },
+  {
+   "request": "./",
+   "parent": "parent",
+   "value": [
+    "/workspace/app"
+   ]
+  },
+  {
+   "request": ".hidden",
+   "parent": "parent",
+   "value": [
+    "/workspace/app/node_modules",
+    "/workspace/node_modules",
+    "/node_modules",
+    "/workspace/global",
+    "/workspace/nope",
+    "/workspace/home/.node_modules",
+    "/workspace/home/.node_libraries",
+    "/usr/local/lib/node"
+   ]
+  },
+  {
+   "request": "..hidden",
+   "parent": "parent",
+   "value": [
+    "/workspace/app"
+   ]
+  },
+  {
+   "request": "x",
+   "parent": "parent",
+   "value": [
+    "/workspace/app/node_modules",
+    "/workspace/node_modules",
+    "/node_modules",
+    "/workspace/global",
+    "/workspace/nope",
+    "/workspace/home/.node_modules",
+    "/workspace/home/.node_libraries",
+    "/usr/local/lib/node"
+   ]
+  },
+  {
+   "request": "@s/x",
+   "parent": "parent",
+   "value": [
+    "/workspace/app/node_modules",
+    "/workspace/node_modules",
+    "/node_modules",
+    "/workspace/global",
+    "/workspace/nope",
+    "/workspace/home/.node_modules",
+    "/workspace/home/.node_libraries",
+    "/usr/local/lib/node"
+   ]
+  },
+  {
+   "request": "/abs/x",
+   "parent": "parent",
+   "value": [
+    "/workspace/app/node_modules",
+    "/workspace/node_modules",
+    "/node_modules",
+    "/workspace/global",
+    "/workspace/nope",
+    "/workspace/home/.node_modules",
+    "/workspace/home/.node_libraries",
+    "/usr/local/lib/node"
+   ]
+  },
+  {
+   "request": "fs",
+   "parent": "parent",
+   "value": null
+  },
+  {
+   "request": "node:fs",
+   "parent": "parent",
+   "value": null
+  },
+  {
+   "request": "node:nope",
+   "parent": "parent",
+   "value": [
+    "/workspace/app/node_modules",
+    "/workspace/node_modules",
+    "/node_modules",
+    "/workspace/global",
+    "/workspace/nope",
+    "/workspace/home/.node_modules",
+    "/workspace/home/.node_libraries",
+    "/usr/local/lib/node"
+   ]
+  },
+  {
+   "request": "./x",
+   "parent": "undefined",
+   "value": [
+    "."
+   ]
+  },
+  {
+   "request": "x",
+   "parent": "undefined",
+   "value": [
+    "/workspace/global",
+    "/workspace/nope",
+    "/workspace/home/.node_modules",
+    "/workspace/home/.node_libraries",
+    "/usr/local/lib/node"
+   ]
+  },
+  {
+   "request": "./x",
+   "parent": "null",
+   "value": [
+    "."
+   ]
+  },
+  {
+   "request": "x",
+   "parent": "null",
+   "value": [
+    "/workspace/global",
+    "/workspace/nope",
+    "/workspace/home/.node_modules",
+    "/workspace/home/.node_libraries",
+    "/usr/local/lib/node"
+   ]
+  },
+  {
+   "request": "./x",
+   "parent": "nopaths",
+   "value": [
+    "/workspace/app"
+   ]
+  },
+  {
+   "request": "x",
+   "parent": "nopaths",
+   "value": [
+    "/workspace/global",
+    "/workspace/nope",
+    "/workspace/home/.node_modules",
+    "/workspace/home/.node_libraries",
+    "/usr/local/lib/node"
+   ]
+  },
+  {
+   "request": "x",
+   "parent": "emptypaths",
+   "value": [
+    "/workspace/global",
+    "/workspace/nope",
+    "/workspace/home/.node_modules",
+    "/workspace/home/.node_libraries",
+    "/usr/local/lib/node"
+   ]
+  },
+  {
+   "request": "./x",
+   "parent": "repl",
+   "value": [
+    "."
+   ]
+  },
+  {
+   "request": "x",
+   "parent": "repl",
+   "value": [
+    "/r/node_modules",
+    "/workspace/global",
+    "/workspace/nope",
+    "/workspace/home/.node_modules",
+    "/workspace/home/.node_libraries",
+    "/usr/local/lib/node"
+   ]
+  },
+  {
+   "request": "./x",
+   "parent": "noid",
+   "value": [
+    "."
+   ]
+  },
+  {
+   "request": "./x",
+   "parent": "nofilename",
+   "value": [
+    "."
+   ]
+  },
+  {
+   "request": "",
+   "parent": "parent",
+   "value": [
+    "/workspace/app/node_modules",
+    "/workspace/node_modules",
+    "/node_modules",
+    "/workspace/global",
+    "/workspace/nope",
+    "/workspace/home/.node_modules",
+    "/workspace/home/.node_libraries",
+    "/usr/local/lib/node"
+   ]
+  },
+  {
+   "request": "x",
+   "parent": "empty",
+   "value": [
+    "/workspace/global",
+    "/workspace/nope",
+    "/workspace/home/.node_modules",
+    "/workspace/home/.node_libraries",
+    "/usr/local/lib/node"
+   ]
+  },
+  {
+   "request": 5,
+   "parent": "parent",
+   "value": [
+    "/workspace/app/node_modules",
+    "/workspace/node_modules",
+    "/node_modules",
+    "/workspace/global",
+    "/workspace/nope",
+    "/workspace/home/.node_modules",
+    "/workspace/home/.node_libraries",
+    "/usr/local/lib/node"
+   ]
+  },
+  {
+   "request": null,
+   "parent": "parent",
+   "error": {
+    "name": "TypeError",
+    "code": null,
+    "message": "String.prototype.startsWith called on null or undefined"
+   }
+  },
+  {
+   "request": "<undefined>",
+   "parent": "parent",
+   "error": {
+    "name": "TypeError",
+    "code": null,
+    "message": "String.prototype.startsWith called on null or undefined"
+   }
+  }
+ ],
+ "lookupIdentity": {
+  "same": true,
+  "copy": true
+ },
+ "initPaths": [
+  {
+   "env": {
+    "HOME": "/h",
+    "NODE_PATH": "/a:/b"
+   },
+   "result": "<undefined>",
+   "globalPaths": [
+    "/a",
+    "/b",
+    "/h/.node_modules",
+    "/h/.node_libraries",
+    "/usr/local/lib/node"
+   ],
+   "replaced": true,
+   "lookup": [
+    "/a",
+    "/b",
+    "/h/.node_modules",
+    "/h/.node_libraries",
+    "/usr/local/lib/node"
+   ]
+  },
+  {
+   "env": {
+    "HOME": "/h"
+   },
+   "result": "<undefined>",
+   "globalPaths": [
+    "/h/.node_modules",
+    "/h/.node_libraries",
+    "/usr/local/lib/node"
+   ],
+   "replaced": true,
+   "lookup": [
+    "/h/.node_modules",
+    "/h/.node_libraries",
+    "/usr/local/lib/node"
+   ]
+  },
+  {
+   "env": {
+    "NODE_PATH": "/a::/b:"
+   },
+   "result": "<undefined>",
+   "globalPaths": [
+    "/a",
+    "/b",
+    "/usr/local/lib/node"
+   ],
+   "replaced": true,
+   "lookup": [
+    "/a",
+    "/b",
+    "/usr/local/lib/node"
+   ]
+  },
+  {
+   "env": {},
+   "result": "<undefined>",
+   "globalPaths": [
+    "/usr/local/lib/node"
+   ],
+   "replaced": true,
+   "lookup": [
+    "/usr/local/lib/node"
+   ]
+  },
+  {
+   "env": {
+    "HOME": "",
+    "NODE_PATH": ""
+   },
+   "result": "<undefined>",
+   "globalPaths": [
+    "/usr/local/lib/node"
+   ],
+   "replaced": true,
+   "lookup": [
+    "/usr/local/lib/node"
+   ]
+  },
+  {
+   "env": {
+    "HOME": "rel",
+    "NODE_PATH": "rel:/abs/"
+   },
+   "result": "<undefined>",
+   "globalPaths": [
+    "rel",
+    "/abs/",
+    "/workspace/app/rel/.node_modules",
+    "/workspace/app/rel/.node_libraries",
+    "/usr/local/lib/node"
+   ],
+   "replaced": true,
+   "lookup": [
+    "rel",
+    "/abs/",
+    "/workspace/app/rel/.node_modules",
+    "/workspace/app/rel/.node_libraries",
+    "/usr/local/lib/node"
+   ]
+  }
+ ],
+ "mutatedLookup": [
+  "rel",
+  "/abs/",
+  "/workspace/app/rel/.node_modules",
+  "/workspace/app/rel/.node_libraries",
+  "/usr/local/lib/node"
+ ],
+ "finds": [
+  {
+   "request": "/workspace/app/main.js",
+   "paths": [],
+   "value": "/workspace/app/main.js"
+  },
+  {
+   "request": "/workspace/app/main",
+   "paths": [],
+   "value": "/workspace/app/main.js"
+  },
+  {
+   "request": "/workspace/app/lib",
+   "paths": [],
+   "value": "/workspace/app/lib/index.js"
+  },
+  {
+   "request": "/workspace/app/lib/",
+   "paths": [],
+   "value": "/workspace/app/lib/index.js"
+  },
+  {
+   "request": "/workspace/app/lib/data",
+   "paths": [],
+   "value": "/workspace/app/lib/data.json"
+  },
+  {
+   "request": "/workspace/app/nope",
+   "paths": [],
+   "value": false
+  },
+  {
+   "request": "/workspace/app/main.js/",
+   "paths": [],
+   "value": false
+  },
+  {
+   "request": "./main",
+   "paths": [
+    "/workspace/app"
+   ],
+   "value": "/workspace/app/main.js"
+  },
+  {
+   "request": "./lib/util.js",
+   "paths": [
+    "/workspace/app"
+   ],
+   "value": "/workspace/app/lib/util.js"
+  },
+  {
+   "request": "../main",
+   "paths": [
+    "/workspace/app/lib"
+   ],
+   "value": "/workspace/app/main.js"
+  },
+  {
+   "request": "../app/main",
+   "paths": [
+    "/workspace/app/lib"
+   ],
+   "value": false
+  },
+  {
+   "request": "./nope",
+   "paths": [
+    "/workspace/app"
+   ],
+   "value": false
+  },
+  {
+   "request": "./main",
+   "paths": [
+    "/workspace/nope",
+    "/workspace/app"
+   ],
+   "value": "/workspace/app/main.js"
+  },
+  {
+   "request": "./main",
+   "paths": [],
+   "value": false
+  },
+  {
+   "request": "./main",
+   "paths": null,
+   "value": false
+  },
+  {
+   "request": "./main",
+   "paths": "<undefined>",
+   "value": false
+  },
+  {
+   "request": "./main",
+   "paths": "/workspace/app",
+   "value": false
+  },
+  {
+   "request": "main-pkg",
+   "paths": [
+    "/workspace/app/node_modules"
+   ],
+   "value": "/workspace/app/node_modules/main-pkg/lib/entry.js"
+  },
+  {
+   "request": "main-pkg/other",
+   "paths": [
+    "/workspace/app/node_modules"
+   ],
+   "value": "/workspace/app/node_modules/main-pkg/other.js"
+  },
+  {
+   "request": "main-pkg/lib/entry.js",
+   "paths": [
+    "/workspace/app/node_modules"
+   ],
+   "value": "/workspace/app/node_modules/main-pkg/lib/entry.js"
+  },
+  {
+   "request": "exports-pkg",
+   "paths": [
+    "/workspace/app/node_modules"
+   ],
+   "value": "/workspace/app/node_modules/exports-pkg/dist/cjs.js"
+  },
+  {
+   "request": "exports-pkg/feature",
+   "paths": [
+    "/workspace/app/node_modules"
+   ],
+   "value": "/workspace/app/node_modules/exports-pkg/dist/feature.js"
+  },
+  {
+   "request": "exports-pkg/package.json",
+   "paths": [
+    "/workspace/app/node_modules"
+   ],
+   "value": "/workspace/app/node_modules/exports-pkg/package.json"
+  },
+  {
+   "request": "index-pkg",
+   "paths": [
+    "/workspace/app/node_modules"
+   ],
+   "value": "/workspace/app/node_modules/index-pkg/index.js"
+  },
+  {
+   "request": "nested",
+   "paths": [
+    "/workspace/app/node_modules"
+   ],
+   "value": "/workspace/app/node_modules/nested/n.js"
+  },
+  {
+   "request": "inner",
+   "paths": [
+    "/workspace/app/node_modules"
+   ],
+   "value": false
+  },
+  {
+   "request": "inner",
+   "paths": [
+    "/workspace/app/node_modules/nested/node_modules"
+   ],
+   "value": "/workspace/app/node_modules/nested/node_modules/inner/index.js"
+  },
+  {
+   "request": "@scope/scoped",
+   "paths": [
+    "/workspace/app/node_modules"
+   ],
+   "value": "/workspace/app/node_modules/@scope/scoped/s.js"
+  },
+  {
+   "request": "linked",
+   "paths": [
+    "/workspace/app/node_modules"
+   ],
+   "value": "/workspace/linked-src/l.js"
+  },
+  {
+   "request": "linked/l.js",
+   "paths": [
+    "/workspace/app/node_modules"
+   ],
+   "value": "/workspace/linked-src/l.js"
+  },
+  {
+   "request": "np-pkg",
+   "paths": [
+    "/workspace/nope",
+    "/workspace/global"
+   ],
+   "value": "/workspace/global/np-pkg/index.js"
+  },
+  {
+   "request": "main",
+   "paths": [
+    "/workspace/app"
+   ],
+   "value": "/workspace/app/main.js"
+  },
+  {
+   "request": "lib",
+   "paths": [
+    "/workspace/app"
+   ],
+   "value": "/workspace/app/lib/index.js"
+  },
+  {
+   "request": "fs",
+   "paths": [
+    "/workspace/app/node_modules"
+   ],
+   "value": false
+  },
+  {
+   "request": "",
+   "paths": [
+    "/workspace/app"
+   ],
+   "value": false
+  },
+  {
+   "request": ".",
+   "paths": [
+    "/workspace/app/lib"
+   ],
+   "value": "/workspace/app/lib/index.js"
+  },
+  {
+   "request": "..",
+   "paths": [
+    "/workspace/app/lib"
+   ],
+   "value": false
+  },
+  {
+   "request": "./",
+   "paths": [
+    "/workspace/app/lib"
+   ],
+   "value": "/workspace/app/lib/index.js"
+  },
+  {
+   "request": "./main",
+   "paths": [
+    "."
+   ],
+   "value": "/workspace/app/main.js"
+  },
+  {
+   "request": "exports-pkg/hidden",
+   "paths": [
+    "/workspace/app/node_modules"
+   ],
+   "error": {
+    "name": "Error",
+    "code": "ERR_PACKAGE_PATH_NOT_EXPORTED",
+    "message": "Package subpath './hidden' is not defined by \"exports\" in /workspace/app/node_modules/exports-pkg/package.json"
+   }
+  },
+  {
+   "request": "./x",
+   "paths": [
+    5
+   ],
+   "error": {
+    "name": "TypeError",
+    "code": "ERR_INVALID_ARG_TYPE",
+    "message": "The \"paths\" argument must be array of strings. Received an instance of Array"
+   }
+  },
+  {
+   "request": "x",
+   "paths": [
+    "/workspace/app",
+    5
+   ],
+   "error": {
+    "name": "TypeError",
+    "code": "ERR_INVALID_ARG_TYPE",
+    "message": "The \"paths\" argument must be array of strings. Received an instance of Array"
+   }
+  },
+  {
+   "request": 5,
+   "paths": [
+    "/workspace"
+   ],
+   "error": {
+    "name": "TypeError",
+    "code": "ERR_INVALID_ARG_TYPE",
+    "message": "The \"path\" argument must be of type string. Received type number (5)"
+   }
+  },
+  {
+   "request": "<undefined>",
+   "paths": [
+    "/workspace"
+   ],
+   "error": {
+    "name": "TypeError",
+    "code": "ERR_INVALID_ARG_TYPE",
+    "message": "The \"path\" argument must be of type string. Received undefined"
+   }
+  }
+ ],
+ "pathCache": {
+  "entries": [
+   [
+    "/workspace/app/main.js\u0000",
+    "/workspace/app/main.js"
+   ],
+   [
+    "/workspace/app/main\u0000",
+    "/workspace/app/main.js"
+   ],
+   [
+    "/workspace/app/lib\u0000",
+    "/workspace/app/lib/index.js"
+   ],
+   [
+    "/workspace/app/lib/\u0000",
+    "/workspace/app/lib/index.js"
+   ],
+   [
+    "/workspace/app/lib/data\u0000",
+    "/workspace/app/lib/data.json"
+   ],
+   [
+    "./main\u0000/workspace/app",
+    "/workspace/app/main.js"
+   ],
+   [
+    "./lib/util.js\u0000/workspace/app",
+    "/workspace/app/lib/util.js"
+   ],
+   [
+    "../main\u0000/workspace/app/lib",
+    "/workspace/app/main.js"
+   ],
+   [
+    "./main\u0000/workspace/nope\u0000/workspace/app",
+    "/workspace/app/main.js"
+   ],
+   [
+    "main-pkg\u0000/workspace/app/node_modules",
+    "/workspace/app/node_modules/main-pkg/lib/entry.js"
+   ],
+   [
+    "main-pkg/other\u0000/workspace/app/node_modules",
+    "/workspace/app/node_modules/main-pkg/other.js"
+   ],
+   [
+    "main-pkg/lib/entry.js\u0000/workspace/app/node_modules",
+    "/workspace/app/node_modules/main-pkg/lib/entry.js"
+   ],
+   [
+    "index-pkg\u0000/workspace/app/node_modules",
+    "/workspace/app/node_modules/index-pkg/index.js"
+   ],
+   [
+    "nested\u0000/workspace/app/node_modules",
+    "/workspace/app/node_modules/nested/n.js"
+   ],
+   [
+    "inner\u0000/workspace/app/node_modules/nested/node_modules",
+    "/workspace/app/node_modules/nested/node_modules/inner/index.js"
+   ],
+   [
+    "@scope/scoped\u0000/workspace/app/node_modules",
+    "/workspace/app/node_modules/@scope/scoped/s.js"
+   ],
+   [
+    "linked\u0000/workspace/app/node_modules",
+    "/workspace/linked-src/l.js"
+   ],
+   [
+    "linked/l.js\u0000/workspace/app/node_modules",
+    "/workspace/linked-src/l.js"
+   ],
+   [
+    "np-pkg\u0000/workspace/nope\u0000/workspace/global",
+    "/workspace/global/np-pkg/index.js"
+   ],
+   [
+    "main\u0000/workspace/app",
+    "/workspace/app/main.js"
+   ],
+   [
+    "lib\u0000/workspace/app",
+    "/workspace/app/lib/index.js"
+   ],
+   [
+    ".\u0000/workspace/app/lib",
+    "/workspace/app/lib/index.js"
+   ],
+   [
+    "./\u0000/workspace/app/lib",
+    "/workspace/app/lib/index.js"
+   ]
+  ],
+  "nullPrototype": true,
+  "poisoned": "/poisoned.js"
+ },
+ "findPackageJSON": [
+  {
+   "specifier": "main-pkg",
+   "base": "/workspace/app/main.js",
+   "value": "/workspace/app/node_modules/main-pkg/package.json"
+  },
+  {
+   "specifier": "main-pkg",
+   "base": "file:///workspace/app/main.js",
+   "value": "/workspace/app/node_modules/main-pkg/package.json"
+  },
+  {
+   "specifier": "main-pkg/other",
+   "base": "/workspace/app/main.js",
+   "value": "/workspace/app/node_modules/main-pkg/package.json"
+  },
+  {
+   "specifier": "exports-pkg",
+   "base": "/workspace/app/main.js",
+   "value": "/workspace/app/node_modules/exports-pkg/package.json"
+  },
+  {
+   "specifier": "exports-pkg/feature",
+   "base": "/workspace/app/main.js",
+   "value": "/workspace/app/node_modules/exports-pkg/package.json"
+  },
+  {
+   "specifier": "exports-pkg/hidden",
+   "base": "/workspace/app/main.js",
+   "value": "/workspace/app/node_modules/exports-pkg/package.json"
+  },
+  {
+   "specifier": "index-pkg",
+   "base": "/workspace/app/main.js",
+   "value": "/workspace/app/node_modules/index-pkg/package.json"
+  },
+  {
+   "specifier": "nested",
+   "base": "/workspace/app/main.js",
+   "value": "/workspace/app/node_modules/nested/package.json"
+  },
+  {
+   "specifier": "inner",
+   "base": "/workspace/app/main.js",
+   "error": {
+    "name": "Error",
+    "code": "ERR_MODULE_NOT_FOUND",
+    "message": "Cannot find package 'inner' imported from /workspace/app/main.js"
+   }
+  },
+  {
+   "specifier": "inner",
+   "base": "/workspace/app/node_modules/nested/n.js",
+   "value": "/workspace/app/node_modules/nested/node_modules/inner/package.json"
+  },
+  {
+   "specifier": "@scope/scoped",
+   "base": "/workspace/app/main.js",
+   "value": "/workspace/app/node_modules/@scope/scoped/package.json"
+  },
+  {
+   "specifier": "linked",
+   "base": "/workspace/app/main.js",
+   "value": "/workspace/app/node_modules/linked/package.json"
+  },
+  {
+   "specifier": "nope",
+   "base": "/workspace/app/main.js",
+   "error": {
+    "name": "Error",
+    "code": "ERR_MODULE_NOT_FOUND",
+    "message": "Cannot find package 'nope' imported from /workspace/app/main.js"
+   }
+  },
+  {
+   "specifier": "fs",
+   "base": "/workspace/app/main.js",
+   "error": {
+    "name": "Error",
+    "code": "ERR_MODULE_NOT_FOUND",
+    "message": "Cannot find package 'fs' imported from /workspace/app/main.js"
+   }
+  },
+  {
+   "specifier": "node:fs",
+   "base": "/workspace/app/main.js",
+   "error": {
+    "name": "TypeError",
+    "code": "ERR_INVALID_URL_SCHEME",
+    "message": "The URL must be of scheme file"
+   }
+  },
+  {
+   "specifier": "main-pkg",
+   "base": "/workspace/app/",
+   "value": "/workspace/app/node_modules/main-pkg/package.json"
+  },
+  {
+   "specifier": "main-pkg",
+   "base": "/workspace/app",
+   "error": {
+    "name": "Error",
+    "code": "ERR_MODULE_NOT_FOUND",
+    "message": "Cannot find package 'main-pkg' imported from /workspace/app"
+   }
+  },
+  {
+   "specifier": "main-pkg",
+   "base": "/workspace/app/sub/deep/x.js",
+   "value": "/workspace/app/node_modules/main-pkg/package.json"
+  },
+  {
+   "specifier": "app",
+   "base": "/workspace/app/main.js",
+   "error": {
+    "name": "Error",
+    "code": "ERR_MODULE_NOT_FOUND",
+    "message": "Cannot find package 'app' imported from /workspace/app/main.js"
+   }
+  },
+  {
+   "specifier": "main-pkg",
+   "base": "<undefined>",
+   "error": {
+    "name": "TypeError",
+    "code": "ERR_INVALID_URL",
+    "message": "Invalid URL"
+   }
+  },
+  {
+   "specifier": "main-pkg",
+   "base": "rel/x.js",
+   "error": {
+    "name": "TypeError",
+    "code": "ERR_INVALID_URL",
+    "message": "Invalid URL"
+   }
+  },
+  {
+   "specifier": "main-pkg",
+   "base": "http://a/b",
+   "error": {
+    "name": "TypeError",
+    "code": "ERR_INVALID_URL",
+    "message": "Invalid URL"
+   }
+  },
+  {
+   "specifier": "./lib/util.js",
+   "base": "/workspace/app/main.js",
+   "value": "/workspace/app/package.json"
+  },
+  {
+   "specifier": "./nope.js",
+   "base": "/workspace/app/main.js",
+   "error": {
+    "name": "Error",
+    "code": "ERR_MODULE_NOT_FOUND",
+    "message": "Cannot find module '/workspace/app/nope.js' imported from /workspace/app/main.js"
+   }
+  },
+  {
+   "specifier": "..",
+   "base": "/workspace/app/lib/util.js",
+   "value": "/workspace/app/package.json"
+  },
+  {
+   "specifier": ".",
+   "base": "/workspace/app/lib/util.js",
+   "value": "/workspace/app/package.json"
+  },
+  {
+   "specifier": "./",
+   "base": "/workspace/app/lib/util.js",
+   "value": "/workspace/app/package.json"
+  },
+  {
+   "specifier": "../main.js",
+   "base": "/workspace/app/lib/util.js",
+   "value": "/workspace/app/package.json"
+  },
+  {
+   "specifier": "/workspace/app/lib/util.js",
+   "base": "<undefined>",
+   "error": {
+    "name": "TypeError",
+    "code": "ERR_UNSUPPORTED_RESOLVE_REQUEST",
+    "message": "Failed to resolve module specifier \"/workspace/app/lib/util.js\" from \"data:\": Invalid relative URL or base scheme is not hierarchical."
+   }
+  },
+  {
+   "specifier": "/workspace/app/lib/util.js",
+   "base": "/elsewhere/x.js",
+   "value": "/workspace/app/package.json"
+  },
+  {
+   "specifier": "./x",
+   "base": "<undefined>",
+   "error": {
+    "name": "TypeError",
+    "code": "ERR_UNSUPPORTED_RESOLVE_REQUEST",
+    "message": "Failed to resolve module specifier \"./x\" from \"data:\": Invalid relative URL or base scheme is not hierarchical."
+   }
+  },
+  {
+   "specifier": "file:///workspace/app/lib/util.js",
+   "base": "<undefined>",
+   "value": "/workspace/app/package.json"
+  },
+  {
+   "specifier": "file:///workspace/app/node_modules/nested/node_modules/inner/index.js",
+   "base": "<undefined>",
+   "value": "/workspace/app/node_modules/nested/node_modules/inner/package.json"
+  },
+  {
+   "specifier": "/workspace/app/node_modules/exports-pkg",
+   "base": "/x/y.js",
+   "value": "/workspace/app/node_modules/exports-pkg"
+  },
+  {
+   "specifier": "/workspace/app/node_modules/exports-pkg/",
+   "base": "/x/y.js",
+   "value": "/workspace/app/node_modules/exports-pkg/package.json"
+  },
+  {
+   "specifier": "/workspace/app/node_modules/index-pkg/index.js",
+   "base": "/x/y.js",
+   "value": "/workspace/app/node_modules/index-pkg/index.js"
+  },
+  {
+   "specifier": "/workspace/app/node_modules/linked/l.js",
+   "base": "/x/y.js",
+   "value": "/workspace/linked-src/package.json"
+  },
+  {
+   "specifier": "/workspace/global/np-pkg/index.js",
+   "base": "/x/y.js",
+   "value": "/workspace/global/np-pkg/index.js"
+  },
+  {
+   "specifier": "http://x/y",
+   "base": "<undefined>",
+   "error": {
+    "name": "TypeError",
+    "code": "ERR_INVALID_URL_SCHEME",
+    "message": "The URL must be of scheme file"
+   }
+  },
+  {
+   "specifier": "x",
+   "base": 5,
+   "error": {
+    "name": "TypeError",
+    "code": "ERR_INVALID_ARG_TYPE",
+    "message": "The \"base\" argument must be of type string. Received type number (5)"
+   }
+  },
+  {
+   "specifier": "x",
+   "base": null,
+   "error": {
+    "name": "TypeError",
+    "code": "ERR_INVALID_ARG_TYPE",
+    "message": "The \"base\" argument must be of type string. Received null"
+   }
+  },
+  {
+   "specifier": "x",
+   "base": {},
+   "error": {
+    "name": "TypeError",
+    "code": "ERR_INVALID_ARG_TYPE",
+    "message": "The \"base\" argument must be of type string. Received an instance of Object"
+   }
+  },
+  {
+   "specifier": 5,
+   "base": "<undefined>",
+   "error": {
+    "name": "TypeError",
+    "code": "ERR_INVALID_URL",
+    "message": "Invalid URL"
+   }
+  }
+ ],
+ "findPackageJSONOther": {
+  "none": {
+   "error": {
+    "name": "TypeError",
+    "code": "ERR_MISSING_ARGS",
+    "message": "The \"specifier\" argument must be specified"
+   }
+  },
+  "symbol": {
+   "error": {
+    "name": "TypeError",
+    "code": "ERR_INVALID_ARG_TYPE",
+    "message": "The \"specifier\" argument must be of type string. Received type symbol (Symbol(s))"
+   }
+  },
+  "url": {
+   "value": "/workspace/app/package.json"
+  },
+  "baseUrl": {
+   "value": "/workspace/app/node_modules/main-pkg/package.json"
+  }
+ },
+ "constants": {
+  "value": {
+   "compileCacheStatus": {
+    "FAILED": 0,
+    "ENABLED": 1,
+    "ALREADY_ENABLED": 2,
+    "DISABLED": 3
+   }
+  },
+  "frozen": [
+   true,
+   true
+  ],
+  "nullPrototype": [
+   true,
+   true
+  ]
+ },
+ "compileCache": {
+  "enable": [
+   {
+    "args": [],
+    "value": {
+     "status": 3,
+     "message": "Disabled by NODE_DISABLE_COMPILE_CACHE"
+    }
+   },
+   {
+    "args": [
+     "/tmp/cc"
+    ],
+    "value": {
+     "status": 3,
+     "message": "Disabled by NODE_DISABLE_COMPILE_CACHE"
+    }
+   },
+   {
+    "args": [
+     "<undefined>"
+    ],
+    "value": {
+     "status": 3,
+     "message": "Disabled by NODE_DISABLE_COMPILE_CACHE"
+    }
+   },
+   {
+    "args": [
+     5
+    ],
+    "error": {
+     "name": "TypeError",
+     "code": "ERR_INVALID_ARG_TYPE",
+     "message": "cacheDir should be a string"
+    }
+   },
+   {
+    "args": [
+     null
+    ],
+    "error": {
+     "name": "TypeError",
+     "code": "ERR_INVALID_ARG_TYPE",
+     "message": "cacheDir should be a string"
+    }
+   },
+   {
+    "args": [
+     {}
+    ],
+    "value": {
+     "status": 3,
+     "message": "Disabled by NODE_DISABLE_COMPILE_CACHE"
+    }
+   },
+   {
+    "args": [
+     ""
+    ],
+    "value": {
+     "status": 3,
+     "message": "Disabled by NODE_DISABLE_COMPILE_CACHE"
+    }
+   },
+   {
+    "args": [
+     "rel"
+    ],
+    "value": {
+     "status": 3,
+     "message": "Disabled by NODE_DISABLE_COMPILE_CACHE"
+    }
+   },
+   {
+    "args": [
+     {
+      "directory": 5
+     }
+    ],
+    "error": {
+     "name": "TypeError",
+     "code": "ERR_INVALID_ARG_TYPE",
+     "message": "cacheDir should be a string"
+    }
+   },
+   {
+    "args": [
+     {
+      "directory": "/tmp/x"
+     }
+    ],
+    "value": {
+     "status": 3,
+     "message": "Disabled by NODE_DISABLE_COMPILE_CACHE"
+    }
+   },
+   {
+    "args": [
+     true
+    ],
+    "error": {
+     "name": "TypeError",
+     "code": "ERR_INVALID_ARG_TYPE",
+     "message": "cacheDir should be a string"
+    }
+   }
+  ],
+  "directory": {
+   "value": "<undefined>"
+  },
+  "flush": [
+   {
+    "args": [],
+    "value": "<undefined>"
+   },
+   {
+    "args": [
+     true
+    ],
+    "value": "<undefined>"
+   },
+   {
+    "args": [
+     false
+    ],
+    "value": "<undefined>"
+   },
+   {
+    "args": [
+     "<undefined>"
+    ],
+    "value": "<undefined>"
+   },
+   {
+    "args": [
+     5
+    ],
+    "error": {
+     "name": "TypeError",
+     "code": "ERR_INVALID_ARG_TYPE",
+     "message": "keepDeserializedCache should be a boolean"
+    }
+   },
+   {
+    "args": [
+     "x"
+    ],
+    "error": {
+     "name": "TypeError",
+     "code": "ERR_INVALID_ARG_TYPE",
+     "message": "keepDeserializedCache should be a boolean"
+    }
+   },
+   {
+    "args": [
+     null
+    ],
+    "error": {
+     "name": "TypeError",
+     "code": "ERR_INVALID_ARG_TYPE",
+     "message": "keepDeserializedCache should be a boolean"
+    }
+   }
+  ]
+ },
+ "register": [
+  {
+   "args": [],
+   "error": {
+    "name": "TypeError",
+    "code": "ERR_UNSUPPORTED_RESOLVE_REQUEST",
+    "message": "Failed to resolve module specifier \"undefined\" from \"data:\": Invalid relative URL or base scheme is not hierarchical."
+   }
+  },
+  {
+   "args": [
+    5
+   ],
+   "error": {
+    "name": "TypeError",
+    "code": "ERR_UNSUPPORTED_RESOLVE_REQUEST",
+    "message": "Failed to resolve module specifier \"5\" from \"data:\": Invalid relative URL or base scheme is not hierarchical."
+   }
+  },
+  {
+   "args": [
+    null
+   ],
+   "error": {
+    "name": "TypeError",
+    "code": "ERR_UNSUPPORTED_RESOLVE_REQUEST",
+    "message": "Failed to resolve module specifier \"null\" from \"data:\": Invalid relative URL or base scheme is not hierarchical."
+   }
+  },
+  {
+   "args": [
+    {}
+   ],
+   "error": {
+    "name": "TypeError",
+    "code": "ERR_UNSUPPORTED_RESOLVE_REQUEST",
+    "message": "Failed to resolve module specifier \"[object Object]\" from \"data:\": Invalid relative URL or base scheme is not hierarchical."
+   }
+  },
+  {
+   "args": [
+    "./x.mjs",
+    5
+   ],
+   "error": {
+    "name": "TypeError",
+    "code": "ERR_UNSUPPORTED_RESOLVE_REQUEST",
+    "message": "Failed to resolve module specifier \"./x.mjs\" from \"5\": Invalid relative URL or base scheme is not hierarchical."
+   }
+  },
+  {
+   "args": [
+    "./x.mjs",
+    "notaurl"
+   ],
+   "error": {
+    "name": "TypeError",
+    "code": "ERR_UNSUPPORTED_RESOLVE_REQUEST",
+    "message": "Failed to resolve module specifier \"./x.mjs\" from \"notaurl\": Invalid relative URL or base scheme is not hierarchical."
+   }
+  },
+  {
+   "args": [
+    "./x.mjs",
+    {
+     "parentURL": 5
+    }
+   ],
+   "error": {
+    "name": "TypeError",
+    "code": "ERR_UNSUPPORTED_RESOLVE_REQUEST",
+    "message": "Failed to resolve module specifier \"./x.mjs\" from \"5\": Invalid relative URL or base scheme is not hierarchical."
+   }
+  },
+  {
+   "args": [
+    "./x.mjs",
+    "file:///workspace/app/",
+    {
+     "transferList": 5
+    }
+   ],
+   "error": {
+    "name": "TypeError",
+    "code": "ERR_INVALID_ARG_TYPE",
+    "message": "Optional transferList argument must be an iterable"
+   }
+  },
+  {
+   "args": [
+    "./x.mjs",
+    {
+     "transferList": 5
+    }
+   ],
+   "error": {
+    "name": "TypeError",
+    "code": "ERR_INVALID_ARG_TYPE",
+    "message": "Optional transferList argument must be an iterable"
+   }
+  },
+  {
+   "args": [
+    "./x.mjs",
+    "file:///workspace/app/",
+    {
+     "transferList": null
+    }
+   ],
+   "error": {
+    "name": "Error",
+    "code": "ERR_MODULE_NOT_FOUND",
+    "message": "Cannot find module '/workspace/app/x.mjs' imported from /workspace/app/"
+   }
+  }
+ ],
+ "registerHooks": [
+  {
+   "args": [],
+   "error": {
+    "name": "TypeError",
+    "code": null,
+    "message": "Cannot destructure property 'resolve' of 'hooks' as it is undefined."
+   }
+  },
+  {
+   "args": [
+    5
+   ],
+   "value": {
+    "keys": [
+     "resolve",
+     "load"
+    ],
+    "prototype": "ModuleHooks",
+    "name": "deregister",
+    "length": 0,
+    "own": false,
+    "result": "<undefined>",
+    "again": "<undefined>"
+   }
+  },
+  {
+   "args": [
+    null
+   ],
+   "error": {
+    "name": "TypeError",
+    "code": null,
+    "message": "Cannot destructure property 'resolve' of 'hooks' as it is null."
+   }
+  },
+  {
+   "args": [
+    "x"
+   ],
+   "value": {
+    "keys": [
+     "resolve",
+     "load"
+    ],
+    "prototype": "ModuleHooks",
+    "name": "deregister",
+    "length": 0,
+    "own": false,
+    "result": "<undefined>",
+    "again": "<undefined>"
+   }
+  },
+  {
+   "args": [
+    {}
+   ],
+   "value": {
+    "keys": [
+     "resolve",
+     "load"
+    ],
+    "prototype": "ModuleHooks",
+    "name": "deregister",
+    "length": 0,
+    "own": false,
+    "result": "<undefined>",
+    "again": "<undefined>"
+   }
+  },
+  {
+   "args": [
+    {
+     "resolve": 5
+    }
+   ],
+   "error": {
+    "name": "TypeError",
+    "code": "ERR_INVALID_ARG_TYPE",
+    "message": "The \"hooks.resolve\" property must be of type function. Received type number (5)"
+   }
+  },
+  {
+   "args": [
+    {
+     "load": "x"
+    }
+   ],
+   "error": {
+    "name": "TypeError",
+    "code": "ERR_INVALID_ARG_TYPE",
+    "message": "The \"hooks.load\" property must be of type function. Received type string ('x')"
+   }
+  },
+  {
+   "args": [
+    {
+     "resolve": null
+    }
+   ],
+   "value": {
+    "keys": [
+     "resolve",
+     "load"
+    ],
+    "prototype": "ModuleHooks",
+    "name": "deregister",
+    "length": 0,
+    "own": false,
+    "result": "<undefined>",
+    "again": "<undefined>"
+   }
+  },
+  {
+   "args": [
+    {
+     "resolve": "fn",
+     "load": 5
+    }
+   ],
+   "error": {
+    "name": "TypeError",
+    "code": "ERR_INVALID_ARG_TYPE",
+    "message": "The \"hooks.load\" property must be of type function. Received type number (5)"
+   }
+  }
+ ],
+ "sync": [
+  {
+   "value": "<undefined>"
+  },
+  {
+   "value": "<undefined>"
+  }
+ ],
+ "preload": [
+  {
+   "args": [
+    "<undefined>"
+   ],
+   "value": "<undefined>"
+  },
+  {
+   "args": [
+    null
+   ],
+   "value": "<undefined>"
+  },
+  {
+   "args": [
+    []
+   ],
+   "value": "<undefined>"
+  },
+  {
+   "args": [
+    "./lib/util"
+   ],
+   "value": "<undefined>"
+  },
+  {
+   "args": [
+    5
+   ],
+   "value": "<undefined>"
+  },
+  {
+   "args": [
+    {}
+   ],
+   "value": "<undefined>"
+  },
+  {
+   "args": [
+    [
+     "./lib/util.js",
+     "main-pkg"
+    ]
+   ],
+   "value": "<undefined>"
+  },
+  {
+   "args": [
+    [
+     5
+    ]
+   ],
+   "error": {
+    "name": "TypeError",
+    "code": "ERR_INVALID_ARG_TYPE",
+    "message": "The \"id\" argument must be of type string. Received type number (5)"
+   }
+  },
+  {
+   "args": [
+    [
+     "/workspace/pre/p.js"
+    ]
+   ],
+   "value": "<undefined>"
+  }
+ ],
+ "preloaded": {
+  "id": "internal/preload",
+  "filename": null,
+  "paths": [
+   "/workspace/app/node_modules",
+   "/workspace/node_modules",
+   "/node_modules"
+  ],
+  "loaded": false
+ },
+ "runMainErrors": [
+  {
+   "args": [
+    5
+   ],
+   "error": {
+    "name": "TypeError",
+    "code": "ERR_INVALID_ARG_TYPE",
+    "message": "The \"paths[0]\" argument must be of type string. Received type number (5)"
+   }
+  },
+  {
+   "args": [
+    null
+   ],
+   "error": {
+    "name": "TypeError",
+    "code": "ERR_INVALID_ARG_TYPE",
+    "message": "The \"paths[0]\" argument must be of type string. Received null"
+   }
+  },
+  {
+   "args": [
+    {}
+   ],
+   "error": {
+    "name": "TypeError",
+    "code": "ERR_INVALID_ARG_TYPE",
+    "message": "The \"paths[0]\" argument must be of type string. Received an instance of Object"
+   }
+  }
+ ]
+}
