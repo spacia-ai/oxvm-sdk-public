@@ -6,6 +6,7 @@ import { VMError } from "../../errors.js";
 import { ASSISTANCE_LIMITS, type AssistanceFileTime, type AssistanceOperation } from "../../protocol/assistance.js";
 import type { AssistanceResult } from "../../protocol/assistance-reply.js";
 import { fileURLToPath } from "./node-url.js";
+import { invalidValue } from "./node-util-validators.ts";
 
 /** One Linux operation program is driven by either the synchronous mailbox or
  * asynchronous completion. Both forms retain identical validation and cleanup. */
@@ -329,7 +330,7 @@ export function createFileOperations(cwd: () => string, asynchronous = false, co
     rename: checked((value: unknown, destination: unknown) => unit({ kind: "rename", path: path(value), destination: path(destination) }), 2, 2),
     link: checked((value: unknown, destination: unknown) => unit({ kind: "link", path: path(value), destination: path(destination) }), 2, 2),
     symlink: checked(function* (target: unknown, value: unknown, type?: unknown): FileOperation<void> {
-      noOptions(type);
+      symlinkType(type);
       if (typeof target !== "string" || target.includes("\0")) throw new TypeError("Only UTF-8 string link targets are supported");
       const destination = path(value);
       if (target === "" || destination === "") throw Object.assign(new Error("ENOENT: symlink"), { errno: -2, code: "ENOENT", syscall: "symlink", path: target, dest: value });
@@ -523,6 +524,12 @@ function pathEncoding(value: unknown): BufferEncodingName | null {
   if (selected === "buffer") return null;
   const encoding = bufferEncoding(selected, "utf8") ?? "utf8";
   return encoding === "utf-8" ? "utf8" : encoding;
+}
+/** Node validates `fs.symlink`'s Windows-only `type` and ignores it on Linux (bin-links passes "file"). */
+function symlinkType(value: unknown): void {
+  if (value !== undefined && value !== null && value !== "dir" && value !== "file" && value !== "junction") {
+    throw invalidValue("type", value, "must be one of: 'dir', 'file', 'junction', null, undefined");
+  }
 }
 function noOptions(value: unknown): void {
   if (value !== undefined) throw new TypeError("Unsupported filesystem options");

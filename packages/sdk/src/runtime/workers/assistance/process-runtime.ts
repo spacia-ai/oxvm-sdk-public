@@ -382,7 +382,7 @@ export async function runLocalProcess(start: LocalProcessStart, io: ProcessRunti
       string_decoder: nodeStringDecoder, worker_threads: threads?.module ?? createNodeWorkerThreads(globalThis, { clientId: () => `node-${String(processIdentity.pid)}-0` }), inspector: inspector.module, "inspector/promises": inspector.promises,
       os, net, http, ...createLegacyHttpModules(http),
       zlib: { ...createNodeZlib(context, scheduler), ...createNodeBrotli(children, context, () => io.retain(), scheduler) },
-      querystring: nodeQuerystring, url: createNodeUrl(directory.cwd), util, crypto: createNodeCryptoModule(crypto.module, { retain: () => io.retain(), dispatch: callback => { scheduler.enqueue(callback); } }, (fn, message, code) => util.deprecate(fn, message, code), (message, type, code) => { process.emitWarning(message, type, code); }), v8: createNodeV8({ promises: context.resources }), sqlite: nodeSqlite,
+      querystring: nodeQuerystring, url: createNodeUrl(directory.cwd), util, crypto: createNodeCryptoModule(crypto.module, { retain: () => io.retain(), dispatch: callback => { scheduler.enqueue(callback); } }, (fn, message, code) => util.deprecate(fn, message, code), (message, type, code) => { process.emitWarning(message, type, code); }), v8: createNodeV8({ promises: context.resources, heapLimit: () => os.totalmem() }), sqlite: nodeSqlite,
       ...(runtime.wasiHost === undefined ? {} : { wasi: createNodeWasi({ host: runtime.wasiHost, exit: code => process.exit(code) }) }),
       ...(runtime.tty === undefined ? {} : { tty: runtime.tty }),
       ...(runtime.nextCompiler === undefined ? {} : { [NEXT_COMPILER_BUILTIN]: runtime.nextCompiler }),
