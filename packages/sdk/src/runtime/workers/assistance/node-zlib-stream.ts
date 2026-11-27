@@ -20,6 +20,9 @@ class CompressionStream extends Duplex {
   #pending: { iterator: Generator<Uint8Array, void>; done: Completion } | undefined;
   #queued = false;
   #blocked = false;
+  /** Node's native handle as programs reach it: minizlib (npm's tar) swaps its `close` around `_processChunk`
+   * and puts the handle back afterwards. Null once the stream has released its codec. */
+  _handle: { close(): void } | null;
 
   constructor(mode: CompressionMode, options: unknown, context: AsyncContext, scheduler: Scheduler) {
     const opts = typeof options === "object" && options !== null ? options : {};
@@ -34,7 +37,7 @@ class CompressionStream extends Duplex {
       final: done => { this.#begin(new Uint8Array(), codec.finishFlush, error => { if (error === undefined || error === null) this.push(null); done(error); }); },
       destroy: (error, done) => {
         const pending = this.#pending; this.#pending = undefined;
-        pending?.iterator.return(); codec.close();
+        pending?.iterator.return(); codec.close(); this._handle = null;
         this.#run(() => {
           pending?.done(error ?? Object.assign(new Error("Compression stream destroyed"), { code: "ERR_STREAM_DESTROYED" }));
           done(error);
@@ -42,6 +45,31 @@ class CompressionStream extends Duplex {
       },
     });
     this.#codec = codec; this.#scheduler = scheduler; this.#run = context.capture();
+    this._handle = { close: () => { codec.close(); } };
+  }
+
+  /**
+   * Node's synchronous form: all output of one chunk at once, then the handle is released, on success and on
+   * failure. Several output buffers go through `Buffer.concat` exactly as in Node, which a caller may replace.
+   */
+  _processChunk(chunk: unknown, flush: unknown, callback?: unknown): Uint8Array {
+    if (callback !== undefined) unavailableNodeApi("zlib stream _processChunk with a callback");
+    const buffers: Buffer[] = []; let length = 0;
+    try {
+      for (const output of this.#codec.write(compressionBytes(chunk, false), compressionFlush(flush, this.#codec.flush))) {
+        length += output.length;
+        if (length > this.#codec.maxOutputLength) throw compressionLimit(this.#codec.maxOutputLength);
+        buffers.push(Buffer.from(output));
+      }
+    } finally { this.#release(); }
+    const [first] = buffers;
+    if (first === undefined) return Buffer.alloc(0);
+    return buffers.length === 1 ? first : Buffer.concat(buffers, length);
+  }
+
+  #release(): void {
+    const handle = this._handle; this._handle = null;
+    handle?.close();
   }
 
   get bytesWritten(): number { return this.#codec.bytesWritten; }

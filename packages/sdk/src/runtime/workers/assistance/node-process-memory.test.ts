@@ -94,11 +94,12 @@ describe("what stays refused", () => {
     expect(refusal(() => processMemoryUsage.rss())).toEqual(["FEATURE_NOT_AVAILABLE", "process.memoryUsage.rss", "unavailable-builtin"]);
   });
 
-  it("v8 heap statistics: Node's 14 fields have at most three measurable counterparts", () => {
+  it("v8 heap statistics: Node's 14 fields have at most three measurable counterparts, so none is answered as a measurement", () => {
     const heap = record(controls("node-process-memory.controls.json")["heapStatistics"], "heapStatistics");
     expect(heap["keys"]).toHaveLength(14);
     // The one derivation that looked possible is not what Node reports.
     expect(heap["availableIsLimitMinusUsed"]).toBe(false);
+    // Without the VM's configured memory there is no limit to state either (node-heap-statistics.test.ts has the other case).
     for (const name of ["getHeapStatistics", "getHeapSpaceStatistics", "getHeapCodeStatistics"] as const) {
       expect(refusal(() => nodeV8Memory[name]()), name).toEqual(["FEATURE_NOT_AVAILABLE", `v8.${name}`, "unavailable-builtin"]);
     }

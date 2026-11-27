@@ -90,21 +90,46 @@ named(GCProfiler, "GCProfiler");
 export interface V8Ports {
   /** `context.resources` of the process. Without it `v8.promiseHooks` is refused. */
   readonly promises?: PromiseLifecycle;
+  /**
+   * The VM's configured memory in bytes: Linux's `MemTotal`, which is `os.totalmem()`. Without it
+   * `v8.getHeapStatistics` is refused. A failure of the read itself is thrown by the port and is not caught here.
+   */
+  readonly heapLimit?: () => number;
 }
 
 /**
- * The `v8` builtin. Heap statistics, snapshots, profilers and heap queries have no browser equivalent and are
- * refused; a process never builds a startup snapshot and never collects coverage, so those answer as Node does
- * in that state.
+ * `v8.getHeapStatistics` by owner decision of 2026-11-27 (engine ADR 0026, "Heap statistics"). No browser gives a
+ * dedicated worker a measurement of its heap, so nothing here is one:
  *
- * `getHeapStatistics` stays refused although `process.memoryUsage.rss` is served from Linux (node-process-memory.ts):
- * no browser gives a dedicated worker a measurement of its heap, and Chromium's `performance.memory`, were it
- * offered, would fill three of Node's fourteen fields (`total_available_size` is not limit minus used in Node).
+ * - `heap_size_limit` and `total_available_size` are the VM's configured memory, a stated configuration and not the
+ *   browser's real ceiling for this worker's heap, which may be lower;
+ * - `number_of_native_contexts` is 1, the one realm a process runs in;
+ * - `does_zap_garbage` is 0, as in every release build of Node;
+ * - every other field is 0, which means "not measured" and never "empty".
+ *
+ * A program that sizes a cache from the limit works. A program that watches heap pressure sees none.
+ */
+function heapStatistics(limit: (() => number) | undefined): Record<string, number> {
+  const configured = limit?.();
+  if (configured === undefined || !Number.isSafeInteger(configured) || configured <= 0) return unavailableNodeApi("v8.getHeapStatistics");
+  // Node's key order.
+  return {
+    total_heap_size: 0, total_heap_size_executable: 0, total_physical_size: 0, total_available_size: configured,
+    used_heap_size: 0, heap_size_limit: configured, malloced_memory: 0, peak_malloced_memory: 0, does_zap_garbage: 0,
+    number_of_native_contexts: 1, number_of_detached_contexts: 0, total_global_handles_size: 0,
+    used_global_handles_size: 0, external_memory: 0,
+  };
+}
+
+/**
+ * The `v8` builtin. Heap snapshots, per-space and code statistics, profilers and heap queries have no browser
+ * equivalent and are refused; a process never builds a startup snapshot and never collects coverage, so those answer
+ * as Node does in that state. `getHeapStatistics` answers the VM's configured memory (see `heapStatistics`).
  */
 export function createNodeV8(ports: V8Ports = {}) {
   return Object.freeze({
     ...nodeV8Serialization,
-    getHeapStatistics: () => unavailableNodeApi("v8.getHeapStatistics"),
+    getHeapStatistics: named((): Record<string, number> => heapStatistics(ports.heapLimit), "getHeapStatistics"),
     getHeapSpaceStatistics: () => unavailableNodeApi("v8.getHeapSpaceStatistics"),
     getHeapCodeStatistics: () => unavailableNodeApi("v8.getHeapCodeStatistics"),
     getHeapSnapshot: () => unavailableNodeApi("v8.getHeapSnapshot"),
@@ -129,7 +154,7 @@ export function createNodeV8(ports: V8Ports = {}) {
   });
 }
 
-/** The builtin for a process that does not offer its promise lifecycle. */
+/** The builtin for a process that offers neither its promise lifecycle nor a configured memory. */
 export const nodeV8Memory = createNodeV8();
 
 /**
