@@ -8,6 +8,8 @@ import type { NodeSocket } from "./node-socket.js";
 import { bindAsyncEvents, bindAsyncWritable, isEventListener, streamError } from "./node-streams.js";
 import type { ProcessScheduler } from "./process-scheduler.js";
 import { copyOptions, present, refuseSetOptions, truthy, UNSUPPORTED_CONNECT_OPTIONS, type SetTests } from "./node-connect-options.js";
+import { connectHints, ipFamily, lookupHost, type LookupRequest } from "./node-socket-connect.js";
+import { validateFunction } from "./node-util-validators.js";
 import { tlsGuestArguments } from "./node-tls-guest.js";
 import { readTlsFrame, tlsControl, tlsData, type TlsAddressInfo, type TlsControl, type TlsFrame, type TlsSecureInfo } from "./node-tls-wire.js";
 import { unavailableNodeApi } from "./node-capability.ts";
@@ -20,6 +22,7 @@ type Completion = (error?: Error | null) => void;
 export type TlsSocket = NodeSocket & {
   readonly encrypted: true; readonly authorized: boolean; readonly authorizationError: string | null;
   readonly alpnProtocol: string | false; readonly servername: string | false | null;
+  readonly secureConnecting: boolean;
   getProtocol(): string | null; getCipher(): TlsSecureInfo["cipher"] | undefined;
   getPeerCertificate(detailed?: unknown): object;
 };
@@ -60,7 +63,8 @@ export type NodeTls = {
 };
 /** Without ports there is no image to read a CA bundle from: the lists are empty. */
 const NO_CERTIFICATES: TlsCertificatePorts = { readFile: () => undefined, env: () => ({}) };
-export function createNodeTls(children: Pick<ReturnType<typeof createNativeChildren>, "spawnService">, context: AsyncContext, retain: () => () => void, scheduler?: ProcessScheduler, ports: TlsCertificatePorts = NO_CERTIFICATES): NodeTls {
+/** `autoSelectFamily` is net.getDefaultAutoSelectFamily: whether a lookup asks for every address, as net does. */
+export function createNodeTls(children: Pick<ReturnType<typeof createNativeChildren>, "spawnService">, context: AsyncContext, retain: () => () => void, scheduler?: ProcessScheduler, ports: TlsCertificatePorts = NO_CERTIFICATES, autoSelectFamily: () => boolean = () => true): NodeTls {
   const certificates = createTlsCertificates(ports);
   /** The CA list a program installed with setDefaultCACertificates, as the `ca` of a connection that names none. */
   const installed = (): string | undefined => {
@@ -125,6 +129,8 @@ export function createNodeTls(children: Pick<ReturnType<typeof createNativeChild
       void this.#ready.promise.catch(() => {}); void this.#remoteEnd.promise.catch(() => {});
     }
     get connecting(): boolean { return this.#child !== undefined && this.#address === undefined && !this.destroyed; }
+    /** True from a client's start until its handshake completes, as Node's TLSSocket keeps it. */
+    get secureConnecting(): boolean { return this.#link === undefined && this.#secure === undefined; }
     get pending(): boolean { return this.#address === undefined; }
     get authorized(): boolean { return this.#secure?.authorized ?? false; }
     get authorizationError(): string | null { return this.#secure?.authorizationError ?? null; }
@@ -150,10 +156,10 @@ export function createNodeTls(children: Pick<ReturnType<typeof createNativeChild
     unref(): this { this.#referenced = false; this.#release?.(); this.#release = undefined; return this; }
     connect(...args: unknown[]): this {
       if (this.#child !== undefined || this.#link !== undefined || this.destroyed) throw failure("ERR_SOCKET_CLOSED", "TLS socket is already connected or closed");
-      const { options, timeout, callback } = connectArguments(args, installed);
+      const { options, timeout, callback, resolve } = connectArguments(args, installed, autoSelectFamily);
       if (callback !== undefined) this.once("secureConnect", callback);
       this.#verifyCertificate = options["rejectUnauthorized"] !== false;
-      const child = children.spawnService("/usr/bin/node", tlsGuestArguments(options)); this.#child = child;
+      const child = children.spawnService("/usr/bin/node", tlsGuestArguments(resolve === undefined ? options : { ...options, resolve: true })); this.#child = child;
       if (this.#referenced) this.#release = retain();
       // Node arms a truthy timeout before it connects; the helper reads this frame first, so the timer covers the handshake too.
       if (timeout !== undefined) this.setTimeout(timeout);
@@ -164,7 +170,16 @@ export function createNodeTls(children: Pick<ReturnType<typeof createNativeChild
         if (!this.#closing && (code !== 0 || signal !== null || !this.#closeFrame)) this.destroy(failure("ERR_TLS_BRIDGE_EXIT", "Native TLS service exited before completion"));
       });
       void this.#control(child); void this.#data(child);
+      if (resolve !== undefined) this.#resolve(resolve);
       return this;
+    }
+    /** Runs the program's lookup here, as net's lookupAndConnect would, and hands the guest's TLS the addresses it
+     * answered; the hostname stays the guest's `host`, so the certificate is checked against it, as in Node. */
+    #resolve(request: LookupRequest): void {
+      const controller = new AbortController(); this.once("close", () => { controller.abort(); });
+      const emit = (name: string, ...values: unknown[]) => { this.emit(name, ...values); };
+      const answer = (addresses: readonly { address: string; family: 4 | 6 }[]) => { this.#command({ kind: "addresses", addresses: addresses.slice(0, TLS_LOOKUP_ADDRESSES) }); };
+      void lookupHost(request, { signal: controller.signal, emit }, answer).catch((error: unknown) => { if (!this.destroyed) this.destroy(streamError(error)); });
     }
     setNoDelay(enabled: unknown = true): this { this.#command({ kind: "no-delay", enabled: Boolean(enabled) }); return this; }
     setKeepAlive(enabled: unknown = false, delay = 0): this {
@@ -306,7 +321,7 @@ export function createNodeTls(children: Pick<ReturnType<typeof createNativeChild
  * that is not a port number) or a port with an optional host; a second argument that is an object, else the third,
  * is then assigned over them, so its port and host win over positional ones.
  */
-function connectArguments(args: unknown[], installed: () => string | undefined): { options: Record<string, unknown>; timeout: number | undefined; callback?: (...args: unknown[]) => void } {
+function connectArguments(args: unknown[], installed: () => string | undefined, autoSelectFamily: () => boolean): { options: Record<string, unknown>; timeout: number | undefined; callback?: (...args: unknown[]) => void; resolve?: LookupRequest } {
   const values = [...args]; const last = values.at(-1); const callback = isEventListener(last) ? last : undefined;
   if (callback !== undefined) values.pop();
   const [first, second, third] = values;
@@ -322,7 +337,16 @@ function connectArguments(args: unknown[], installed: () => string | undefined):
   const port = typeof options["port"] === "string" && /^\d+$/u.test(options["port"]) ? Number(options["port"]) : options["port"];
   if (typeof port !== "number" || !Number.isInteger(port) || port < 1 || port > 65535) throw failure("ERR_SOCKET_BAD_PORT", "Invalid TLS port");
   const timeout = truthy(options["timeout"]) ? timeoutDuration(options["timeout"]) : undefined;
-  return { options: { host, port, ...tlsOptions(options) }, timeout, ...(callback === undefined ? {} : { callback }) };
+  // net's lookupAndConnect: a lookup that is set must be a function, and a hostname that is not an IP address is
+  // resolved through it. Without one, the guest's Node resolves the name with the hints given.
+  const lookup = options["lookup"];
+  if (lookup !== undefined && lookup !== null) validateFunction(lookup, "options.lookup");
+  const hints = connectHints(options["hints"]);
+  const auto = typeof options["autoSelectFamily"] === "boolean" ? options["autoSelectFamily"] : autoSelectFamily();
+  const resolve: LookupRequest | undefined = typeof lookup === "function" && ipFamily(host) === 0
+    ? { host, family: 0, hints, auto, lookup: (name, settings, done) => { const value: unknown = Reflect.apply(lookup, undefined, [name, settings, done]); return value; } } : undefined;
+  const guestHints = resolve === undefined && options["hints"] !== undefined && options["hints"] !== null ? { hints } : {};
+  return { options: { host, port, ...tlsOptions(options), ...guestHints }, timeout, ...(callback === undefined ? {} : { callback }), ...(resolve === undefined ? {} : { resolve }) };
 }
 /** The keys Node takes from a secure context and not from the connection's own options when one is given. */
 const CONTEXT_OPTION_NAMES = ["allowPartialTrustChain", "ca", "cert", "ciphers", "clientCertEngine", "crl", "dhparam", "ecdhCurve", "key", "passphrase", "pfx", "privateKeyIdentifier", "privateKeyEngine",
@@ -346,6 +370,8 @@ function timeoutDuration(value: unknown): number {
 function failure(code: string, message: string): Error { return Object.assign(new Error(message), { code }); }
 function protocol(): VMError { return new VMError("PROTOCOL_ERROR", "Invalid native TLS lifecycle"); }
 
+/** The addresses one lookup hands the guest: a bounded control frame holds this many IPv6 addresses. */
+const TLS_LOOKUP_ADDRESSES = 64;
 export const TLS_OPTION_NAMES = ["ca", "servername", "rejectUnauthorized", "ALPNProtocols", "minVersion", "maxVersion"] as const;
 /**
  * Keys tls.connect reads that the guest TLS helper does not take, each with Node's own test. https.request,

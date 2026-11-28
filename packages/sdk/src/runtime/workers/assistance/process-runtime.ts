@@ -282,7 +282,7 @@ export async function runLocalProcess(start: LocalProcessStart, io: ProcessRunti
       fastLookup: true,
     });
     const net = createNodeNet(io, context, scheduler, runtime.socketRuntime === undefined ? undefined : { defaults: runtime.socketRuntime, lookup: dns.lookup });
-    const tls = createNodeTls(children, context, () => io.retain(), scheduler, { readFile: path => String(files.readFileSync(path, "utf8")), env: () => process.env });
+    const tls = createNodeTls(children, context, () => io.retain(), scheduler, { readFile: path => String(files.readFileSync(path, "utf8")), env: () => process.env }, () => net.getDefaultAutoSelectFamily());
     // A TLS server runs in a helper in the guest, as HTTP/2 servers do: the engine's TLS is a client only.
     const tlsServers = createTlsServers({ children, context, retain: () => io.retain(), scheduler, tls, net });
     // Assigned, not spread: reading `rootCertificates` would load the CA bundle at start.
@@ -363,7 +363,7 @@ export async function runLocalProcess(start: LocalProcessStart, io: ProcessRunti
     }).Utf8Stream });
     const builtins = {
       fs: fileModule, "fs/promises": filePromises,
-      tls, https: { ...createHttpClients({ createConnection: tls.connect }, httpParser, context, scheduler.nextTick, () => io.retain(), "https:"), Server: httpsServers.Server, createServer: httpsServers.createServer },
+      tls, https: { ...createHttpClients({ createConnection: tls.connect }, httpParser, context, scheduler.nextTick, () => io.retain(), "https:", http.Agent), Server: httpsServers.Server, createServer: httpsServers.createServer },
       _tls_wrap: { TLSSocket: tls.TLSSocket, Server: tlsServers.Server, createServer: tlsServers.createServer, connect: tls.connect },
       _tls_common: { SecureContext: tls.SecureContext, createSecureContext: tls.createSecureContext, translatePeerCertificate },
       http2: createNodeHttp2(children, context, () => io.retain(), scheduler, message => { process.emitWarning(message); }),

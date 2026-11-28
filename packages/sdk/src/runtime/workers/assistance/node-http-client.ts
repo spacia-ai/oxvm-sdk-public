@@ -5,11 +5,13 @@ import type { AsyncContext } from "./async-context.js";
 import type { NodeSocket, NodeSockets } from "./node-socket.js";
 import { bindAsyncEvents, bindAsyncWritable, isEventListener, streamError } from "./node-streams.js";
 import { HttpOutgoing, framingLength, failureOf, headerName, headerEntries } from "./node-http-outgoing.js";
-import { createHttpAgents, type HttpAgent } from "./node-http-agent.js";
+import { createHttpAgents, dropQueuedRequest, type AgentRequest, type HttpAgentClass } from "./node-http-agent.js";
+import { invalidType } from "./node-util-validators.js";
 import { receiveHttpResponse } from "./node-http-client-connection.js";
 
 type HttpClientRequest = HttpOutgoing & {
-  readonly method: string; readonly path: string; readonly host: string; readonly protocol: string; readonly agent: HttpAgent;
+  readonly method: string; readonly path: string; readonly host: string; readonly protocol: string; readonly agent: AgentLike;
+  shouldKeepAlive: boolean; readonly timeout?: unknown;
   socket: NodeSocket | null; reusedSocket: boolean; aborted: boolean;
   readonly connection: NodeSocket | null; readonly finished: boolean;
   onSocket(socket?: NodeSocket, error?: Error): void;
@@ -19,6 +21,8 @@ type HttpClientRequest = HttpOutgoing & {
   abort(): void;
   flushHeaders(): void;
 };
+/** What http.request takes as `agent`, as Node checks it: any object with an addRequest method. */
+type AgentLike = { addRequest(request: AgentRequest, options: Record<string, unknown>): unknown };
 type Clients = ReturnType<typeof createHttpAgents> & {
   ClientRequest: new (options: unknown, callback?: unknown) => HttpClientRequest;
   request(value?: unknown, optionsOrCallback?: unknown, callback?: unknown): HttpClientRequest;
@@ -54,17 +58,22 @@ function hostOption(value: unknown, name: string): string | undefined {
   return value;
 }
 
-export function createHttpClients(net: Pick<NodeSockets, "createConnection">, module: WebAssembly.Module, context: AsyncContext, dispatch: (callback: () => void) => void = queueMicrotask, retain: () => () => void = () => () => {}, protocol: "http:" | "https:" = "http:"): Clients {
-  const agents = createHttpAgents(net, context, dispatch, protocol);
-  const defaultPort = agents.globalAgent.defaultPort;
+/** `base` is the http module's Agent, which an https module's Agent extends, as in Node. */
+export function createHttpClients(net: Pick<NodeSockets, "createConnection">, module: WebAssembly.Module, context: AsyncContext, dispatch: (callback: () => void) => void = queueMicrotask, retain: () => () => void = () => () => {}, protocol: "http:" | "https:" = "http:", base?: HttpAgentClass): Clients {
+  const agents = createHttpAgents(net, context, protocol, base);
+  const defaultPort = protocol === "https:" ? 443 : 80;
   const unsupported: SetTests = { ...UNSUPPORTED_REQUEST_OPTIONS, defaultPort: otherDefaultPort(defaultPort), ...(protocol === "https:" ? UNSUPPORTED_TLS_OPTIONS : UNSUPPORTED_NET_SOCKET_OPTIONS) };
   class ClientRequest extends HttpOutgoing {
     readonly method: string;
     readonly path: string;
     readonly host: string;
     readonly protocol = protocol;
-    readonly agent: InstanceType<typeof agents.Agent>;
+    readonly agent: AgentLike;
     socket: NodeSocket | null = null;
+    /** Node's flag for whether this request's socket goes back to its agent: set when the agent keeps connections
+     * alive or caps them (a finite maxSockets), and cleared when the response asks to close. */
+    shouldKeepAlive = false;
+    declare readonly timeout?: unknown;
     reusedSocket = false;
     aborted = false;
     readonly #ready = Promise.withResolvers<NodeSocket>();
@@ -84,7 +93,7 @@ export function createHttpClients(net: Pick<NodeSockets, "createConnection">, mo
         write: (chunk, _encoding, done) => { void this.#write(chunk).then(() => done(), (error: unknown) => { const failure = streamError(error); this.destroy(failure); done(failure); }); },
         final: done => { void this.#finish().then(() => done(), (error: unknown) => { const failure = streamError(error); this.destroy(failure); done(failure); }); },
         destroy: (error, done) => {
-          this.agent.cancelRequest(this);
+          dropQueuedRequest(this.agent, this);
           this.#releaseActivity?.(); this.#releaseActivity = undefined;
           this.socket?.removeListener("timeout", this.#onTimeout);
           if (this.#signal !== undefined && this.#abort !== undefined) this.#signal.removeEventListener("abort", this.#abort);
@@ -97,6 +106,9 @@ export function createHttpClients(net: Pick<NodeSockets, "createConnection">, mo
       const options = requestOptions(ownOptions(value, "http.request options"));
       this.method = options.method; this.path = options.path; this.host = options.host;
       this.agent = options.agent === false ? new agents.Agent() : options.agent ?? agents.globalAgent;
+      const keepAlive: unknown = Reflect.get(this.agent, "keepAlive"), maxSockets: unknown = Reflect.get(this.agent, "maxSockets");
+      this.shouldKeepAlive = Boolean(keepAlive) || (typeof maxSockets === "number" && Number.isFinite(maxSockets));
+      if (options.timeout !== undefined) Object.defineProperty(this, "timeout", { value: options.timeout, writable: true, enumerable: true, configurable: true });
       bindAsyncEvents(this, context); bindAsyncWritable(this, context);
       this.once("finish", () => { this.#release(); });
       void this.#ready.promise.catch(() => undefined);
@@ -112,16 +124,18 @@ export function createHttpClients(net: Pick<NodeSockets, "createConnection">, mo
         this.#signal.addEventListener("abort", this.#abort, { once: true });
       }
       this.#releaseActivity = retain();
-      try { this.agent.addRequest(this, { host: options.host, port: options.port, ...options.tls }); }
+      try { this.agent.addRequest(this, options.agentOptions); }
       catch (error) { this.#releaseActivity(); this.#releaseActivity = undefined; throw error; }
     }
     get connection(): NodeSocket | null { return this.socket; }
     get finished(): boolean { return this.writableEnded; }
-    onSocket(socket?: NodeSocket, error?: Error): void {
+    /** Node takes the socket on the next tick (onSocketNT), so an agent handing out sockets is never re-entered. */
+    onSocket(socket?: NodeSocket | null, error?: Error | null): void { dispatch(() => { this.#onSocket(socket ?? undefined, error ?? undefined); }); }
+    #onSocket(socket?: NodeSocket, error?: Error): void {
       if (error !== undefined) { this.destroy(error); return; }
       if (socket === undefined) { this.destroy(failureOf("ECONNRESET", "HTTP socket missing")); return; }
       if (this.destroyed) { socket.emit("free"); return; }
-      this.socket = socket;
+      this.socket = socket; Reflect.set(socket, "_httpMessage", this);
       this.#receiver = receiveHttpResponse(socket, module, context, this.method, {
         information: head => {
           if (head.statusCode === 100) this.emit("continue");
@@ -156,7 +170,7 @@ export function createHttpClients(net: Pick<NodeSockets, "createConnection">, mo
       this.#length = framingLength(length, encoding);
       this.#chunked = encoding !== undefined || (length === undefined && this.method !== "GET" && this.method !== "HEAD" && this.method !== "CONNECT");
       if (this.#chunked && encoding === undefined) this.setHeader("Transfer-Encoding", "chunked");
-      if (!this.hasHeader("connection")) this.setHeader("Connection", this.agent.keepAlive ? "keep-alive" : "close");
+      if (!this.hasHeader("connection")) this.setHeader("Connection", this.shouldKeepAlive ? "keep-alive" : "close");
       this.sealHeaders(`${this.method} ${this.path} HTTP/1.1`);
     }
     #sendHead(): Promise<void> {
@@ -185,14 +199,15 @@ export function createHttpClients(net: Pick<NodeSockets, "createConnection">, mo
     #release(): void {
       if (!this.writableFinished || this.#responseReusable === undefined || this.#released || this.socket === null) return;
       this.#released = true; this.socket.removeListener("timeout", this.#onTimeout);
-      if (this.#responseReusable && String(this.getHeader("connection")).toLowerCase() !== "close") this.socket.emit("free");
+      if (!this.#responseReusable || String(this.getHeader("connection")).toLowerCase() === "close") this.shouldKeepAlive = false;
+      if (this.shouldKeepAlive) this.socket.emit("free");
       else this.socket.destroy();
       this.destroy();
     }
   }
   function requestOptions(options: Readonly<Record<string, unknown>>): {
-    host: string; port: number; tls: TlsOptions | undefined; method: string; path: string; agent: InstanceType<typeof agents.Agent> | false | undefined;
-    auth: string | undefined; signal: AbortSignal | undefined; timeout: unknown; headers: unknown;
+    host: string; port: number; tls: TlsOptions | undefined; method: string; path: string; agent: AgentLike | false | undefined;
+    auth: string | undefined; signal: AbortSignal | undefined; timeout: unknown; headers: unknown; agentOptions: Record<string, unknown>;
   } {
     if (options["protocol"] !== undefined && options["protocol"] !== null && options["protocol"] !== protocol) throw failureOf("ERR_INVALID_PROTOCOL", `HTTP request requires ${protocol}`);
     const builtin = protocol === "https:" ? "https.request" : "http.request";
@@ -209,11 +224,24 @@ export function createHttpClients(net: Pick<NodeSockets, "createConnection">, mo
     if (typeof method !== "string") throw new TypeError("Invalid HTTP method");
     const path = truthy(options["path"]) ? options["path"] : "/";
     if (typeof path !== "string" || path.length > 8192 || /[^\x21-\xff]/u.test(path)) throw new TypeError("Invalid HTTP request path");
-    const agent = options["agent"] ?? undefined;
-    if (agent !== undefined && agent !== false && !(agent instanceof agents.Agent)) throw new TypeError("Invalid HTTP agent");
+    const agent = agentOption(options["agent"]);
     const auth = truthy(options["auth"]) ? options["auth"] : undefined; if (auth !== undefined && typeof auth !== "string") throw new TypeError("Invalid HTTP auth");
     const signal = options["signal"] ?? undefined; if (signal !== undefined && !(signal instanceof AbortSignal)) throw new TypeError("Invalid HTTP AbortSignal");
-    return { host, port, tls: protocol === "https:" ? tlsOptions(options) : undefined, method: method.toUpperCase(), path, agent, auth, signal, timeout: options["timeout"], headers: truthy(headers) ? headers : undefined };
+    // What ClientRequest hands agent.addRequest: the request's own options without its signal, with host and port
+    // filled in. An https request also names its protocol: agent-base (npm's agent) tells https from http by it, and
+    // otherwise by a node:https frame in the stack, which the assisted https module has not.
+    const agentOptions = copyOptions(options); Reflect.deleteProperty(agentOptions, "signal");
+    Object.assign(agentOptions, { host, port }, protocol === "https:" && agentOptions["protocol"] === undefined ? { protocol } : {});
+    return { host, port, tls: protocol === "https:" ? tlsOptions(options) : undefined, method: method.toUpperCase(), path, agent, auth, signal, timeout: options["timeout"], headers: truthy(headers) ? headers : undefined, agentOptions };
+  }
+  /** Node's check of `options.agent`: undefined or null use the global agent, false a new one, else an Agent-like object. */
+  function agentOption(value: unknown): AgentLike | false | undefined {
+    if (value === undefined || value === null) return undefined;
+    if (value === false) return false;
+    if (isAgentLike(value)) return value;
+    const failure = invalidType("options.agent", "t", value);
+    failure.message = failure.message.replace("must be of type t.", "must be one of Agent-like Object, undefined, or false.");
+    throw failure;
   }
   function request(value: unknown = {}, optionsOrCallback?: unknown, callback?: unknown): ClientRequest {
     let options: Record<string, unknown>;
@@ -232,4 +260,7 @@ export function createHttpClients(net: Pick<NodeSockets, "createConnection">, mo
     const result = request(value, optionsOrCallback, callback); result.end(); return result;
   }
   return { ...agents, ClientRequest, request, get };
+}
+function isAgentLike(value: unknown): value is AgentLike {
+  return typeof value === "object" && value !== null && typeof Reflect.get(value, "addRequest") === "function";
 }

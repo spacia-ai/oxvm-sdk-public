@@ -1,3 +1,4 @@
+import { truthy } from "./node-connect-options.js";
 import type { ProcessScheduler } from "./process-scheduler.js";
 import { Buffer } from "buffer";
 import { Duplex } from "readable-stream";
@@ -64,11 +65,13 @@ export function createNodeSockets(io: Pick<ProcessIO, "call" | "callSync" | "ret
 
     constructor(value: unknown = {}) {
       const options = record(value, "net.Socket options");
-      exactKeys(options, [], ["allowHalfOpen", "highWaterMark", "fd"]);
+      exactKeys(options, [], ["allowHalfOpen", "highWaterMark", "fd", "readable", "writable"]);
       if (options["allowHalfOpen"] !== undefined && typeof options["allowHalfOpen"] !== "boolean") throw new TypeError("Invalid net.Socket allowHalfOpen");
+      // Duplex reads `readable: false` and `writable: false`: agent-base builds such a socket as a placeholder in its agent's registry.
+      const closedSides = { ...(options["readable"] === false ? { readable: false } : {}), ...(options["writable"] === false ? { writable: false } : {}) };
       const highWaterMark = options["highWaterMark"] === undefined ? ASSISTANCE_LIMITS.chunk
         : integer(options["highWaterMark"], "socket highWaterMark", 1, ASSISTANCE_LIMITS.chunk);
-      super({ highWaterMark, allowHalfOpen: options["allowHalfOpen"] === true, autoDestroy: true,
+      super({ highWaterMark, allowHalfOpen: options["allowHalfOpen"] === true, autoDestroy: true, ...closedSides,
         read: () => this.#read(),
         write: (chunk, _encoding, callback) => { void this.#write(chunk, callback); },
         final: callback => { void this.#finish(callback); },
@@ -243,7 +246,7 @@ export function createNodeSockets(io: Pick<ProcessIO, "call" | "callSync" | "ret
       }
     }
   }
-  const createConnection = (...args: unknown[]) => new Socket().connect(...args);
+  const createConnection = (...args: unknown[]) => connectionOptions(new Socket(socketOptions(args[0])), args[0]).connect(...args);
   return { Socket, createConnection, connect: createConnection,
     getDefaultAutoSelectFamily: defaults.getDefaultAutoSelectFamily, setDefaultAutoSelectFamily: defaults.setDefaultAutoSelectFamily,
     getDefaultAutoSelectFamilyAttemptTimeout: defaults.getDefaultAutoSelectFamilyAttemptTimeout, setDefaultAutoSelectFamilyAttemptTimeout: defaults.setDefaultAutoSelectFamilyAttemptTimeout };
@@ -256,3 +259,20 @@ function socketOptionResult(result: AssistanceResult): void {
 
 function family(address: string): string { return address.includes(":") ? "IPv6" : "IPv4"; }
 function socketError(code: string, message: string): Error { return Object.assign(new Error(message), { code }); }
+
+/** What net.connect hands net.Socket's constructor from its options: allowHalfOpen, when given as a boolean. */
+export function socketOptions(options: unknown): Record<string, unknown> {
+  const allowHalfOpen: unknown = typeof options === "object" && options !== null ? Reflect.get(options, "allowHalfOpen") : undefined;
+  return typeof allowHalfOpen === "boolean" ? { allowHalfOpen } : {};
+}
+/** What net.connect and net.Socket read from the options besides the address, before connecting: a truthy timeout,
+ * noDelay, and keepAlive with its initial delay in milliseconds. */
+export function connectionOptions<T extends NodeSocket>(socket: T, options: unknown): T {
+  if (typeof options !== "object" || options === null) return socket;
+  const timeout: unknown = Reflect.get(options, "timeout"), noDelay: unknown = Reflect.get(options, "noDelay");
+  const keepAlive: unknown = Reflect.get(options, "keepAlive"), delay: unknown = Reflect.get(options, "keepAliveInitialDelay");
+  if (truthy(timeout)) socket.setTimeout(timeout);
+  if (truthy(noDelay)) socket.setNoDelay(true);
+  if (truthy(keepAlive)) socket.setKeepAlive(true, Number(delay) || 0);
+  return socket;
+}

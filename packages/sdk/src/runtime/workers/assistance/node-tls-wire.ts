@@ -20,7 +20,9 @@ export type TlsFrame = TlsSecureInfo | ({ readonly kind: "connect" } & TlsAddres
 export type TlsControl = { readonly kind: "end" | "destroy" }
   | { readonly kind: "no-delay"; readonly enabled: boolean }
   | { readonly kind: "keep-alive"; readonly enabled: boolean; readonly delay: number }
-  | { readonly kind: "timeout"; readonly duration: number };
+  | { readonly kind: "timeout"; readonly duration: number }
+  /** The addresses the program's own lookup answered, which the guest's lookup hands its tls.connect. */
+  | { readonly kind: "addresses"; readonly addresses: readonly { readonly address: string; readonly family: 4 | 6 }[] };
 
 export function tlsControl(value: TlsControl): Buffer { return encodeNativeFrame(1, Buffer.from(JSON.stringify(value))); }
 export function tlsData(bytes: Uint8Array): Buffer { return encodeNativeFrame(0, bytes); }
