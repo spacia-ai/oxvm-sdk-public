@@ -1,5 +1,6 @@
 import { Buffer } from "buffer";
-import { exactKeys, integer, record } from "../../decode.js";
+import { integer, record } from "../../decode.js";
+import { copyOptions, refuseSetOptions, UNSUPPORTED_CONNECT_OPTIONS, type SetTests } from "./node-connect-options.js";
 import { VMError } from "../../errors.js";
 import { decodeAssistanceSocketAddress } from "../../protocol/assistance.js";
 import type { AssistanceResult } from "../../protocol/assistance-reply.js";
@@ -8,7 +9,7 @@ import type { createSocketDefaults, SocketRuntime } from "./node-socket-defaults
 import { nodeResult } from "./node-file-operations.js";
 import { streamError } from "./node-streams.js";
 
-type Address = { address: string; family: 4 | 6 };
+export type Address = { address: string; family: 4 | 6 };
 type SocketInfo = Extract<AssistanceResult, { kind: "socket" }>;
 type Defaults = ReturnType<typeof createSocketDefaults>;
 export type SocketLookup = (host: unknown, options: unknown, callback: unknown) => unknown;
@@ -24,6 +25,13 @@ interface Control {
 }
 const schedule = globalThis.setTimeout.bind(globalThis), cancel = globalThis.clearTimeout.bind(globalThis);
 const connectError = (code: string, message: string) => Object.assign(new Error(message), { code });
+/** Keys net.connect and net.Socket's connect read, when Node's own test says they are set, that a Linux-backed socket
+ * here does not take: a local address or port to bind, a pipe path, an abort signal, an onread buffer, and an fd or
+ * handle to adopt. (The net module's own Socket takes blockList; the socket options are applied by createConnection.) */
+const UNSUPPORTED_NET_CONNECT_OPTIONS: SetTests = {
+  localAddress: Boolean, localPort: Boolean, path: Boolean, signal: Boolean, onread: UNSUPPORTED_CONNECT_OPTIONS["onread"] ?? Boolean,
+  fd: value => value !== undefined && value !== null, handle: Boolean,
+};
 
 export function socketConnectArguments(args: unknown[], defaults: Defaults, lookup?: SocketLookup) {
   const last = args.at(-1), callback = typeof last === "function" ? last : undefined;
@@ -32,7 +40,9 @@ export function socketConnectArguments(args: unknown[], defaults: Defaults, look
   if (typeof args[0] === "object" && args[0] !== null) {
     if (args.length !== 1) throw new TypeError("Unsupported net.Socket.connect arguments");
     options = record(args[0], "net.connect options");
-    exactKeys(options, ["port"], ["host", "family", "hints", "lookup", "autoSelectFamily", "autoSelectFamilyAttemptTimeout"]);
+    // Node reads only the keys it knows and ignores the rest, as an agent's whole option bag reaches net.connect
+    // (agent-base, @npmcli/agent). A key it reads that this socket cannot honor is refused by name.
+    refuseSetOptions(copyOptions(options), UNSUPPORTED_NET_CONNECT_OPTIONS, "net.connect", "net.connect");
   } else {
     if (args.length < 1 || args.length > 2) throw new TypeError("Unsupported net.Socket.connect arguments");
     options = { port: args[0], host: args[1] };
@@ -42,8 +52,7 @@ export function socketConnectArguments(args: unknown[], defaults: Defaults, look
   if (typeof host !== "string" || host.length === 0 || host.includes("\0") || Buffer.byteLength(host) > 4096) throw new TypeError("Invalid socket hostname");
   const family = options["family"] ?? 0;
   if (family !== 0 && family !== 4 && family !== 6) throw new TypeError("Invalid socket family");
-  const hints = integer(options["hints"] ?? 32, "socket DNS hints", 0, 56);
-  if ((hints & ~56) !== 0) throw new TypeError("Invalid socket DNS hints");
+  const hints = connectHints(options["hints"]);
   const auto = options["autoSelectFamily"] === undefined ? defaults.getDefaultAutoSelectFamily() : options["autoSelectFamily"];
   if (typeof auto !== "boolean") throw new TypeError("Invalid socket autoSelectFamily");
   const timeout = options["autoSelectFamilyAttemptTimeout"] === undefined ? defaults.getDefaultAutoSelectFamilyAttemptTimeout() : defaults.timeout(options["autoSelectFamilyAttemptTimeout"], "autoSelectFamilyAttemptTimeout");
@@ -63,7 +72,20 @@ export function connectSocket(io: Pick<ProcessIO, "call">, options: Options, con
     if (options.host === "localhost") return attempts(io, options, [{ address: "127.0.0.1", family: 4 }], false, control);
     throw new VMError("FEATURE_NOT_AVAILABLE", "Socket DNS lookup owner is unavailable");
   }
-  const multiple = options.auto && options.family === 0;
+  return lookupHost({ ...options, lookup: options.lookup }, control, (addresses, multiple) => attempts(io, options, addresses, multiple && addresses.length > 1, control));
+}
+
+/** What net's lookupAndConnect hands a lookup function, and what it does with the answer. */
+export interface LookupRequest { readonly host: string; readonly family: 0 | 4 | 6; readonly hints: number; readonly auto: boolean; readonly lookup: SocketLookup }
+export interface LookupControl { readonly signal: AbortSignal; emit(event: string, ...args: unknown[]): void }
+/**
+ * Calls `lookup` the way net's lookupAndConnect does: with `{ hints, all: true }` when families are selected
+ * automatically, else with `{ family, hints }`; checks every address, emits `lookup` for each, and returns them in
+ * the order the connection attempts take (alternating families when selecting automatically) to `next`, which runs
+ * inside the lookup's callback, as net's emitLookup connects.
+ */
+export function lookupHost<T>(request: LookupRequest, control: LookupControl, next: (addresses: Address[], multiple: boolean) => T | PromiseLike<T>): Promise<T> {
+  const multiple = request.auto && request.family === 0;
   return new Promise((resolve, reject) => {
     let completed = false;
     const aborted = () => { if (!completed) { completed = true; reject(streamError(control.signal.reason)); } };
@@ -75,17 +97,23 @@ export function connectSocket(io: Pick<ProcessIO, "call">, options: Options, con
       try {
         const values = multiple ? value : [{ address: value, family }];
         const addresses = lookupAddresses(values);
-        for (const address of addresses) control.emit("lookup", null, address.address, address.family, options.host);
-        const selected = multiple ? alternate(addresses) : addresses;
-        resolve(attempts(io, options, selected, multiple && selected.length > 1, control));
+        for (const address of addresses) control.emit("lookup", null, address.address, address.family, request.host);
+        resolve(next(multiple ? alternate(addresses) : addresses, multiple));
       } catch (failure) { reject(streamError(failure)); }
     };
     try {
       if (control.signal.aborted) { aborted(); return; }
-      const settings = multiple ? { hints: options.hints, all: true } : { family: options.family, hints: options.hints };
-      options.lookup?.(options.host, settings, callback);
+      const settings = multiple ? { hints: request.hints, all: true } : { family: request.family, hints: request.hints };
+      request.lookup(request.host, settings, callback);
     } catch (error) { control.signal.removeEventListener("abort", aborted); reject(streamError(error)); }
   });
+}
+
+/** The `hints` option of net.connect and tls.connect: unset is ADDRCONFIG, as Node passes it; else the flags dns.lookup takes. */
+export function connectHints(value: unknown): number {
+  const hints = integer(value ?? 32, "socket DNS hints", 0, 56);
+  if ((hints & ~56) !== 0) throw new TypeError("Invalid socket DNS hints");
+  return hints;
 }
 
 async function attempts(io: Pick<ProcessIO, "call">, options: Options, addresses: Address[], multiple: boolean, control: Control): Promise<SocketInfo> {
@@ -132,7 +160,10 @@ function lookupAddresses(input: unknown): Address[] {
   return input.map((value: unknown) => {
     const entry = record(value, "socket DNS address");
     const address = entry["address"], family = entry["family"];
-    if (typeof address !== "string" || (family !== 4 && family !== 6) || ipFamily(address) !== family) throw connectError("ERR_INVALID_IP_ADDRESS", "Invalid DNS address");
+    // net's emitLookup: an answer that is not an IP address of the family it names is ERR_INVALID_IP_ADDRESS.
+    if (typeof address !== "string" || (family !== 4 && family !== 6) || ipFamily(address) !== family) {
+      throw Object.assign(new TypeError(`Invalid IP address: ${typeof address === "string" ? address : String(address)}`), { code: "ERR_INVALID_IP_ADDRESS" });
+    }
     return { address, family };
   });
 }
@@ -144,7 +175,7 @@ function alternate(addresses: Address[]): Address[] {
   }
   return primary.flatMap((address, index) => secondary[index] === undefined ? [address] : [address, secondary[index]]).concat(secondary.slice(primary.length));
 }
-function ipFamily(input: string): 0 | 4 | 6 {
+export function ipFamily(input: string): 0 | 4 | 6 {
   try { decodeAssistanceSocketAddress({ address: input, port: 1 }); return input.includes(":") ? 6 : 4; } catch { return 0; }
 }
 function connectionFailure(error: unknown, address: string, port: number, timedOut: boolean): Error {

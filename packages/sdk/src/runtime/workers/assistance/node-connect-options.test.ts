@@ -2,8 +2,8 @@ import { expect, it } from "vitest";
 import { copyOptions, otherDefaultPort, refuseSetOptions, UNSUPPORTED_CONNECT_OPTIONS } from "./node-connect-options.js";
 
 it("tests each connection key the way Node does: set values are refused by name, unset ones ignored", () => {
-  const set: Readonly<Record<string, unknown>> = { localAddress: "10.0.0.2", localPort: 4000, lookup: () => {},
-    family: "IPv6", hints: 32, allowHalfOpen: true, onread: { buffer: () => new Uint8Array(1), callback: () => true } };
+  const set: Readonly<Record<string, unknown>> = { localAddress: "10.0.0.2", localPort: 4000,
+    family: "IPv6", allowHalfOpen: true, onread: { buffer: () => new Uint8Array(1), callback: () => true } };
   // net.Socket ignores an onread without a buffer and callback. createConnection and blockList are not read on every
   // socket (only http.request reads the first; only net.Socket, so plain http, reads the second).
   const unset: Readonly<Record<string, unknown>> = { localAddress: "", localPort: 0, lookup: null, family: 0, hints: 0, allowHalfOpen: false,
@@ -14,6 +14,8 @@ it("tests each connection key the way Node does: set values are refused by name,
       .toThrow(expect.objectContaining({ code: "FEATURE_NOT_AVAILABLE", message: `${key} is not supported for http.Agent`, detail: { lateFailure: "unavailable-builtin", subject: `node:https.Agent ${key}` } }));
   }
   refuseSetOptions(unset, UNSUPPORTED_CONNECT_OPTIONS, "http.Agent", "http.Agent");
+  // net and tls.connect call a lookup function and pass hints to it, as Node does, so neither is refused.
+  refuseSetOptions({ lookup: () => {}, hints: 32 }, UNSUPPORTED_CONNECT_OPTIONS, "http.Agent", "http.Agent");
   for (const family of [4, 6, "IPv4"]) expect(UNSUPPORTED_CONNECT_OPTIONS["family"]?.(family)).toBe(true);
   expect([443, "443", 0, "", null].map(otherDefaultPort(443))).toEqual([false, false, false, false, false]);
   expect([8443, "80"].map(otherDefaultPort(443))).toEqual([true, true]);

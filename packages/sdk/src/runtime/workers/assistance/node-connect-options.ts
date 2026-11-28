@@ -15,7 +15,6 @@ export type SetTests = Readonly<Record<string, SetTest>>;
 export const present: SetTest = value => value !== null && value !== undefined;
 /** Set when truthy, as in Node's `if (options.x)`. */
 export const truthy: SetTest = value => Boolean(value);
-const callable: SetTest = value => typeof value === "function";
 
 /** net.Socket uses an onread only with a buffer (or a function making one) and a callback. */
 const onread: SetTest = value => typeof value === "object" && value !== null && "buffer" in value && "callback" in value
@@ -23,14 +22,13 @@ const onread: SetTest = value => typeof value === "object" && value !== null && 
 
 /**
  * Connection keys Node reads for every socket that http.request, http.Agent and tls.connect open, which the assisted
- * HTTP agent and TLS helper do not take: net's lookupAndConnect reads localAddress and localPort when truthy, a lookup
- * function, a family of 4 or 6 (or "IPv4" and "IPv6") and non-zero hints; net.Socket reads allowHalfOpen and onread,
- * and TLSSocket passes both on to the net.Socket it builds.
+ * HTTP agent and TLS helper do not take: net's lookupAndConnect reads localAddress and localPort when truthy and a
+ * family of 4 or 6 (or "IPv4" and "IPv6"); net.Socket reads allowHalfOpen and onread, and TLSSocket passes both on to
+ * the net.Socket it builds. A lookup function and hints are taken: net and tls.connect call the lookup as Node does.
  */
 export const UNSUPPORTED_CONNECT_OPTIONS: SetTests = {
-  localAddress: Boolean, localPort: Boolean, lookup: callable,
+  localAddress: Boolean, localPort: Boolean,
   family: value => value === 4 || value === 6 || value === "IPv4" || value === "IPv6",
-  hints: value => typeof value === "number" && value !== 0,
   allowHalfOpen: Boolean, onread,
 };
 

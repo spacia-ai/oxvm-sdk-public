@@ -7,7 +7,7 @@ import type { ProcessIO } from "./process-io.js";
 import type { AsyncContext } from "./async-context.js";
 import { bindAsyncEvents, EventEmitter, streamError } from "./node-streams.js";
 import { nodeResult } from "./node-file-operations.js";
-import { createNodeSockets } from "./node-socket.js";
+import { connectionOptions, createNodeSockets, socketOptions } from "./node-socket.js";
 import type { SocketLookup, SocketNetworking } from "./node-socket-connect.js";
 import { blockedAddress, BlockList, invalidBlockList, SocketAddress } from "./node-net-address.ts";
 import { createServerHandle, normalizeArgs } from "./node-net-extras.ts";
@@ -73,7 +73,7 @@ export function createNodeNet(io: Pick<ProcessIO, "call" | "callSync" | "retain"
   Object.defineProperty(Socket, "name", { value: "Socket" });
   const createConnection = (...args: unknown[]): InstanceType<typeof Socket> => {
     const first = args[0], blockList: unknown = typeof first === "object" && first !== null ? Reflect.get(first, "blockList") : undefined;
-    return new Socket(blockList === undefined ? {} : { blockList }).connect(...args);
+    return connectionOptions(new Socket({ ...socketOptions(first), ...(blockList === undefined ? {} : { blockList }) }), first).connect(...args);
   };
   const sockets = { ...plain, Socket, createConnection, connect: createConnection };
   class Server extends EventEmitter {

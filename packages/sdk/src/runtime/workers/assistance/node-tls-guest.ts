@@ -6,6 +6,7 @@ import { nativeGuestFrames, nativeGuestArguments } from "./native-guest.ts";
 export const tlsGuestSource = String.raw`
 'use strict';
 const tls = require('node:tls');
+const net = require('node:net');
 const { once } = require('node:events');
 const MAX_DATA = 65536;
 const MAX_CONTROL = 16384;
@@ -20,14 +21,26 @@ function object(value, required, optional = []) {
 ${nativeGuestFrames}
 function event(value) { return send(1, Buffer.from(JSON.stringify(value))); }
 async function main() {
-  const options = object(JSON.parse(process.argv[1]), ['host', 'port'], ['servername', 'ca', 'rejectUnauthorized', 'ALPNProtocols', 'minVersion', 'maxVersion']);
+  const options = object(JSON.parse(process.argv[1]), ['host', 'port'], ['servername', 'ca', 'rejectUnauthorized', 'ALPNProtocols', 'minVersion', 'maxVersion', 'hints', 'resolve']);
   if (typeof options.host !== 'string' || options.host.length > 4096 || options.host.includes('\0') || !Number.isInteger(options.port) || options.port < 1 || options.port > 65535) throw protocol();
   if (options.ca !== undefined && (typeof options.ca !== 'string' || Buffer.byteLength(options.ca) > 65536)) throw protocol();
   if (options.servername !== undefined && (typeof options.servername !== 'string' || options.servername.length > 4096 || options.servername.includes('\0'))) throw protocol();
   if (options.rejectUnauthorized !== undefined && typeof options.rejectUnauthorized !== 'boolean') throw protocol();
   if (options.ALPNProtocols !== undefined && (!Array.isArray(options.ALPNProtocols) || options.ALPNProtocols.length > 32 || options.ALPNProtocols.some(value => typeof value !== 'string' || Buffer.byteLength(value) === 0 || Buffer.byteLength(value) > 255))) throw protocol();
   for (const key of ['minVersion', 'maxVersion']) if (options[key] !== undefined && !['TLSv1', 'TLSv1.1', 'TLSv1.2', 'TLSv1.3'].includes(options[key])) throw protocol();
-  const socket = tls.connect(options);
+  if (options.hints !== undefined && (!Number.isInteger(options.hints) || options.hints < 0 || options.hints > 56 || (options.hints & ~56) !== 0)) throw protocol();
+  if (options.resolve !== undefined && options.resolve !== true) throw protocol();
+  // With resolve, the program's own lookup ran outside Linux: its addresses arrive as the first 'addresses' frame and
+  // this lookup answers net with them, so the hostname stays the identity the certificate is checked against.
+  const { resolve, ...connectOptions } = options;
+  let answer; let asked;
+  const answerLookup = () => {
+    if (answer === undefined || asked === undefined) return;
+    const { all, callback } = asked; asked = undefined;
+    if (all) callback(null, answer); else callback(null, answer[0].address, answer[0].family);
+  };
+  if (resolve) connectOptions.lookup = (host, lookupOptions, callback) => { asked = { all: lookupOptions?.all === true, callback }; answerLookup(); };
+  const socket = tls.connect(connectOptions);
   const address = () => ({ localAddress: socket.localAddress, localPort: socket.localPort, localFamily: socket.localFamily, remoteAddress: socket.remoteAddress, remotePort: socket.remotePort, remoteFamily: socket.remoteFamily });
   let connected = Promise.resolve(); let finished = Promise.resolve();
   socket.once('finish', () => { finished = event({ kind: 'finished' }); void finished.catch(error => socket.destroy(error)); });
@@ -50,8 +63,17 @@ async function main() {
           continue;
         }
         let value; try { value = JSON.parse(payload.toString('utf8')); } catch { throw protocol(); }
-        object(value, ['kind'], ['enabled', 'delay', 'duration']);
-        if (value.kind === 'end') {
+        object(value, ['kind'], ['enabled', 'delay', 'duration', 'addresses']);
+        if (value.kind === 'addresses') {
+          object(value, ['kind', 'addresses']);
+          if (!resolve || answer !== undefined || !Array.isArray(value.addresses) || value.addresses.length === 0 || value.addresses.length > 64) throw protocol();
+          answer = value.addresses.map(entry => {
+            object(entry, ['address', 'family']);
+            if (typeof entry.address !== 'string' || net.isIP(entry.address) !== entry.family) throw protocol();
+            return { address: entry.address, family: entry.family };
+          });
+          answerLookup();
+        } else if (value.kind === 'end') {
           object(value, ['kind']); ended = true;
           await new Promise((resolve, reject) => socket.end(error => error ? reject(error) : resolve()));
         } else if (value.kind === 'no-delay') {

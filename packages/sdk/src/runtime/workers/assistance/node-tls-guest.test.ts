@@ -279,7 +279,7 @@ it("closes normally when the TLS peer ends before the application ends its writa
 
 const lateFailure = (subject: string): unknown => expect.objectContaining({ code: "FEATURE_NOT_AVAILABLE", detail: { lateFailure: "unavailable-builtin", subject } });
 
-it("tls.connect ignores keys Node does not read and refuses a set lookup", async () => {
+it("tls.connect ignores keys Node does not read", async () => {
   const server = createServer({ key, cert }, socket => {
     // The client is destroyed after secureConnect, so the peer can receive a reset.
     socket.on("error", error => { expect(error).toMatchObject({ code: "ECONNRESET" }); });
@@ -311,9 +311,6 @@ it("tls.connect ignores keys Node does not read and refuses a set lookup", async
     expect(echoed).toBe("unread keys ignored"); expect(socket.authorized).toBe(true); expect(f.references()).toBe(0);
     const unset = f.tls.connect({ host: "127.0.0.1", port: address.port, ca: cert, servername: "localhost", session: "" });
     await new Promise<void>((resolve, reject) => { unset.on("secureConnect", () => { unset.destroy(); }); unset.on("error", reject); unset.on("close", () => resolve()); });
-    // A lookup function decides where the host resolves, which the guest helper cannot take: refused by name, before any helper starts.
-    expect(() => f.tls.connect({ host: "localhost", port: address.port, lookup: () => {} })).toThrow(lateFailure("node:tls.connect lookup"));
-    expect(() => f.tls.connect(address.port, "localhost", { lookup: () => {} })).toThrow(lateFailure("node:tls.connect lookup"));
     expect(f.references()).toBe(0); expect(f.native.hasPending).toBe(false);
   } finally { f.dispose(); server.close(); await once(server, "close"); }
 }, 20000);
